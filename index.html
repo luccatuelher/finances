@@ -126,7 +126,7 @@
         .tag-fixo { font-size: 9px; font-weight: 700; padding: 2px 5px; border-radius: 3px; background: #fef3c7; color: #92400e; margin-left: 6px; vertical-align: middle; }
         .tag-card { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 3px; margin-left: 5px; vertical-align: middle; }
         /* FATURA INFO */
-        .fatura-info { border-radius: 7px; padding: 8px 10px; font-size: 11px; margin-bottom: 8px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; line-height: 1.5; }
+        .fatura-info { border-radius: 7px; padding: 8px 10px; font-size: 11px; margin-bottom: 8px; background: var(--accent-soft); border: 1px solid #bfdbfe; color: var(--accent); line-height: 1.5; }
 
         /* FATURA ACCORDION */
         .fatura-section { padding: 0 16px 12px; }
@@ -223,7 +223,7 @@
         /* Fatura summary row in table */
         tr.fatura-row td { background: #f0f4ff !important; border-bottom: 1px solid #dbeafe; }
         tr.fatura-row:hover td { background: #e8eeff !important; }
-        .fatura-row-label { display: flex; align-items: center; gap: 8px; font-weight: 600; color: #1d4ed8; }
+        .fatura-row-label { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--accent); }
         .fatura-row-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
         /* Mobile fatura card in list */
@@ -240,7 +240,7 @@
         .ext-body { overflow-y: auto; padding: 16px 24px; flex: 1; }
         .ext-foot { padding: 14px 24px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
         .ext-drop { border: 2px dashed var(--border); border-radius: 12px; padding: 40px 20px; text-align: center; cursor: pointer; transition: all .15s; background: var(--bg); }
-        .ext-drop:hover, .ext-drop.dragover { border-color: var(--accent); background: #f0f0ff; }
+        .ext-drop:hover, .ext-drop.dragover { border-color: var(--accent); background: var(--accent-soft); }
         .ext-drop-icon { font-size: 36px; opacity: .3; margin-bottom: 8px; }
         .ext-drop-text { font-size: 13px; color: var(--text-2); font-weight: 500; }
         .ext-drop-sub { font-size: 11px; color: var(--text-3); margin-top: 4px; }
@@ -263,7 +263,7 @@
         .ext-badge.transf { background: #fef3c7; color: #92400e; }
         .ext-badge.dup    { background: #fef9c3; color: #854d0e; }
         .ext-badge.new    { background: #dcfce7; color: #166534; }
-        .ext-info-bar { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #1e40af; margin-bottom: 14px; line-height: 1.5; }
+        .ext-info-bar { background: var(--accent-soft); border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 14px; font-size: 12px; color: var(--accent); margin-bottom: 14px; line-height: 1.5; }
         .ext-back-btn { background: var(--bg); border: 1px solid var(--border); padding: 6px 14px; border-radius: 7px; font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit; color: var(--text-2); }
         .ext-import-btn { background: var(--accent); color: white; border: none; padding: 8px 20px; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
         .ext-import-btn:disabled { opacity: .4; cursor: default; }
@@ -278,7 +278,7 @@
         }
 
         /* IMPORT EXTRATO */
-        .import-btn { width: 100%; padding: 8px; background: linear-gradient(135deg, #3b82f6, #6366f1); color: white; border: none; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; transition: opacity .15s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+        .import-btn { width: 100%; padding: 8px; background: var(--accent-grad); color: white; border: none; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; transition: opacity .15s; display: flex; align-items: center; justify-content: center; gap: 6px; }
         .import-btn:hover { opacity: .88; }
         #ovImport .modal { width: 780px; max-height: 88vh; display: flex; flex-direction: column; padding: 0; overflow: hidden; }
         .import-head { padding: 20px 24px 14px; border-bottom: 1px solid var(--border); }
@@ -291,7 +291,7 @@
         .import-stat.green strong { color: var(--success); }
         .import-stat.red strong { color: var(--danger); }
         .import-stat.gray strong { color: var(--text-3); }
-        .import-stat.blue strong { color: #3b82f6; }
+        .import-stat.blue strong { color: var(--accent); }
         .import-controls { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
         .import-controls label { font-size: 12px; display: flex; align-items: center; gap: 5px; cursor: pointer; color: var(--text-2); }
         .import-controls select { padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 11px; font-family: inherit; }
@@ -306,7 +306,7 @@
         .import-footer { padding: 14px 24px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
         .import-footer .import-count { flex: 1; font-size: 12px; color: var(--text-2); }
         .import-drop { border: 2px dashed var(--border); border-radius: 12px; padding: 30px; text-align: center; cursor: pointer; transition: all .2s; background: var(--bg); }
-        .import-drop:hover, .import-drop.dragover { border-color: #6366f1; background: #eef2ff; }
+        .import-drop:hover, .import-drop.dragover { border-color: var(--accent); background: var(--accent-soft); }
         .import-drop-icon { font-size: 32px; opacity: .3; margin-bottom: 8px; }
         .import-drop-text { font-size: 13px; color: var(--text-2); font-weight: 500; }
         .import-drop-sub { font-size: 11px; color: var(--text-3); margin-top: 4px; }
@@ -884,6 +884,27 @@
         .patrimonio-delta.up { background: #e8f7ef; color: var(--success); }
         .patrimonio-delta.down { background: #fdecec; color: var(--danger); }
         .patrimonio-chart { height: 150px; position: relative; margin-top: 8px; }
+
+        /* ═══════════════ BUDGET CATEGORY TILES — needs/wants (phase 6) ═══════════════ */
+        .budget-tiles-group { margin: 14px 16px; }
+        .budget-tiles-group-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text-2); margin: 0 0 8px; }
+        .budget-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+        .budget-tile { position: relative; border: 1px solid var(--border); border-radius: 12px; padding: 10px 11px; cursor: pointer; background: var(--surface); transition: box-shadow .15s, transform .15s, border-color .15s; }
+        .budget-tile:hover { box-shadow: var(--shadow-sm); transform: translateY(-1px); border-color: var(--accent); }
+        .budget-tile-pct { position: absolute; top: 9px; right: 10px; font-size: 11px; font-weight: 800; }
+        .budget-tile-icon { font-size: 18px; line-height: 1; }
+        .budget-tile-name { font-size: 12.5px; font-weight: 600; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); padding-right: 26px; }
+        .budget-tile-spent { font-size: 10.5px; color: var(--text-3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .budget-tile-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; margin-top: 8px; }
+        .budget-tile-fill { height: 4px; border-radius: 2px; transition: width .5s cubic-bezier(.4,0,.2,1); }
+        .budget-tile-detail { grid-column: 1 / -1; flex-direction: column; gap: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin: 2px 0 4px; }
+        .btd-row { display: flex; align-items: center; gap: 8px; }
+        .btd-lbl { font-size: 11px; font-weight: 600; color: var(--text-3); white-space: nowrap; }
+        .btd-rename { flex: 1; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; outline: none; color: var(--text); background: var(--surface); }
+        .btd-rename:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+        .btd-save { padding: 6px 13px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+        .btd-del { padding: 6px 10px; background: #fee2e2; color: var(--danger); border: none; border-radius: 8px; font-size: 13px; cursor: pointer; }
+        body.mobile .budget-tiles { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
     </style>
 </head>
 <body>
@@ -988,7 +1009,7 @@
         </label>
         <button class="mob-form-save" onclick="mobAdicionar()">Salvar Lançamento</button>
         <div style="text-align:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-            <button style="background:none;border:none;font-family:inherit;font-size:12px;color:#6366f1;font-weight:600;cursor:pointer" onclick="closeMobForm();abrirExtrato()">📄 Importar extrato bancário</button>
+            <button style="background:none;border:none;font-family:inherit;font-size:12px;color:var(--accent);font-weight:600;cursor:pointer" onclick="closeMobForm();abrirExtrato()">📄 Importar extrato bancário</button>
         </div>
     </div>
 </div>
@@ -1162,7 +1183,7 @@
         <hr style="border:none;border-top:1px solid var(--border)">
         <div>
             <div class="section-label">Importar Extrato</div>
-            <button class="btn-save" style="background:#1d4ed8" onclick="abrirExtrato()">📄 Importar Extrato Bancário</button>
+            <button class="btn-save" style="background:var(--accent)" onclick="abrirExtrato()">📄 Importar Extrato Bancário</button>
             <div style="font-size:10px;color:var(--text-3);margin-top:4px;line-height:1.4">CSV (Nubank, Inter, Bradesco…) ou OFX — detecta transferências e duplicatas</div>
         </div>
         <hr style="border:none;border-top:1px solid var(--border)">
@@ -1181,7 +1202,7 @@
     <main class="main">
         <div class="hero-card" id="heroCard" style="display:none">
             <div class="hero-left">
-                <div class="hero-label">Você ainda pode gastar</div>
+                <div class="hero-label" id="heroLabel">Você ainda pode gastar</div>
                 <div class="hero-num" id="heroNum">—</div>
                 <div class="hero-sub" id="heroSub"></div>
             </div>
@@ -2255,7 +2276,7 @@ function renderMobList() {
                 <div class="mob-fatura-header" onclick="$('mobFaturaCard-${idx}').classList.toggle('open')">
                     <div class="mob-tx-dot" style="background:${f.card.cor}22;border-radius:10px"><span style="font-size:16px">💳</span></div>
                     <div class="mob-tx-info">
-                        <div class="mob-tx-desc" style="color:#1d4ed8">${escHtml(f.card.nome)}</div>
+                        <div class="mob-tx-desc" style="color:var(--accent)">${escHtml(f.card.nome)}</div>
                         <div class="mob-tx-meta">Fatura · vence ${vd}/${vm} · ${f.items.length} itens</div>
                     </div>
                     <div class="mob-tx-right">
@@ -2311,7 +2332,7 @@ function renderMobList() {
 
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const GOAL_COLORS = ['#16a34a','#0284c7','#6d28d9','#dc2626','#f59e0b','#ec4899','#0f766e','#b45309','#0e7490'];
-const CAT_COLORS  = ['#ef4444','#f59e0b','#3b82f6','#10b981','#ec4899','#8b5cf6','#06b6d4','#84cc16','#f97316','#14b8a6'];
+const CAT_COLORS  = ['#ef4444','#f59e0b','#0b62f0','#10b981','#ec4899','#8b5cf6','#06b6d4','#84cc16','#f97316','#14b8a6'];
 
 const CHART_COMMON_OPTS = {
     responsive: true, maintainAspectRatio: false,
@@ -3917,16 +3938,18 @@ function renderAnual() {
     const anualLabels = MESES.map(m => m.slice(0, 3));
     const acc = _chartColors();
     const anualDs = [
-        { label: 'Entradas', data: rows.map(r => r.ent),  backgroundColor: acc.entBg,  borderColor: acc.entBd,  borderWidth: 1.5, borderRadius: 3 },
-        { label: 'Débito',   data: rows.map(r => r.deb),  backgroundColor: acc.debBg,  borderColor: acc.debBd,  borderWidth: 1.5, borderRadius: 3 },
-        { label: 'Crédito',  data: rows.map(r => r.cred), backgroundColor: acc.credBg, borderColor: acc.credBd, borderWidth: 1.5, borderRadius: 3 },
-        { label: 'Invest.',  data: rows.map(r => r.inv),  backgroundColor: acc.invBg,  borderColor: acc.invBd,  borderWidth: 1.5, borderRadius: 3 }
+        { label: 'Entradas', stack: 'in',  data: rows.map(r => r.ent),  backgroundColor: acc.entBg,  borderColor: acc.entBd,  borderWidth: 1.5, borderRadius: 3 },
+        { label: 'Débito',   stack: 'out', data: rows.map(r => r.deb),  backgroundColor: acc.debBg,  borderColor: acc.debBd,  borderWidth: 1.5, borderRadius: 3 },
+        { label: 'Crédito',  stack: 'out', data: rows.map(r => r.cred), backgroundColor: acc.credBg, borderColor: acc.credBd, borderWidth: 1.5, borderRadius: 3 },
+        { label: 'Invest.',  stack: 'inv', data: rows.map(r => r.inv),  backgroundColor: acc.invBg,  borderColor: acc.invBd,  borderWidth: 1.5, borderRadius: 3 }
     ];
+    // Débito + Crédito share stack 'out' → one "gastos" bar split into the two segments
+    const anualScales = { x: { ...AXIS_OPTS.x, stacked: true }, y: { ...AXIS_OPTS.y, stacked: true } };
     if (!_updateChart('anual', anualLabels, anualDs)) {
         destroyChart('anual');
         charts['anual'] = new Chart($('graficoAnual').getContext('2d'), {
             type: 'bar', data: { labels: anualLabels, datasets: anualDs },
-            options: { ...CHART_COMMON_OPTS, scales: AXIS_OPTS }
+            options: { ...CHART_COMMON_OPTS, scales: anualScales }
         });
     }
 
@@ -4554,6 +4577,14 @@ function toggleBudgetCatRow(safeKey) {
     }
 }
 
+function _budgetGroup(catName) {
+    if (_isBudgetCatInvest(catName)) return 'invest';
+    const n = catName.toLowerCase();
+    const needs = ['moradia','aluguel','aliment','mercado','supermerc','saúde','saude','farm','transporte','ônibus','onibus','combust','gasolina','internet','telefone','celular','água','agua','luz','energia','gás','educa','escola','faculdade','fatura','conta ','plano','seguro','imposto','financ'];
+    if (needs.some(k => n.includes(k))) return 'needs';
+    return 'wants';
+}
+
 function renderBudgetCatList(m, a, saidas, investList, totalBudget) {
     const el = $('budgetCatList');
     if (!el) return;
@@ -4568,69 +4599,64 @@ function renderBudgetCatList(m, a, saidas, investList, totalBudget) {
         const allocated = totalBudget * (pct / 100);
         const spent     = _getSpentForBudgetCat(catName, saidas, investList);
         const pctUsed   = allocated > 0 ? Math.round((spent / allocated) * 100) : 0;
-        return { catName, pct, isInvest, allocated, spent, pctUsed };
+        return { catName, pct, isInvest, allocated, spent, pctUsed, group: _budgetGroup(catName) };
     });
-    if (_budgetCatSort === 'alloc_desc') enriched.sort((a, b) => b.pct - a.pct);
-    if (_budgetCatSort === 'alloc_asc')  enriched.sort((a, b) => a.pct - b.pct);
-    if (_budgetCatSort === 'used_desc')  enriched.sort((a, b) => b.pctUsed - a.pctUsed);
-    if (_budgetCatSort === 'used_asc')   enriched.sort((a, b) => a.pctUsed - b.pctUsed);
-    if (_budgetCatSort === 'name_asc')   enriched.sort((a, b) => a.catName.localeCompare(b.catName));
-    if (_budgetCatSort === 'name_desc')  enriched.sort((a, b) => b.catName.localeCompare(a.catName));
+    if (_budgetCatSort === 'alloc_desc')      enriched.sort((a, b) => b.pct - a.pct);
+    else if (_budgetCatSort === 'alloc_asc')  enriched.sort((a, b) => a.pct - b.pct);
+    else if (_budgetCatSort === 'used_desc')  enriched.sort((a, b) => b.pctUsed - a.pctUsed);
+    else if (_budgetCatSort === 'used_asc')   enriched.sort((a, b) => a.pctUsed - b.pctUsed);
+    else if (_budgetCatSort === 'name_asc')   enriched.sort((a, b) => a.catName.localeCompare(b.catName));
+    else if (_budgetCatSort === 'name_desc')  enriched.sort((a, b) => b.catName.localeCompare(a.catName));
     const sortBtn = $('btnBudgetSort');
     if (sortBtn) sortBtn.textContent = _BUDGET_SORT_LABELS[_budgetCatSort] || _budgetCatSort;
 
-    el.innerHTML = enriched.map(({ catName, pct, isInvest, allocated, spent, pctUsed }) => {
-        const over        = pctUsed > 100;
-        const barColor    = isInvest
-            ? (over ? 'var(--danger)' : pctUsed > 80 ? '#f59e0b' : 'var(--invest)')
-            : (over ? 'var(--danger)' : pctUsed > 80 ? '#f59e0b' : 'var(--success)');
-        const statusColor = over ? 'var(--danger)' : pctUsed > 80 ? '#b45309' : barColor;
-        const investBadge = isInvest ? `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:#ede9fe;color:#6d28d9;margin-left:5px">INVEST</span>` : '';
-        const safeKey     = encodeURIComponent(catName);
-        const collapsed   = _budgetCatCollapsed.has(catName);
+    const tileHtml = ({ catName, pct, isInvest, allocated, spent, pctUsed }) => {
+        const over     = pctUsed > 100;
+        const barColor = over ? 'var(--danger)' : pctUsed > 80 ? '#f59e0b' : (isInvest ? 'var(--invest)' : 'var(--success)');
+        const pctColor = over ? 'var(--danger)' : pctUsed > 80 ? '#b45309' : 'var(--text-3)';
+        const safeKey  = encodeURIComponent(catName);
+        const icon     = catName.match(/^\p{Emoji}/u)?.[0] || '📦';
+        const nameText = escHtml(catName.replace(/^\p{Emoji}️?\s*/u, '')) || escHtml(catName);
+        const detail   = _budgetCatCollapsed.has(catName) ? 'none' : 'flex';
         return `
-        <div style="border-bottom:1px solid var(--border-light)">
-            <div class="budget-cat-row" style="cursor:pointer;padding-right:8px" onclick="toggleBudgetCatRow('${safeKey}')">
-                <div class="budget-cat-icon">${catName.match(/^\p{Emoji}/u)?.[0] || '📦'}</div>
-                <div class="budget-cat-info">
-                    <div class="budget-cat-name">${escHtml(catName)}${investBadge}</div>
-                    <div class="budget-cat-vals">${fmt(spent)} de ${fmt(allocated)}${pct > 0 ? ` <span style="color:var(--text-3)">(${pct}%)</span>` : ''}</div>
-                </div>
-                <div style="flex:0 0 80px;height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin:0 4px">
-                    <div style="height:4px;border-radius:2px;background:${barColor};width:${Math.min(pctUsed,100)}%;transition:width .5s"></div>
-                </div>
-                <div class="budget-cat-status" style="color:${statusColor};width:38px;text-align:right">${pctUsed}%</div>
-                <span id="bcat-chev-${safeKey}" style="font-size:16px;color:var(--text-3);width:18px;text-align:center;flex-shrink:0;line-height:1;user-select:none">${collapsed ? '›' : '⌄'}</span>
+        <div class="budget-tile" onclick="toggleBudgetCatRow('${safeKey}')" title="${escHtml(catName)}">
+            <span class="budget-tile-pct" style="color:${pctColor}">${pctUsed}%</span>
+            <div class="budget-tile-icon">${icon}</div>
+            <div class="budget-tile-name">${nameText}</div>
+            <div class="budget-tile-spent">${fmt(spent)}${pct > 0 ? ` / ${fmt(allocated)}` : ''}</div>
+            <div class="budget-tile-bar"><div class="budget-tile-fill" style="width:${Math.min(pctUsed, 100)}%;background:${barColor}"></div></div>
+        </div>
+        <div id="bcat-detail-${safeKey}" class="budget-tile-detail" style="display:${detail}" onclick="event.stopPropagation()">
+            <div class="btd-row">
+                <span class="btd-lbl">% do orçamento</span>
+                <input type="number" class="budget-cat-pct-input" value="${pct}" min="0" max="100" onchange="updateBudgetCatPct('${safeKey}', this.value)">
+                <span class="btd-lbl">&rarr; ${fmt(allocated)}</span>
             </div>
-            <div id="bcat-detail-${safeKey}" style="background:var(--bg);padding:10px 16px 14px 16px;display:${collapsed ? 'none' : 'flex'};flex-direction:column;gap:10px" onclick="event.stopPropagation()">
-                <!-- Row 1: % allocation -->
-                <div style="display:flex;align-items:center;gap:10px;padding-left:42px">
-                    <span style="font-size:11px;font-weight:600;color:var(--text-3);white-space:nowrap">% Orçamento</span>
-                    <input type="number" class="budget-cat-pct-input" value="${pct}" min="0" max="100"
-                        onchange="updateBudgetCatPct('${safeKey}', this.value)" title="% do orçamento">
-                    <span style="font-size:11px;color:var(--text-3)">%</span>
-                    <div class="budget-cat-bar" style="flex:1"><div class="budget-cat-fill" style="width:${Math.min(pctUsed,100)}%;background:${barColor}"></div></div>
-                    <div style="font-size:11px;color:var(--text-3);white-space:nowrap">${fmt(spent)} / ${fmt(allocated)}</div>
-                </div>
-                <!-- Row 2: rename + delete -->
-                <div style="display:flex;align-items:center;gap:8px;padding-left:42px">
-                    <span style="font-size:11px;font-weight:600;color:var(--text-3);white-space:nowrap">Nome</span>
-                    <input type="text" id="bcat-rename-${safeKey}" value="${escHtml(catName)}"
-                        style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;outline:none;color:var(--text);background:var(--surface)"
-                        onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
-                        onkeydown="if(event.key==='Enter')renameBudgetCat('${safeKey}')">
-                    <button onclick="renameBudgetCat('${safeKey}')"
-                        style="padding:6px 12px;background:var(--accent);color:white;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">
-                        ✓ Renomear
-                    </button>
-                    <button onclick="deleteBudgetCat('${safeKey}')"
-                        style="padding:6px 10px;background:#fee2e2;color:var(--danger);border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">
-                        🗑️
-                    </button>
-                </div>
+            <div class="btd-row">
+                <input type="text" id="bcat-rename-${safeKey}" class="btd-rename" value="${escHtml(catName)}" onkeydown="if(event.key==='Enter')renameBudgetCat('${safeKey}')">
+                <button class="btd-save" onclick="renameBudgetCat('${safeKey}')">&#10003; Renomear</button>
+                <button class="btd-del" onclick="deleteBudgetCat('${safeKey}')">&#128465;&#65039;</button>
             </div>
         </div>`;
-    }).join('');
+    };
+
+    const groups = [
+        { key: 'needs',  label: 'Necessidades' },
+        { key: 'wants',  label: 'Desejos' },
+        { key: 'invest', label: 'Investimentos' }
+    ];
+    let html = '';
+    groups.forEach(g => {
+        const items = enriched.filter(c => c.group === g.key);
+        if (!items.length) return;
+        const gSpent = items.reduce((s, c) => s + c.spent, 0);
+        const gPct   = items.reduce((s, c) => s + c.pct, 0);
+        html += `<div class="budget-tiles-group">
+            <div class="budget-tiles-group-label">${g.label} <span style="color:var(--text-3);font-weight:600">&middot; ${fmt(gSpent)}${gPct ? ` &middot; ${gPct}%` : ''}</span></div>
+            <div class="budget-tiles">${items.map(tileHtml).join('')}</div>
+        </div>`;
+    });
+    el.innerHTML = html;
 }
 
 function renderBudgetPie(totalBudget) {
@@ -4990,7 +5016,7 @@ function setupAutoSync() {
 // CREDIT CARD MANAGEMENT
 // ═══════════════════════════════════════════════════════════════
 
-const CARD_COLORS = ['#6d28d9','#0284c7','#dc2626','#16a34a','#f59e0b','#ec4899','#0f766e','#b45309','#0e7490','#1d4ed8'];
+const CARD_COLORS = ['#6d28d9','#0284c7','#dc2626','#16a34a','#f59e0b','#ec4899','#0f766e','#b45309','#0e7490','#0b62f0'];
 let _selCardColor = CARD_COLORS[0];
 
 // ── FATURA CALCULATION ────────────────────────────────────────
@@ -6386,9 +6412,11 @@ function renderHero() {
     card.style.display = '';
 
     const remaining = limit - gas;
+    const overLimit = remaining < 0;
     const numEl = $('heroNum');
-    numEl.textContent = fmt(remaining);
-    numEl.classList.toggle('neg', remaining < 0);
+    numEl.textContent = overLimit ? fmt(-remaining) : fmt(remaining);
+    numEl.classList.toggle('neg', overLimit);
+    $('heroLabel').textContent = overLimit ? 'Você passou do limite em' : 'Você ainda pode gastar';
     $('heroSub').textContent = `do limite de ${fmt(limit)} ${totalBudget ? 'deste mês' : '· renda do mês'}`;
 
     // "today" within the viewed month (full month if viewing a past/future month)
