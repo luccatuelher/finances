@@ -23,13 +23,19 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
     <style>
         :root {
-            --accent: #18181b; --accent2: #3f3f46;
-            --success: #16a34a; --danger: #dc2626; --invest: #6d28d9;
+            /* Visor redesign palette */
+            --accent: #0b62f0; --accent2: #0147e3;
+            --accent-soft: #eaf1fe; --accent-grad: linear-gradient(135deg, #0a84fb 0%, #0247e6 100%);
+            --success: #16a34a; --danger: #ef4444; --invest: #7c3aed;
             --credit: #0284c7; --debit: #0f766e;
-            --bg: #fafafa; --surface: #ffffff;
-            --border: #e4e4e7; --border-light: #f4f4f5;
-            --text: #18181b; --text-2: #52525b; --text-3: #a1a1aa;
-            --sidebar-w: 300px; --radius: 10px;
+            --bg: #f4f6f9; --surface: #ffffff;
+            --border: #ecedf1; --border-light: #f4f5f8;
+            --text: #0f172a; --text-2: #64748b; --text-3: #97a1b0;
+            --sidebar-w: 300px;
+            --radius: 16px; --radius-sm: 10px; --radius-lg: 22px;
+            --shadow-sm: 0 1px 2px rgba(16,24,40,.04), 0 1px 3px rgba(16,24,40,.06);
+            --shadow-md: 0 6px 20px rgba(16,24,40,.07), 0 2px 6px rgba(16,24,40,.04);
+            --shadow-lg: 0 12px 34px rgba(16,24,40,.11);
         }
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; }
@@ -804,6 +810,80 @@
 
         .ie-row.open { opacity: 1; }
 
+        /* ═══════════════ VISOR THEME LAYER (redesign · phase 1) ═══════════════ */
+        body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+        /* Soft, rounded cards with subtle shadow instead of hard borders */
+        .kpi, .chart-box, .history-box, .data-table-box {
+            border: 1px solid var(--border); box-shadow: var(--shadow-sm);
+        }
+        .kpi:hover, .chart-box:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+        /* Topbar: airy, soft divider */
+        .topbar { border-bottom: 1px solid var(--border); box-shadow: 0 1px 2px rgba(16,24,40,.03); }
+        .logo { color: var(--accent); font-weight: 800; }
+        .logo span { color: var(--text-3); }
+        /* Nav pills → Visor style */
+        .nav-pills { background: var(--bg); border-color: var(--border); border-radius: 12px; }
+        .nav-pill { border-radius: 9px; }
+        .nav-pill.active { color: var(--accent); background: var(--surface); box-shadow: var(--shadow-sm); }
+        /* Sidebar */
+        .sidebar { border-right: 1px solid var(--border); }
+        .section-label { color: var(--text-3); letter-spacing: .7px; }
+        /* Primary buttons → gradient pill */
+        .btn-save { background: var(--accent-grad); border-radius: 11px; box-shadow: 0 2px 8px rgba(11,98,240,.25); padding: 10px; }
+        .btn-save:hover { opacity: .95; }
+        /* Inputs → rounder, blue focus ring */
+        .field input, .field select { border-radius: 10px; }
+        .field input:focus, .field select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+        /* Tab pills */
+        .tabs { border-radius: 11px; }
+        .tab { border-radius: 8px; }
+        .tab.active { box-shadow: var(--shadow-sm); }
+        /* KPI numbers a touch larger */
+        .kpi-val { font-size: 22px; }
+        /* Month/year nav → rounded */
+        .month-nav-bar { border-radius: 10px; }
+
+        /* ═══════════════ SAFE-TO-SPEND HERO (phase 2) ═══════════════ */
+        .hero-card { background: var(--accent-grad); border-radius: var(--radius-lg); padding: 22px 24px; color: #fff;
+            box-shadow: 0 10px 30px rgba(11,98,240,.26); display: grid; grid-template-columns: 1fr 1.05fr; gap: 18px 24px; align-items: center; }
+        .hero-left { min-width: 0; }
+        .hero-label { font-size: 13px; font-weight: 500; opacity: .88; }
+        .hero-num { font-size: 40px; font-weight: 800; letter-spacing: -1px; line-height: 1.04; margin-top: 3px; }
+        .hero-num.neg { color: #ffe08a; }
+        .hero-sub { font-size: 12px; opacity: .82; margin-top: 5px; }
+        .hero-pace-wrap { position: relative; height: 100px; }
+        .hero-pace-pill { position: absolute; top: 4px; right: 4px; background: rgba(255,255,255,.20); color: #fff;
+            font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
+        .hero-pace-pill.over { background: rgba(255,138,138,.34); }
+        .hero-tip { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 10px;
+            background: rgba(255,255,255,.15); border-radius: 14px; padding: 12px 14px; font-size: 12.5px; line-height: 1.45; }
+        .hero-tip-icon { flex-shrink: 0; font-size: 15px; line-height: 1.3; }
+        body.mobile .hero-card { grid-template-columns: 1fr; padding: 20px; }
+        body.mobile .hero-num { font-size: 34px; }
+
+        /* ═══════════════ DISTRIBUIÇÃO DOS GASTOS (phase 3) ═══════════════ */
+        .dist-wrap { display: flex; flex-direction: column; gap: 12px; }
+        .dist-donut { position: relative; height: 148px; }
+        .dist-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+        .dist-center-lbl { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: .5px; }
+        .dist-center-val { font-size: 17px; font-weight: 800; color: var(--text); letter-spacing: -.4px; }
+        .dist-list { display: flex; flex-direction: column; gap: 1px; max-height: 152px; overflow-y: auto; }
+        .dist-row { display: flex; align-items: center; gap: 8px; padding: 4px 2px; font-size: 12.5px; }
+        .dist-dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+        .dist-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-2); }
+        .dist-val { font-size: 11px; color: var(--text-3); margin-left: 4px; }
+        .dist-pct { font-weight: 700; color: var(--text); font-size: 12px; min-width: 34px; text-align: right; }
+
+        /* ═══════════════ PATRIMÔNIO + PROJEÇÃO (phase 4) ═══════════════ */
+        .patrimonio-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 18px 20px; transition: box-shadow .2s, transform .2s; }
+        .patrimonio-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+        .patrimonio-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+        .patrimonio-val { font-size: 26px; font-weight: 800; letter-spacing: -.6px; color: var(--text); }
+        .patrimonio-sub { font-size: 11px; color: var(--text-3); margin-top: 3px; }
+        .patrimonio-delta { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
+        .patrimonio-delta.up { background: #e8f7ef; color: var(--success); }
+        .patrimonio-delta.down { background: #fdecec; color: var(--danger); }
+        .patrimonio-chart { height: 150px; position: relative; margin-top: 8px; }
     </style>
 </head>
 <body>
@@ -813,7 +893,7 @@
     <div class="topbar-left">
         <div class="logo">Finances <span>/ Lucca</span></div>
         <nav class="nav-pills">
-            <button class="nav-pill active" onclick="navTo('dashboard',this)">Dashboard</button>
+            <button class="nav-pill active" onclick="navTo('dashboard',this)">Visão Geral</button>
             <button class="nav-pill" onclick="navTo('anual',this)">Anual</button>
             <button class="nav-pill" onclick="navTo('mensal',this)">Mensal</button>
             <button class="nav-pill" onclick="navTo('metas',this)">Orçamento</button>
@@ -1099,6 +1179,21 @@
     </aside>
 
     <main class="main">
+        <div class="hero-card" id="heroCard" style="display:none">
+            <div class="hero-left">
+                <div class="hero-label">Você ainda pode gastar</div>
+                <div class="hero-num" id="heroNum">—</div>
+                <div class="hero-sub" id="heroSub"></div>
+            </div>
+            <div class="hero-pace-wrap">
+                <canvas id="heroPace"></canvas>
+                <span class="hero-pace-pill" id="heroPacePill" style="display:none"></span>
+            </div>
+            <div class="hero-tip" id="heroTip" style="display:none">
+                <span class="hero-tip-icon">✦</span>
+                <span id="heroTipText"></span>
+            </div>
+        </div>
         <div class="kpis">
             <div class="kpi">
                 <div class="kpi-label">Entradas</div>
@@ -1127,7 +1222,7 @@
         <div id="overlapBanner" style="display:none;background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:10px 12px;margin-bottom:14px"></div>
         <div class="charts">
             <div class="chart-box">
-                <div class="chart-box-label">Despesas por Categoria</div>
+                <div class="chart-box-label">Distribuição dos gastos</div>
                 <div id="wrapGastos"><div class="chart-empty"><span style="font-size:24px;opacity:.3">📉</span>Sem dados</div></div>
             </div>
             <div class="chart-box">
@@ -1138,6 +1233,17 @@
                 <div class="chart-box-label">Orçamento do Mês</div>
                 <div id="wrapBudgetRemaining"><div class="chart-empty"><span style="font-size:24px;opacity:.3">💰</span>Defina um orçamento</div></div>
             </div>
+        </div>
+        <div class="patrimonio-card" id="patrimonioCard" style="display:none">
+            <div class="patrimonio-head">
+                <div>
+                    <div class="chart-box-label" style="margin-bottom:2px">Patrimônio</div>
+                    <div class="patrimonio-val" id="patrimonioVal">—</div>
+                    <div class="patrimonio-sub" id="patrimonioSub"></div>
+                </div>
+                <span class="patrimonio-delta" id="patrimonioDelta"></span>
+            </div>
+            <div class="patrimonio-chart"><canvas id="grafPatrimonio"></canvas></div>
         </div>
         <div class="history-box">
             <div class="history-header">
@@ -1993,7 +2099,7 @@ function populateCatSelect(el, tipo, selected) {
 function closeOverlay(id, e) { if (!e || e.target === $(id)) $(id).classList.remove('open'); }
 
 // ── MOBILE HELPERS ────────────────────────────────────────────────────────────
-const MOB_VIEW_LABELS = { dashboard: 'Início', anual: 'Visão Anual', mensal: 'Mensal', metas: 'Orçamento' };
+const MOB_VIEW_LABELS = { dashboard: 'Visão Geral', anual: 'Visão Anual', mensal: 'Mensal', metas: 'Orçamento' };
 const MOB_TYPE_ICON   = { entrada: '💰', saida: '💸', investimento: '📈' };
 
 function mobNavTo(view, btn) {
@@ -3685,9 +3791,11 @@ function atualizar() {
 
     // Skip expensive dashboard rendering when not visible
     if (currentView === 'dashboard') {
-        renderDonut(catD, 'grafGas', 'wrapGastos', '📉', CAT_COLORS);
+        renderHero();
+        renderDistribution(catD);
         renderDonut(catI, 'grafInv', 'wrapInvest', '💼', ['#6d28d9','#7c3aed','#a78bfa','#c4b5fd']);
         renderBudgetRemaining();
+        renderPatrimonio();
         renderOverlapBanner(m, a);
         renderVencimentos();
         renderFaturas();
@@ -4646,19 +4754,37 @@ const fbDb   = firebase.database();
 let _currentUser    = null;
 let _autoSyncTimer  = null;
 
+// ── PREVIEW MODE ──────────────────────────────────────────────────────────────
+// Runs the app WITHOUT Google sign-in, for local development / edit previews.
+// Activates only when the URL carries ?preview (e.g. index.html?preview=1). The
+// normal hosted app (no param) is untouched and still requires login. Firebase
+// writes are disabled here so preview edits never reach the real cloud data — it
+// works purely off local (localStorage/seed) data.
+const PREVIEW_MODE = new URLSearchParams(location.search).has('preview');
+
 // ── AUTH ──────────────────────────────────────────────────────────────────────
-fbAuth.onAuthStateChanged(user => {
-    if (user) {
-        _currentUser = user;
-        showApp(user);
-        init();
-        fbLoadOnStart().catch(e => { console.warn('Firebase load failed:', e); toast('⚠️ Erro ao carregar dados do Firebase.', '#b45309'); });
-        setupAutoSync();
-    } else {
-        _currentUser = null;
-        showLoginScreen();
-    }
-});
+if (PREVIEW_MODE) {
+    _fbPush       = function () {};   // never write to Firebase in preview
+    setupAutoSync = function () {};   // no auto-sync loop
+    const previewUser = { displayName: 'Preview', email: 'preview@local', photoURL: null };
+    _currentUser = previewUser;
+    showApp(previewUser);
+    init();
+    console.info('%cFinances preview mode — no login, no cloud sync.', 'color:#0b62f0;font-weight:600');
+} else {
+    fbAuth.onAuthStateChanged(user => {
+        if (user) {
+            _currentUser = user;
+            showApp(user);
+            init();
+            fbLoadOnStart().catch(e => { console.warn('Firebase load failed:', e); toast('⚠️ Erro ao carregar dados do Firebase.', '#b45309'); });
+            setupAutoSync();
+        } else {
+            _currentUser = null;
+            showLoginScreen();
+        }
+    });
+}
 
 function showLoginScreen() {
     $('loginScreen').classList.remove('hidden');
@@ -6113,8 +6239,213 @@ function extConfirmImport() {
     toast(`✅ ${toImport.length} lançamento${toImport.length > 1 ? 's' : ''} importado${toImport.length > 1 ? 's' : ''}!`, '#16a34a');
 }
 
-// If Firebase is slow to respond, show login screen by default
-$('loginScreen').classList.remove('hidden');
+// ── PATRIMÔNIO (net-worth trend) + PROJEÇÃO (phase 4) ─────────────────────────
+function renderPatrimonio() {
+    const card = $('patrimonioCard');
+    if (!card) return;
+    const { m, a } = filtro();
+    const curYm = `${a}-${String(m + 1).padStart(2, '0')}`;
+
+    // Monthly net delta (income − expenses; investments are transfers → net-worth neutral)
+    const monthly = {};
+    tx.forEach(t => {
+        if (!t.data) return;
+        const ym = t.data.slice(0, 7);
+        const d = t.tipo === 'entrada' ? t.valor : t.tipo === 'saida' ? -t.valor : 0;
+        monthly[ym] = (monthly[ym] || 0) + d;
+    });
+    const yms = Object.keys(monthly).filter(ym => ym <= curYm).sort();
+    if (!yms.length) { card.style.display = 'none'; destroyChart('grafPatrimonio'); return; }
+    card.style.display = '';
+
+    let run = 0;
+    const pts = yms.map(ym => { run += monthly[ym]; return { ym, v: run }; });
+    const windowPts = pts.slice(-12);
+
+    const mlabel   = ym => { const [yy, mm] = ym.split('-'); return MESES[+mm - 1].slice(0, 3) + '/' + yy.slice(2); };
+    const addMonth = (ym, n) => { let [yy, mm] = ym.split('-').map(Number); mm += n; while (mm > 12) { mm -= 12; yy++; } return `${yy}-${String(mm).padStart(2, '0')}`; };
+
+    const latest = windowPts[windowPts.length - 1].v;
+    const prev   = windowPts.length > 1 ? windowPts[windowPts.length - 2].v : 0;
+    $('patrimonioVal').textContent = fmt(latest);
+
+    const diff = latest - prev;
+    const deltaEl = $('patrimonioDelta');
+    if (windowPts.length > 1 && prev !== 0) {
+        const pctD = Math.round(diff / Math.abs(prev) * 100);
+        deltaEl.textContent = (diff >= 0 ? '▲ +' : '▼ ') + fmt(Math.abs(diff)) + ` (${pctD >= 0 ? '+' : ''}${pctD}%)`;
+    } else {
+        deltaEl.textContent = (diff >= 0 ? '▲ +' : '▼ ') + fmt(Math.abs(diff));
+    }
+    deltaEl.className = 'patrimonio-delta ' + (diff >= 0 ? 'up' : 'down');
+
+    // Projeção: average of the last up-to-6 monthly deltas
+    const recentDeltas = yms.slice(-6).map(ym => monthly[ym]);
+    const avg = recentDeltas.reduce((s, v) => s + v, 0) / recentDeltas.length;
+    const projLabels = [addMonth(curYm, 1), addMonth(curYm, 2), addMonth(curYm, 3)];
+    const proj = [latest + avg, latest + 2 * avg, latest + 3 * avg];
+    $('patrimonioSub').textContent = avg
+        ? `Projeção: ${fmt(proj[2])} em ${mlabel(projLabels[2])} · ritmo ${avg >= 0 ? '+' : ''}${fmt(avg)}/mês`
+        : 'acumulado desde o início dos registros';
+
+    const labels   = windowPts.map(p => mlabel(p.ym)).concat(projLabels.map(mlabel));
+    const actual   = windowPts.map(p => p.v).concat([null, null, null]);
+    const projData = windowPts.map(() => null);
+    projData[projData.length - 1] = latest;
+    projData.push(...proj);
+
+    destroyChart('grafPatrimonio');
+    const cv = $('grafPatrimonio');
+    if (!cv) return;
+    charts['grafPatrimonio'] = new Chart(cv.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                { data: actual, borderColor: '#16a34a', borderWidth: 3, pointRadius: 0, tension: .35,
+                  fill: { target: 'origin', above: 'rgba(22,163,74,.10)' } },
+                { data: projData, borderColor: '#94a3b8', borderDash: [5, 5], borderWidth: 2, pointRadius: 0, tension: .35, fill: false }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => fmt(c.parsed.y) } } },
+            scales: {
+                x: { grid: { display: false }, ticks: { font: { size: 9, family: 'Inter' }, color: '#97a1b0', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } },
+                y: { grid: { color: '#f1f2f5' }, ticks: { font: { size: 9 }, color: '#97a1b0', callback: v => 'R$' + (Math.abs(v) >= 1000 ? (v / 1000).toFixed(1) + 'k' : v) } }
+            }
+        }
+    });
+}
+
+// ── DISTRIBUIÇÃO DOS GASTOS (Visor-style donut + category list · phase 3) ──────
+function renderDistribution(dados) {
+    const wrap = $('wrapGastos');
+    if (!wrap) return;
+    destroyChart('grafGas');
+    const entries = Object.keys(dados).map(k => [k, dados[k]]).sort((a, b) => b[1] - a[1]);
+    if (!entries.length) {
+        wrap.innerHTML = `<div class="chart-empty"><span style="font-size:24px;opacity:.3">📉</span>Sem dados</div>`;
+        return;
+    }
+    const total  = entries.reduce((s, e) => s + e[1], 0);
+    const colorOf = i => CAT_COLORS[i % CAT_COLORS.length];
+    const rows = entries.map(([name, val], i) => {
+        const pct = total > 0 ? Math.round(val / total * 100) : 0;
+        return `<div class="dist-row">
+            <span class="dist-dot" style="background:${colorOf(i)}"></span>
+            <span class="dist-name">${escHtml(name)}</span>
+            <span class="dist-val">${fmt(val)}</span>
+            <span class="dist-pct">${pct}%</span>
+        </div>`;
+    }).join('');
+    wrap.innerHTML = `<div class="dist-wrap">
+        <div class="dist-donut">
+            <canvas id="grafGas"></canvas>
+            <div class="dist-center">
+                <div class="dist-center-lbl">Total</div>
+                <div class="dist-center-val">${fmt(total)}</div>
+            </div>
+        </div>
+        <div class="dist-list">${rows}</div>
+    </div>`;
+    charts['grafGas'] = new Chart($('grafGas').getContext('2d'), {
+        type: 'doughnut',
+        data: { labels: entries.map(e => e[0]), datasets: [{ data: entries.map(e => e[1]), backgroundColor: entries.map((_, i) => colorOf(i)), borderWidth: 2, borderColor: '#fff' }] },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { display: false } } }
+    });
+}
+
+// ── SAFE-TO-SPEND HERO + SPENDING PACE (phase 2) ──────────────────────────────
+function renderHero() {
+    const card = $('heroCard');
+    if (!card) return;
+    const { m, a } = filtro();
+    const lista = txMes(m, a);
+    const daysInMonth = new Date(a, m + 1, 0).getDate();
+    const perDay = Array(daysInMonth + 1).fill(0); // index 1..daysInMonth
+    let ent = 0, gas = 0;
+    lista.forEach(t => {
+        if (t.tipo === 'entrada') { ent += t.valor; return; }
+        if (t.tipo !== 'saida') return;
+        gas += t.valor;
+        const d = parseInt((t.data || '').slice(8, 10), 10);
+        if (d >= 1 && d <= daysInMonth) perDay[d] += t.valor;
+    });
+
+    // Monthly spend ceiling: budget's spendable portion, else this month's income
+    const totalBudget = getBudgetTotal(m, a);
+    let limit;
+    if (totalBudget) {
+        const investPct = (cats.investimento || []).reduce((s, c) => s + (budget.allocs[c] || 0), 0);
+        limit = totalBudget * ((100 - investPct) / 100);
+    } else {
+        limit = ent;
+    }
+    if (!limit || limit <= 0) { card.style.display = 'none'; destroyChart('heroPace'); return; }
+    card.style.display = '';
+
+    const remaining = limit - gas;
+    const numEl = $('heroNum');
+    numEl.textContent = fmt(remaining);
+    numEl.classList.toggle('neg', remaining < 0);
+    $('heroSub').textContent = `do limite de ${fmt(limit)} ${totalBudget ? 'deste mês' : '· renda do mês'}`;
+
+    // "today" within the viewed month (full month if viewing a past/future month)
+    const now = new Date();
+    const isCur = (now.getFullYear() === a && now.getMonth() === m);
+    const todayDay = isCur ? Math.min(now.getDate(), daysInMonth) : daysInMonth;
+    const daysLeft = Math.max(1, daysInMonth - todayDay);
+
+    // cumulative actual (up to today) vs linear pace line
+    const cum = []; let run = 0;
+    for (let i = 1; i <= daysInMonth; i++) { run += perDay[i]; cum.push(i <= todayDay ? run : null); }
+    const paceLine = [];
+    for (let i = 1; i <= daysInMonth; i++) paceLine.push(+(limit * i / daysInMonth).toFixed(2));
+    const expectedToday = limit * todayDay / daysInMonth;
+    const paceDiff = expectedToday - run; // >0 => below pace (on track)
+
+    const pill = $('heroPacePill');
+    if (paceDiff >= 0) { pill.textContent = `${fmt(paceDiff)} abaixo do ritmo`; pill.classList.remove('over'); }
+    else { pill.textContent = `${fmt(-paceDiff)} acima do ritmo`; pill.classList.add('over'); }
+    pill.style.display = '';
+
+    // Local, rule-based tip (no LLM)
+    const usedPct = limit > 0 ? Math.round(gas / limit * 100) : 0;
+    const tip = $('heroTip'), tipText = $('heroTipText');
+    if (remaining > 0) {
+        tipText.textContent = `Você já usou ${usedPct}% do limite. Dá pra gastar cerca de ${fmt(remaining / daysLeft)} por dia até o fim do mês.`;
+    } else {
+        tipText.textContent = `Você passou do limite em ${fmt(-remaining)}. Segure os gastos para fechar o mês no azul.`;
+    }
+    tip.style.display = '';
+
+    // Spending-pace chart
+    const labels = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+    destroyChart('heroPace');
+    const cv = $('heroPace');
+    if (!cv) return;
+    charts['heroPace'] = new Chart(cv.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                { data: paceLine, borderColor: 'rgba(255,255,255,.45)', borderDash: [6, 5], borderWidth: 1.5, pointRadius: 0, fill: false, tension: 0 },
+                { data: cum, borderColor: '#7CF5B4', borderWidth: 3, fill: { target: 'origin', above: 'rgba(124,245,180,.14)' }, tension: .35,
+                  pointRadius: ctx => ctx.dataIndex === todayDay - 1 ? 4 : 0, pointBackgroundColor: '#fff', pointBorderColor: '#7CF5B4', pointBorderWidth: 2 }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            scales: { x: { display: false }, y: { display: false, beginAtZero: true } },
+            animation: { duration: 400 }
+        }
+    });
+}
+
+// If Firebase is slow to respond, show login screen by default (skipped in preview)
+if (!PREVIEW_MODE) $('loginScreen').classList.remove('hidden');
 </script>
 </body>
 </html>
