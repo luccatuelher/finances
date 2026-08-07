@@ -845,7 +845,7 @@
         /* Collapsible sidebar */
         .sidebar-toggle { border: 1px solid var(--border); background: var(--surface); width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: 700; color: var(--text-2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background .12s, color .12s; }
         .sidebar-toggle:hover { background: var(--bg); color: var(--accent); }
-        body.sidebar-collapsed #view-dashboard.app { grid-template-columns: 0 1fr; }
+        body.sidebar-collapsed #view-dashboard.app { grid-template-columns: 1fr; }
         body.sidebar-collapsed .sidebar { display: none; }
         body.mobile .sidebar-toggle { display: none; }
 
@@ -1519,25 +1519,26 @@
             </div>
         </div>
 
-        <!-- Gastos Fixos Summary -->
-        <div class="data-table-box" style="margin-bottom:20px">
-            <div class="data-table-title" style="display:flex;justify-content:space-between;align-items:center">
-                <span>📌 Gastos Fixos do Mês</span>
-                <div style="display:flex;align-items:center;gap:10px">
-                    <span id="budgetFixosTotal" style="font-weight:700;color:var(--danger)"></span>
-                    <button class="link-btn" onclick="abrirPopupFixos()">Gerenciar →</button>
+        <!-- Gastos Fixos + Próximos Vencimentos, lado a lado -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-bottom:20px">
+            <div class="data-table-box">
+                <div class="data-table-title" style="display:flex;justify-content:space-between;align-items:center">
+                    <span>📌 Gastos Fixos do Mês</span>
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span id="budgetFixosTotal" style="font-weight:700;color:var(--danger)"></span>
+                        <button class="link-btn" onclick="abrirPopupFixos()">Gerenciar →</button>
+                    </div>
                 </div>
+                <div id="budgetFixosList"><div style="padding:16px;text-align:center;color:var(--text-3);font-size:12px">Nenhum fixo.</div></div>
             </div>
-            <div id="budgetFixosList"><div style="padding:16px;text-align:center;color:var(--text-3);font-size:12px">Nenhum fixo.</div></div>
-        </div>
 
-        <!-- Próximos Vencimentos (movido do dashboard) -->
-        <div class="data-table-box" id="vencBox" style="margin-bottom:20px;display:none">
-            <div class="data-table-title" style="display:flex;justify-content:space-between;align-items:center">
-                <span>📅 Próximos Vencimentos · 30 dias</span>
-                <span id="vencTotal" style="font-weight:700;color:var(--danger)"></span>
+            <div class="data-table-box" id="vencBox" style="display:none">
+                <div class="data-table-title" style="display:flex;justify-content:space-between;align-items:center">
+                    <span>📅 Próximos Vencimentos · 30 dias</span>
+                    <span id="vencTotal" style="font-weight:700;color:var(--danger)"></span>
+                </div>
+                <div id="vencList" style="padding:4px 0"></div>
             </div>
-            <div id="vencList" style="padding:4px 0"></div>
         </div>
     </div>
 </div>
@@ -2836,7 +2837,7 @@ function _performCatDelete(catName, target) {
         delete budget.allocs[catName];
         saveBudget();
     }
-    try { _budgetCatCollapsed.delete(catName); } catch (e) {}
+    try { _budgetCatExpanded.delete(catName); } catch (e) {}
     _catHubEditing = -1;
     commitCats();
     atualizar();
@@ -3412,7 +3413,8 @@ function renderVencimentos() {
     box.style.display = 'block';
     const total = items.reduce((s, i) => s + i.valor, 0);
     $('vencTotal').textContent = fmt(total) + ' no período';
-    $('vencList').innerHTML = items.map(i => {
+
+    const rowHtml = i => {
         const dt = new Date(i.data + 'T00:00:00');
         const dias = Math.round((dt - hoje) / 86400000);
         const [chipTxt, chipColor, chipBg] =
@@ -3427,7 +3429,18 @@ function renderVencimentos() {
             <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;color:${chipColor};background:${chipBg};flex-shrink:0">${chipTxt}</span>
             <span style="font-weight:700;color:var(--danger);flex-shrink:0">${fmt(i.valor)}</span>
         </div>`;
-    }).join('') + `<div style="display:flex;justify-content:space-between;padding:8px 2px 0;font-size:11px;color:var(--text-3)">
+    };
+    const sectionHtml = (title, arr) => {
+        if (!arr.length) return '';
+        const sub = arr.reduce((s, i) => s + i.valor, 0);
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 2px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3)">
+            <span>${title}</span><span>${fmt(sub)}</span>
+        </div>` + arr.map(rowHtml).join('');
+    };
+    const fixos   = items.filter(i => i.badge === 'FIXO');
+    const faturas = items.filter(i => i.badge === 'FATURA');
+    $('vencList').innerHTML = sectionHtml('Fixos', fixos) + sectionHtml('Faturas', faturas)
+        + `<div style="display:flex;justify-content:space-between;padding:8px 2px 0;font-size:11px;color:var(--text-3)">
         <span>${items.length} vencimento${items.length !== 1 ? 's' : ''} até ${String(limite.getDate()).padStart(2,'0')}/${String(limite.getMonth()+1).padStart(2,'0')}</span>
         <span>total <strong style="color:var(--danger)">${fmt(total)}</strong></span>
     </div>`;
@@ -4493,7 +4506,7 @@ function renameBudgetCat(safeKey) {
     save();
 
     // Close collapsed state for old key, open for new
-    _budgetCatCollapsed.delete(oldName);
+    _budgetCatExpanded.delete(oldName);
 
     saveBudget();
     atualizar();
@@ -4571,7 +4584,7 @@ function renderBudget() {
 
 
 let _budgetCatSort = 'alloc_desc'; // 'alloc_desc' | 'alloc_asc' | 'used_desc' | 'used_asc' | 'name_asc' | 'name_desc'
-let _budgetCatCollapsed = new Set();
+let _budgetCatExpanded = new Set();
 
 const _BUDGET_SORT_CYCLE = ['alloc_desc','alloc_asc','used_desc','used_asc','name_asc','name_desc'];
 const _BUDGET_SORT_LABELS = {
@@ -4593,14 +4606,14 @@ function toggleBudgetCatSort() {
 
 function toggleBudgetCatRow(safeKey) {
     const catName = decodeURIComponent(safeKey);
-    if (_budgetCatCollapsed.has(catName)) _budgetCatCollapsed.delete(catName);
-    else _budgetCatCollapsed.add(catName);
+    if (_budgetCatExpanded.has(catName)) _budgetCatExpanded.delete(catName);
+    else _budgetCatExpanded.add(catName);
     const detail  = document.getElementById(`bcat-detail-${safeKey}`);
     const chevron = document.getElementById(`bcat-chev-${safeKey}`);
     if (detail) {
-        const collapsed = _budgetCatCollapsed.has(catName);
-        detail.style.display = collapsed ? 'none' : 'flex';
-        if (chevron) chevron.textContent = collapsed ? '›' : '⌄';
+        const expanded = _budgetCatExpanded.has(catName);
+        detail.style.display = expanded ? 'flex' : 'none';
+        if (chevron) chevron.textContent = expanded ? '⌄' : '›';
     }
 }
 
@@ -4649,12 +4662,12 @@ function renderBudgetCatList(m, a, saidas, investList, totalBudget) {
 
     const tileHtml = ({ catName, pct, isInvest, allocated, spent, pctUsed, group }) => {
         const over     = pctUsed > 100;
-        const barColor = over ? 'var(--danger)' : pctUsed > 80 ? '#f59e0b' : (isInvest ? 'var(--invest)' : 'var(--success)');
+        const barColor = over ? 'var(--danger)' : 'var(--accent)';
         const pctColor = over ? 'var(--danger)' : pctUsed > 80 ? '#b45309' : 'var(--text-3)';
         const safeKey  = encodeURIComponent(catName);
         const icon     = catName.match(/^\p{Emoji}/u)?.[0] || '📦';
         const nameText = escHtml(catName.replace(/^\p{Emoji}️?\s*/u, '')) || escHtml(catName);
-        const detail   = _budgetCatCollapsed.has(catName) ? 'none' : 'flex';
+        const detail   = _budgetCatExpanded.has(catName) ? 'flex' : 'none';
         if (group === 'entrada') {
             return `
         <div class="budget-tile" onclick="toggleBudgetCatRow('${safeKey}')" title="${escHtml(catName)}">
