@@ -904,6 +904,9 @@
         .btd-rename:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
         .btd-save { padding: 6px 13px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
         .btd-del { padding: 6px 10px; background: #fee2e2; color: var(--danger); border: none; border-radius: 8px; font-size: 13px; cursor: pointer; }
+        .nw-toggle { display: flex; gap: 2px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 2px; flex: 1; }
+        .nw-opt { flex: 1; padding: 5px 8px; border: none; background: none; border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--text-3); cursor: pointer; font-family: inherit; }
+        .nw-opt.active { background: var(--surface); color: var(--accent); box-shadow: var(--shadow-sm); }
         body.mobile .budget-tiles { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
     </style>
 </head>
@@ -1322,6 +1325,21 @@
                 <button class="year-nav-btn" onclick="anualChangeYear(-1)">◀</button>
                 <span class="year-nav-label" id="anualYearLabel"></span>
                 <button class="year-nav-btn" onclick="anualChangeYear(1)">▶</button>
+            </div>
+        </div>
+        <div class="hero-card" id="heroCardAnual" style="display:none;margin-bottom:16px">
+            <div class="hero-left">
+                <div class="hero-label" id="heroLabelAnual">Você ainda pode gastar</div>
+                <div class="hero-num" id="heroNumAnual">—</div>
+                <div class="hero-sub" id="heroSubAnual"></div>
+            </div>
+            <div class="hero-pace-wrap">
+                <canvas id="heroPaceAnual"></canvas>
+                <span class="hero-pace-pill" id="heroPacePillAnual" style="display:none"></span>
+            </div>
+            <div class="hero-tip" id="heroTipAnual" style="display:none">
+                <span class="hero-tip-icon">✦</span>
+                <span id="heroTipTextAnual"></span>
             </div>
         </div>
         <!-- ★ UPDATED: 4-column grid, 2 rows, with Saldo Anual + Saldo Até Agora -->
@@ -3954,6 +3972,7 @@ function renderAnual() {
     }
 
     renderDonut(catAnual, 'grafAnualCat', 'wrapAnualCat', '📉', CAT_COLORS, 240);
+    renderHeroAnual();
 
     let accumulated = 0;
     $('anualTbody').innerHTML = rows.map(r => {
@@ -4022,7 +4041,7 @@ function renderMensal() {
     saidas.forEach(t => { dayData[parseInt(t.data.split('-')[2]) - 1] += t.valor; });
     const dayLabels = Array.from({ length: daysInMonth }, (_, i) => i + 1);
     const mcc = _chartColors();
-    const dayDs = [{ label: 'Gastos', data: dayData, backgroundColor: mcc.gasBg, borderColor: mcc.gasBd, borderWidth: 1.5, borderRadius: 2 }];
+    const dayDs = [{ label: 'Gastos', data: dayData, backgroundColor: '#dbeafe', borderColor: '#0b62f0', borderWidth: 1.5, borderRadius: 3 }];
     if (!_updateChart('dia', dayLabels, dayDs)) {
         destroyChart('dia');
         charts['dia'] = new Chart($('graficoDia').getContext('2d'), {
@@ -4294,6 +4313,7 @@ let budget = JSON.parse(localStorage.getItem('fin5_budget') || '{"total":0,"allo
 if (!budget.allocs)      budget.allocs = {};
 if (!budget.total)       budget.total  = 0;
 if (!budget.monthTotals) budget.monthTotals = {};
+if (!budget.needsWants)  budget.needsWants  = {};   // per-category needs/wants override
 
 // ── One-time migration from old budget.categorias → budget.allocs ─────────────
 if (budget.categorias && budget.categorias.length) {
@@ -4441,6 +4461,14 @@ function updateBudgetCatPct(safeKey, val) {
     renderBudget();
 }
 
+function setBudgetCatGroup(safeKey, group) {
+    const catName = decodeURIComponent(safeKey);
+    if (!budget.needsWants) budget.needsWants = {};
+    budget.needsWants[catName] = group;
+    saveBudget();
+    renderBudget();
+}
+
 function renameBudgetCat(safeKey) {
     const oldName = decodeURIComponent(safeKey);
     const inp     = document.getElementById(`bcat-rename-${safeKey}`);
@@ -4579,6 +4607,8 @@ function toggleBudgetCatRow(safeKey) {
 
 function _budgetGroup(catName) {
     if (_isBudgetCatInvest(catName)) return 'invest';
+    const ov = budget.needsWants && budget.needsWants[catName];
+    if (ov === 'needs' || ov === 'wants') return ov;   // user override wins over heuristic
     const n = catName.toLowerCase();
     const needs = ['moradia','aluguel','aliment','mercado','supermerc','saúde','saude','farm','transporte','ônibus','onibus','combust','gasolina','internet','telefone','celular','água','agua','luz','energia','gás','educa','escola','faculdade','fatura','conta ','plano','seguro','imposto','financ'];
     if (needs.some(k => n.includes(k))) return 'needs';
@@ -4610,7 +4640,7 @@ function renderBudgetCatList(m, a, saidas, investList, totalBudget) {
     const sortBtn = $('btnBudgetSort');
     if (sortBtn) sortBtn.textContent = _BUDGET_SORT_LABELS[_budgetCatSort] || _budgetCatSort;
 
-    const tileHtml = ({ catName, pct, isInvest, allocated, spent, pctUsed }) => {
+    const tileHtml = ({ catName, pct, isInvest, allocated, spent, pctUsed, group }) => {
         const over     = pctUsed > 100;
         const barColor = over ? 'var(--danger)' : pctUsed > 80 ? '#f59e0b' : (isInvest ? 'var(--invest)' : 'var(--success)');
         const pctColor = over ? 'var(--danger)' : pctUsed > 80 ? '#b45309' : 'var(--text-3)';
@@ -4627,6 +4657,13 @@ function renderBudgetCatList(m, a, saidas, investList, totalBudget) {
             <div class="budget-tile-bar"><div class="budget-tile-fill" style="width:${Math.min(pctUsed, 100)}%;background:${barColor}"></div></div>
         </div>
         <div id="bcat-detail-${safeKey}" class="budget-tile-detail" style="display:${detail}" onclick="event.stopPropagation()">
+            ${isInvest ? '' : `<div class="btd-row">
+                <span class="btd-lbl">Tipo</span>
+                <div class="nw-toggle">
+                    <button class="nw-opt ${group === 'needs' ? 'active' : ''}" onclick="setBudgetCatGroup('${safeKey}','needs')">Necessidade</button>
+                    <button class="nw-opt ${group === 'wants' ? 'active' : ''}" onclick="setBudgetCatGroup('${safeKey}','wants')">Desejo</button>
+                </div>
+            </div>`}
             <div class="btd-row">
                 <span class="btd-lbl">% do orçamento</span>
                 <input type="number" class="budget-cat-pct-input" value="${pct}" min="0" max="100" onchange="updateBudgetCatPct('${safeKey}', this.value)">
@@ -6461,6 +6498,82 @@ function renderHero() {
                 { data: paceLine, borderColor: 'rgba(255,255,255,.45)', borderDash: [6, 5], borderWidth: 1.5, pointRadius: 0, fill: false, tension: 0 },
                 { data: cum, borderColor: '#7CF5B4', borderWidth: 3, fill: { target: 'origin', above: 'rgba(124,245,180,.14)' }, tension: .35,
                   pointRadius: ctx => ctx.dataIndex === todayDay - 1 ? 4 : 0, pointBackgroundColor: '#fff', pointBorderColor: '#7CF5B4', pointBorderWidth: 2 }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            scales: { x: { display: false }, y: { display: false, beginAtZero: true } },
+            animation: { duration: 400 }
+        }
+    });
+}
+
+// ── SAFE-TO-SPEND HERO — YEARLY (Anual view) ──────────────────────────────────
+function renderHeroAnual() {
+    const card = $('heroCardAnual');
+    if (!card) return;
+    const a = parseInt($('filtroAno').value);
+    const perMonth = Array(12).fill(0);
+    let entYear = 0, gasYear = 0;
+    tx.forEach(t => {
+        if (!t.data || parseInt(t.data.slice(0, 4), 10) !== a) return;
+        const mo = parseInt(t.data.slice(5, 7), 10) - 1;
+        if (t.tipo === 'entrada') entYear += t.valor;
+        else if (t.tipo === 'saida') { gasYear += t.valor; if (mo >= 0 && mo < 12) perMonth[mo] += t.valor; }
+    });
+
+    // Yearly spendable ceiling: sum of each month's budget (minus investment allocation), else year income
+    let limit = 0, anyBudget = false;
+    const investPct = (cats.investimento || []).reduce((s, c) => s + (budget.allocs[c] || 0), 0);
+    for (let mm = 0; mm < 12; mm++) {
+        const tb = getBudgetTotal(mm, a);
+        if (tb) { anyBudget = true; limit += tb * ((100 - investPct) / 100); }
+    }
+    if (!anyBudget) limit = entYear;
+    if (!limit || limit <= 0) { card.style.display = 'none'; destroyChart('heroPaceAnual'); return; }
+    card.style.display = '';
+
+    const remaining = limit - gasYear;
+    const overLimit = remaining < 0;
+    $('heroNumAnual').textContent = overLimit ? fmt(-remaining) : fmt(remaining);
+    $('heroNumAnual').classList.toggle('neg', overLimit);
+    $('heroLabelAnual').textContent = overLimit ? `Você passou do limite de ${a} em` : `Você ainda pode gastar em ${a}`;
+    $('heroSubAnual').textContent = `do limite de ${fmt(limit)} ${anyBudget ? 'no ano' : '· renda do ano'}`;
+
+    const now = new Date();
+    const curMonthIdx = now.getFullYear() === a ? now.getMonth() : 11;
+    const monthsElapsed = curMonthIdx + 1;
+    const monthsLeft = Math.max(1, 12 - monthsElapsed);
+
+    const cum = []; let run = 0;
+    for (let i = 0; i < 12; i++) { run += perMonth[i]; cum.push(i <= curMonthIdx ? run : null); }
+    const paceLine = []; for (let i = 0; i < 12; i++) paceLine.push(+(limit * (i + 1) / 12).toFixed(2));
+    const paceDiff = (limit * monthsElapsed / 12) - run;
+
+    const pill = $('heroPacePillAnual');
+    if (paceDiff >= 0) { pill.textContent = `${fmt(paceDiff)} abaixo do ritmo`; pill.classList.remove('over'); }
+    else { pill.textContent = `${fmt(-paceDiff)} acima do ritmo`; pill.classList.add('over'); }
+    pill.style.display = '';
+
+    const usedPct = Math.round(gasYear / limit * 100);
+    $('heroTipTextAnual').textContent = remaining > 0
+        ? `Você já usou ${usedPct}% do limite anual. Dá pra gastar cerca de ${fmt(remaining / monthsLeft)} por mês até dezembro.`
+        : `Você passou do limite anual em ${fmt(-remaining)}. Segure os gastos para fechar o ano no azul.`;
+    $('heroTipAnual').style.display = '';
+
+    const labels = MESES.map(mn => mn.slice(0, 3));
+    destroyChart('heroPaceAnual');
+    const cv = $('heroPaceAnual');
+    if (!cv) return;
+    charts['heroPaceAnual'] = new Chart(cv.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                { data: paceLine, borderColor: 'rgba(255,255,255,.45)', borderDash: [6, 5], borderWidth: 1.5, pointRadius: 0, fill: false, tension: 0 },
+                { data: cum, borderColor: '#7CF5B4', borderWidth: 3, fill: { target: 'origin', above: 'rgba(124,245,180,.14)' }, tension: .35,
+                  pointRadius: ctx => ctx.dataIndex === curMonthIdx ? 4 : 0, pointBackgroundColor: '#fff', pointBorderColor: '#7CF5B4', pointBorderWidth: 2 }
             ]
         },
         options: {
