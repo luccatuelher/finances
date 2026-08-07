@@ -27,7 +27,7 @@
             --accent: #0b62f0; --accent2: #0147e3;
             --accent-soft: #eaf1fe; --accent-grad: linear-gradient(135deg, #0a84fb 0%, #0247e6 100%);
             --success: #16a34a; --danger: #ef4444; --invest: #7c3aed;
-            --credit: #0284c7; --debit: #0f766e;
+            --credit: #0284c7; --debit: #1d4ed8;
             --bg: #f4f6f9; --surface: #ffffff;
             --border: #ecedf1; --border-light: #f4f5f8;
             --text: #0f172a; --text-2: #64748b; --text-3: #97a1b0;
@@ -122,7 +122,7 @@
 
         /* TAGS */
         .tag-cred { font-size: 9px; font-weight: 700; padding: 2px 5px; border-radius: 3px; background: #e0f2fe; color: #0369a1; margin-left: 5px; vertical-align: middle; }
-        .tag-deb  { font-size: 9px; font-weight: 700; padding: 2px 5px; border-radius: 3px; background: #ccfbf1; color: #0f766e; margin-left: 5px; vertical-align: middle; }
+        .tag-deb  { font-size: 9px; font-weight: 700; padding: 2px 5px; border-radius: 3px; background: #dbeafe; color: #1d4ed8; margin-left: 5px; vertical-align: middle; }
         .tag-fixo { font-size: 9px; font-weight: 700; padding: 2px 5px; border-radius: 3px; background: #fef3c7; color: #92400e; margin-left: 6px; vertical-align: middle; }
         .tag-card { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 3px; margin-left: 5px; vertical-align: middle; }
         /* FATURA INFO */
@@ -842,6 +842,12 @@
         .kpi-val { font-size: 22px; }
         /* Month/year nav → rounded */
         .month-nav-bar { border-radius: 10px; }
+        /* Collapsible sidebar */
+        .sidebar-toggle { border: 1px solid var(--border); background: var(--surface); width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: 700; color: var(--text-2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background .12s, color .12s; }
+        .sidebar-toggle:hover { background: var(--bg); color: var(--accent); }
+        body.sidebar-collapsed #view-dashboard.app { grid-template-columns: 0 1fr; }
+        body.sidebar-collapsed .sidebar { display: none; }
+        body.mobile .sidebar-toggle { display: none; }
 
         /* ═══════════════ SAFE-TO-SPEND HERO (phase 2) ═══════════════ */
         .hero-card { background: var(--accent-grad); border-radius: var(--radius-lg); padding: 22px 24px; color: #fff;
@@ -907,7 +913,13 @@
         .nw-toggle { display: flex; gap: 2px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 2px; flex: 1; }
         .nw-opt { flex: 1; padding: 5px 8px; border: none; background: none; border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--text-3); cursor: pointer; font-family: inherit; }
         .nw-opt.active { background: var(--surface); color: var(--accent); box-shadow: var(--shadow-sm); }
+        .btd-value { flex: 1; min-width: 90px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-weight: 600; font-family: inherit; outline: none; color: var(--text); background: var(--surface); text-align: right; }
+        .btd-value:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
         body.mobile .budget-tiles { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+        .budget-add-cat { display: flex; gap: 6px; align-items: center; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--bg); border-radius: 0 0 var(--radius) var(--radius); }
+        .budget-add-type { padding: 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-family: inherit; background: var(--surface); color: var(--text); cursor: pointer; flex-shrink: 0; outline: none; }
+        .budget-add-name { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; outline: none; background: var(--surface); color: var(--text); }
+        .budget-add-name:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
     </style>
 </head>
 <body>
@@ -915,6 +927,7 @@
 <!-- TOP BAR -->
 <div class="topbar">
     <div class="topbar-left">
+        <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" title="Ocultar/mostrar painel lateral">«</button>
         <div class="logo">Finances <span>/ Lucca</span></div>
         <nav class="nav-pills">
             <button class="nav-pill active" onclick="navTo('dashboard',this)">Visão Geral</button>
@@ -1153,27 +1166,6 @@
         </div>
         <hr style="border:none;border-top:1px solid var(--border)">
         <div>
-            <div class="section-label">Gastos Fixos</div>
-            <div class="fixos-mini">
-                <div class="fixos-mini-header">
-                    <span id="fixosMiniTotal" class="fixos-mini-total"></span>
-                    <button class="link-btn" onclick="abrirPopupFixos()">Gerenciar →</button>
-                </div>
-                <div id="fixosMiniList"><span style="font-size:12px;color:var(--text-3)">Nenhum fixo neste mês.</span></div>
-            </div>
-        </div>
-        <hr style="border:none;border-top:1px solid var(--border)">
-        <div id="vencBox" style="display:none">
-            <div class="section-label">Próximos Vencimentos</div>
-            <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                    <span id="vencTotal" style="font-size:12px;font-weight:600;color:var(--danger)"></span>
-                </div>
-                <div id="vencList"></div>
-            </div>
-            <hr style="border:none;border-top:1px solid var(--border);margin-top:16px">
-        </div>
-        <div>
             <div class="section-label">Cartões de Crédito</div>
             <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -1288,7 +1280,7 @@
             </div>
             <div class="fixos-table-section" id="debitoSection" style="display:none">
                 <div class="fixos-table-header" onclick="$('debitoSection').classList.toggle('open')">
-                    <div class="fixos-table-title" style="color:#0f766e">🟢 Débito <span class="fixo-count-badge" id="debitoCountBadge" style="background:#ccfbf1;color:#0f766e"></span></div>
+                    <div class="fixos-table-title" style="color:#1d4ed8">🔵 Débito <span class="fixo-count-badge" id="debitoCountBadge" style="background:#dbeafe;color:#1d4ed8"></span></div>
                     <div class="fixos-table-total" id="debitoTotal"></div>
                     <div class="fixos-table-arrow">▼</div>
                 </div>
@@ -1400,7 +1392,7 @@
             </div>
             <div class="split-box">
                 <div class="split-head">
-                    <span class="split-title debit">🟢 Compras no Débito</span>
+                    <span class="split-title debit">🔵 Compras no Débito</span>
                     <span class="split-total debit" id="mDebTotal">R$ 0</span>
                 </div>
                 <div class="split-list" id="mDebList"></div>
@@ -1492,48 +1484,13 @@
             </div>
         </div>
 
-        <!-- Charts + Category Hub side by side -->
-        <div class="budget-chart-hub-row" style="display:grid;gap:14px;margin-bottom:20px">
-            <div class="chart-box">
-                <div class="chart-box-label">Alocação do Orçamento</div>
-                <div id="wrapBudgetPie"><div class="chart-empty" style="height:200px"><span style="font-size:24px;opacity:.3">📊</span>Defina o orçamento</div></div>
-            </div>
-
-            <!-- Category Hub -->
-            <div class="data-table-box" style="display:flex;flex-direction:column">
-                <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
-                    <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-2)">🏷️ Categorias</span>
-                </div>
-                <!-- Type tabs -->
-                <div style="padding:10px 16px 0">
-                    <div class="tabs" style="margin-bottom:0">
-                        <button class="tab active t-saida"   id="catHub-tab-saida"        onclick="setCatHub('saida',this)">📉 Gastos</button>
-                        <button class="tab t-entrada"         id="catHub-tab-entrada"       onclick="setCatHub('entrada',this)">📈 Entradas</button>
-                        <button class="tab t-invest"          id="catHub-tab-investimento"  onclick="setCatHub('investimento',this)">🟣 Invest.</button>
-                    </div>
-                </div>
-                <!-- Category list -->
-                <div id="catHubList" style="min-height:48px;flex:1;overflow-y:auto;max-height:220px"></div>
-                <!-- Add row -->
-                <div class="ch-add-row">
-                    <div class="icon-picker-wrap">
-                        <div class="ch-add-icon" id="catHubIconBtn" onclick="toggleIconPicker('catHubPicker',null)" title="Escolher ícone">📦</div>
-                        <div class="icon-picker" id="catHubPicker"></div>
-                    </div>
-                    <input type="text" id="catHubInput"
-                        placeholder="Nome da categoria…"
-                        style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;outline:none;background:var(--surface);color:var(--text)"
-                        onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
-                        onkeydown="if(event.key==='Enter')addCatHub()">
-                    <button onclick="addCatHub()" class="btn-save"
-                        style="width:auto;margin:0;padding:8px 14px;font-size:12px;flex-shrink:0">
-                        ＋
-                    </button>
-                </div>
-            </div>
+        <!-- Alocação do Orçamento -->
+        <div class="chart-box" style="margin-bottom:20px">
+            <div class="chart-box-label">Alocação do Orçamento</div>
+            <div id="wrapBudgetPie"><div class="chart-empty" style="height:200px"><span style="font-size:24px;opacity:.3">📊</span>Defina o orçamento</div></div>
         </div>
 
-        <!-- Category budget list (stays in place) -->
+        <!-- Categorias — cria, edita e orça tudo aqui -->
         <div class="data-table-box" style="margin-bottom:20px">
             <div class="data-table-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
                 <span>Categorias do Orçamento</span>
@@ -1542,19 +1499,45 @@
                         style="font-size:11px;font-weight:600;padding:4px 10px;border:1px solid var(--border);background:var(--surface);border-radius:6px;cursor:pointer;color:var(--text-2);white-space:nowrap">
                         ↓ % Alocado
                     </button>
-                    <span style="font-size:11px;color:var(--text-3)">Clique em ⌄ para editar</span>
+                    <span style="font-size:11px;color:var(--text-3)">Clique para editar</span>
                 </div>
             </div>
             <div id="budgetCatList" style="padding:4px 0"></div>
+            <div class="budget-add-cat">
+                <select id="budgetCatType" class="budget-add-type" title="Tipo da categoria">
+                    <option value="saida">📉 Gasto</option>
+                    <option value="entrada">📈 Entrada</option>
+                    <option value="investimento">🟣 Invest.</option>
+                </select>
+                <div class="icon-picker-wrap">
+                    <div class="ch-add-icon" id="catHubIconBtn" onclick="toggleIconPicker('catHubPicker',null)" title="Escolher ícone">📦</div>
+                    <div class="icon-picker" id="catHubPicker"></div>
+                </div>
+                <input type="text" id="catHubInput" class="budget-add-name" placeholder="Nova categoria…"
+                    onkeydown="if(event.key==='Enter')addBudgetCategory()">
+                <button onclick="addBudgetCategory()" class="btn-save" style="width:auto;margin:0;padding:8px 14px;font-size:13px;flex-shrink:0">＋</button>
+            </div>
         </div>
 
         <!-- Gastos Fixos Summary -->
         <div class="data-table-box" style="margin-bottom:20px">
             <div class="data-table-title" style="display:flex;justify-content:space-between;align-items:center">
                 <span>📌 Gastos Fixos do Mês</span>
-                <span id="budgetFixosTotal" style="font-weight:700;color:var(--danger)"></span>
+                <div style="display:flex;align-items:center;gap:10px">
+                    <span id="budgetFixosTotal" style="font-weight:700;color:var(--danger)"></span>
+                    <button class="link-btn" onclick="abrirPopupFixos()">Gerenciar →</button>
+                </div>
             </div>
             <div id="budgetFixosList"><div style="padding:16px;text-align:center;color:var(--text-3);font-size:12px">Nenhum fixo.</div></div>
+        </div>
+
+        <!-- Próximos Vencimentos (movido do dashboard) -->
+        <div class="data-table-box" id="vencBox" style="margin-bottom:20px;display:none">
+            <div class="data-table-title" style="display:flex;justify-content:space-between;align-items:center">
+                <span>📅 Próximos Vencimentos · 30 dias</span>
+                <span id="vencTotal" style="font-weight:700;color:var(--danger)"></span>
+            </div>
+            <div id="vencList" style="padding:4px 0"></div>
         </div>
     </div>
 </div>
@@ -1994,7 +1977,7 @@ function _chartColors() {
         entBg:  '#dcfce7', entBd:  '#16a34a',
         gasBg:  '#fee2e2', gasBd:  '#dc2626',
         invBg:  '#ede9fe', invBd:  '#6d28d9',
-        debBg:  '#ccfbf1', debBd:  '#0f766e',
+        debBg:  '#93c5fd', debBd:  '#1d4ed8',
         credBg: '#e0f2fe', credBd: '#0284c7',
     };
 }
@@ -3821,8 +3804,8 @@ function atualizar() {
 
     const nomes = Object.keys(fixosMap);
     const totalF = nomes.reduce((s, k) => s + fixosMap[k], 0);
-    $('fixosMiniTotal').textContent = nomes.length ? fmt(totalF) : '';
-    $('fixosMiniList').innerHTML = nomes.length
+    if ($('fixosMiniTotal')) $('fixosMiniTotal').textContent = nomes.length ? fmt(totalF) : '';
+    if ($('fixosMiniList')) $('fixosMiniList').innerHTML = nomes.length
         ? nomes.sort((a, b) => fixosMap[b] - fixosMap[a]).slice(0, 5).map(n =>
             `<div class="fixos-mini-item"><span class="n">${escHtml(n)}</span><span class="v">${fmt(fixosMap[n])}</span></div>`).join('')
             + (nomes.length > 5 ? `<div style="text-align:center;margin-top:6px"><button class="link-btn" onclick="abrirPopupFixos()">ver todos (${nomes.length})</button></div>` : '')
@@ -4455,7 +4438,22 @@ function onBudgetTotalChange() {
 
 function updateBudgetCatPct(safeKey, val) {
     const catName = decodeURIComponent(safeKey);
-    const pct = Math.max(0, Math.min(100, parseInt(val) || 0));
+    let pct = parseFloat(String(val).replace(',', '.'));
+    if (!isFinite(pct)) pct = 0;
+    pct = Math.max(0, Math.min(100, Math.round(pct * 100) / 100));   // allow up to 2 decimals
+    budget.allocs[catName] = pct;
+    saveBudget();
+    renderBudget();
+}
+
+// Set an allocation by its R$ amount — converts to % of the month's total budget
+function updateBudgetCatValue(safeKey, val) {
+    const catName = decodeURIComponent(safeKey);
+    const total = getBudgetTotal(_budgetMonth, _budgetYear);
+    if (!total || total <= 0) { toast('⚠️ Defina o Orçamento Total do mês primeiro.', '#b45309'); renderBudget(); return; }
+    const value = parseValor(val);
+    let pct = (isFinite(value) && value > 0) ? (value / total) * 100 : 0;
+    pct = Math.max(0, Math.min(100, Math.round(pct * 100) / 100));
     budget.allocs[catName] = pct;
     saveBudget();
     renderBudget();
@@ -4568,6 +4566,7 @@ function renderBudget() {
 
     // Fixos
     renderBudgetFixos(m, a);
+    renderVencimentos();
 }
 
 
@@ -4603,6 +4602,14 @@ function toggleBudgetCatRow(safeKey) {
         detail.style.display = collapsed ? 'none' : 'flex';
         if (chevron) chevron.textContent = collapsed ? '›' : '⌄';
     }
+}
+
+// Create a category (any type) from the budget box's add-row
+function addBudgetCategory() {
+    const sel = $('budgetCatType');
+    _catHubType = sel ? sel.value : 'saida';
+    addCatHub();      // reuses catHubInput + chosen icon + _catHubType
+    renderBudget();   // refresh the tiles so the new category shows
 }
 
 function _budgetGroup(catName) {
@@ -4648,6 +4655,21 @@ function renderBudgetCatList(m, a, saidas, investList, totalBudget) {
         const icon     = catName.match(/^\p{Emoji}/u)?.[0] || '📦';
         const nameText = escHtml(catName.replace(/^\p{Emoji}️?\s*/u, '')) || escHtml(catName);
         const detail   = _budgetCatCollapsed.has(catName) ? 'none' : 'flex';
+        if (group === 'entrada') {
+            return `
+        <div class="budget-tile" onclick="toggleBudgetCatRow('${safeKey}')" title="${escHtml(catName)}">
+            <div class="budget-tile-icon">${icon}</div>
+            <div class="budget-tile-name">${nameText}</div>
+            <div class="budget-tile-spent">Categoria de entrada</div>
+        </div>
+        <div id="bcat-detail-${safeKey}" class="budget-tile-detail" style="display:${detail}" onclick="event.stopPropagation()">
+            <div class="btd-row">
+                <input type="text" id="bcat-rename-${safeKey}" class="btd-rename" value="${escHtml(catName)}" onkeydown="if(event.key==='Enter')renameBudgetCat('${safeKey}')">
+                <button class="btd-save" onclick="renameBudgetCat('${safeKey}')">✓ Renomear</button>
+                <button class="btd-del" onclick="deleteBudgetCat('${safeKey}')">🗑️</button>
+            </div>
+        </div>`;
+        }
         return `
         <div class="budget-tile" onclick="toggleBudgetCatRow('${safeKey}')" title="${escHtml(catName)}">
             <span class="budget-tile-pct" style="color:${pctColor}">${pctUsed}%</span>
@@ -4665,9 +4687,11 @@ function renderBudgetCatList(m, a, saidas, investList, totalBudget) {
                 </div>
             </div>`}
             <div class="btd-row">
-                <span class="btd-lbl">% do orçamento</span>
-                <input type="number" class="budget-cat-pct-input" value="${pct}" min="0" max="100" onchange="updateBudgetCatPct('${safeKey}', this.value)">
-                <span class="btd-lbl">&rarr; ${fmt(allocated)}</span>
+                <span class="btd-lbl">Valor</span>
+                <input type="text" class="btd-value" inputmode="decimal" value="${allocated ? allocated.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}" placeholder="0,00" onchange="updateBudgetCatValue('${safeKey}', this.value)" title="Valor em R$ para o mês">
+                <span class="btd-lbl">ou</span>
+                <input type="number" class="budget-cat-pct-input" value="${pct}" min="0" max="100" step="0.01" onchange="updateBudgetCatPct('${safeKey}', this.value)" title="% do orçamento">
+                <span class="btd-lbl">%</span>
             </div>
             <div class="btd-row">
                 <input type="text" id="bcat-rename-${safeKey}" class="btd-rename" value="${escHtml(catName)}" onkeydown="if(event.key==='Enter')renameBudgetCat('${safeKey}')">
@@ -4677,19 +4701,26 @@ function renderBudgetCatList(m, a, saidas, investList, totalBudget) {
         </div>`;
     };
 
+    const entradaItems = (cats.entrada || []).map(catName => ({ catName, group: 'entrada' }));
+    const allItems = enriched.concat(entradaItems);
     const groups = [
-        { key: 'needs',  label: 'Necessidades' },
-        { key: 'wants',  label: 'Desejos' },
-        { key: 'invest', label: 'Investimentos' }
+        { key: 'needs',   label: 'Necessidades' },
+        { key: 'wants',   label: 'Desejos' },
+        { key: 'invest',  label: 'Investimentos' },
+        { key: 'entrada', label: 'Entradas' }
     ];
     let html = '';
     groups.forEach(g => {
-        const items = enriched.filter(c => c.group === g.key);
+        const items = allItems.filter(c => c.group === g.key);
         if (!items.length) return;
-        const gSpent = items.reduce((s, c) => s + c.spent, 0);
-        const gPct   = items.reduce((s, c) => s + c.pct, 0);
+        let sub = '';
+        if (g.key !== 'entrada') {
+            const gSpent = items.reduce((s, c) => s + c.spent, 0);
+            const gPct   = items.reduce((s, c) => s + c.pct, 0);
+            sub = ` <span style="color:var(--text-3);font-weight:600">&middot; ${fmt(gSpent)}${gPct ? ` &middot; ${gPct}%` : ''}</span>`;
+        }
         html += `<div class="budget-tiles-group">
-            <div class="budget-tiles-group-label">${g.label} <span style="color:var(--text-3);font-weight:600">&middot; ${fmt(gSpent)}${gPct ? ` &middot; ${gPct}%` : ''}</span></div>
+            <div class="budget-tiles-group-label">${g.label}${sub}</div>
             <div class="budget-tiles">${items.map(tileHtml).join('')}</div>
         </div>`;
     });
@@ -6584,6 +6615,15 @@ function renderHeroAnual() {
         }
     });
 }
+
+// ── COLLAPSIBLE SIDEBAR ───────────────────────────────────────────────────────
+function toggleSidebar() {
+    const collapsed = document.body.classList.toggle('sidebar-collapsed');
+    try { localStorage.setItem('fin5_sidebar_collapsed', collapsed ? '1' : '0'); } catch (e) {}
+    const btn = $('sidebarToggle'); if (btn) btn.textContent = collapsed ? '»' : '«';
+}
+try { if (localStorage.getItem('fin5_sidebar_collapsed') === '1') document.body.classList.add('sidebar-collapsed'); } catch (e) {}
+{ const _sbt = $('sidebarToggle'); if (_sbt) _sbt.textContent = document.body.classList.contains('sidebar-collapsed') ? '»' : '«'; }
 
 // If Firebase is slow to respond, show login screen by default (skipped in preview)
 if (!PREVIEW_MODE) $('loginScreen').classList.remove('hidden');
