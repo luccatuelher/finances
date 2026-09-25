@@ -87,6 +87,47 @@
         verifica invariantes após cada uma (ids únicos, categoria existe, fatura ≥ compra,
         valor/data válidos, fixo com série, estado sempre sanitizado, zero console.error).
         Restaura estado e localStorage ao terminar. Rodadas: 5.000 ações, 0 violações.
+      • FIXOS QUE ACABAM: cada série mostra "até Mmm/AA"; se a última ocorrência cai no
+        mês atual ou no próximo, aparece "⚠️ termina" (popup e lista do orçamento) e o
+        botão 🔁 renova por mais 12 meses a partir da última, preservando o dia pretendido
+        (série do dia 31 continua 31/out, 30/nov, 31/dez...). Antes a série sumia sem aviso.
+      • FONTE ÚNICA DE VALIDAÇÃO: makeTx() agora passa pela mesma normalização da
+        sanitização (_sanTx). O fuzzer (estendido com formulários mobile e importação de
+        extrato) achou divergência: investimento importado de fatura ficava com cartaoId
+        sem pagamento no crédito. Fuzz: 3.600 ações desktop+mobile, 0 violações.
+      • SYNC FUZZ: runSyncFuzz() simula 2 dispositivos + Firebase em memória com edições
+        e sincronizações aleatórias (conflitos resolvidos ao acaso) e exige convergência
+        A = B = servidor. 8 cenários, ~100 merges automáticos, todos convergiram.
+      • PRIVACIDADE: camada única de armazenamento (lsKey/lsGet/lsSet/lsDel); o modo
+        preview usa o namespace "preview:" — antes, index.html?preview abria as finanças
+        salvas no navegador SEM login. Ao sair da conta (com tudo sincronizado) o app
+        oferece apagar os dados deste navegador (computador compartilhado).
+      • REGRAS DO FIREBASE: após o login o app tenta ler um caminho vizinho inexistente;
+        se conseguir, as regras estão abertas (qualquer conta leria as outras) → aviso e
+        regra correta no console (finances/$uid: auth.uid === $uid). 1×/dia, não intrusivo.
+      • BACKUP: indicador "último backup há N dias" na seção Backup, em alerta após 30
+        dias ou se nunca houve backup em arquivo (nuvem não é cópia independente).
+        Análise estática: 327 funções declaradas, nenhuma sem uso.
+      • FOCO NOS MODAIS: observador único da classe "open" dos modais do registro — ao
+        abrir foca o 1º campo (Enter/Esc funcionam sem clicar), ao fechar devolve o foco
+        a quem abriu; overlays com role="dialog"/aria-modal. No celular não abre teclado.
+      • BOTÃO VOLTAR: cada modal aberto empilha uma entrada no histórico — "voltar" (celular
+        ou navegador) fecha o modal do topo em vez de sair do app e perder o que foi
+        digitado; aninhados fecham um por vez; conflito de sync exige decisão.
+      • PROJEÇÃO DO PATRIMÔNIO: média só de meses COMPLETOS (o mês em andamento — ex.: só
+        o salário entrou — virava "ritmo") e exige 2+ meses de histórico; texto informa a
+        base ("média de N meses"). Inspeção visual das 4 visões com dados realistas.
+      • CABEÇALHO RESPONSIVO: em larguras intermediárias (tablet/janela estreita) as abas
+        invadiam os controles da direita (já acontecia no original). Agora as abas rolam
+        dentro do espaço, e rótulos/controles redundantes (ano, extrato, "Desfazer",
+        nome do usuário) saem por breakpoint. Medido em 640–1440 px: nenhuma sobreposição.
+      • CARTÃO PADRÃO: ao escolher "Crédito" num lançamento novo, o cartão sugerido é o
+        último usado (ou o único cadastrado) — antes vinha "sem cartão" e a compra ficava
+        fora de qualquer fatura/vencimento. Edição respeita "sem cartão" explícito. Vale
+        também ao trocar Débito→Crédito na edição inline e registra o cartão de fixos.
+        Inspeção visual mobile (375 px): sem overflow horizontal.
+      Ferramentas de manutenção (use após qualquer mudança, em index.html?preview):
+        runSelfTests() · runFuzz() · runSyncFuzz()
     -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Sans:wght@700;800&display=swap" rel="stylesheet">
     <!-- Versões FIXAS + SRI (integrity): "chart.js" sem versão pegava sempre a mais
@@ -878,6 +919,15 @@
         .budget-add-type { padding: 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-family: inherit; background: var(--surface); color: var(--text); cursor: pointer; flex-shrink: 0; outline: none; }
         .budget-add-name { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; outline: none; background: var(--surface); color: var(--text); }
         .budget-add-name:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    /* Cabeçalho em larguras intermediárias (tablet / janela estreita, sem UA mobile):
+           as abas rolam na horizontal em vez de invadir os controles da direita, e rótulos
+           secundários somem antes de faltar espaço. */
+        .nav-pills { min-width: 0; flex-shrink: 1; overflow-x: auto; scrollbar-width: none; }
+        .nav-pills::-webkit-scrollbar { display: none; }
+        @media (max-width: 1000px) { .logo span, .user-name { display: none; } }
+        /* redundantes em telas menores: o mês já mostra/atravessa o ano; extrato também está na lateral */
+        @media (max-width: 1100px) { #yearNavBar, .topbar-right > .sync-btn[onclick^="abrirExtrato"] { display: none !important; } }
+        @media (max-width: 820px)  { .btn-undo .tb-lbl, .sync-time { display: none; } .btn-undo { padding: 5px 9px; } }
     </style>
 </head>
 <body>
@@ -895,7 +945,7 @@
         </nav>
     </div>
     <div class="topbar-right">
-        <button class="btn-undo" id="btnUndo" onclick="undo()" disabled style="display:none">↩ Desfazer</button>
+        <button class="btn-undo" id="btnUndo" onclick="undo()" disabled style="display:none">↩ <span class="tb-lbl">Desfazer</span></button>
         <button class="sync-btn" id="btnSync" onclick="syncNow()" title="Sincronizar com Firebase" style="display:none">
             <span class="sync-dot" id="syncDot"></span>
             <span id="syncLabel">Sync</span>
@@ -1146,6 +1196,7 @@
                 <div class="backup-btn" onclick="exportar()">↑ Exportar</div>
                 <label class="backup-btn">↓ Importar<input type="file" hidden onchange="importar(this)"></label>
             </div>
+            <div id="backupAge" style="font-size:10px;margin-top:5px;line-height:1.4;color:var(--text-3)"></div>
             <div class="backup-row" style="margin-top:6px">
                 <div class="backup-btn" onclick="exportarCSV()" title="Exporta os lançamentos do mês filtrado em CSV (Excel/Sheets)">⇪ CSV do mês</div>
             </div>
@@ -1925,21 +1976,29 @@ function safeColor(c, fallback = '#6d28d9') { return typeof c === 'string' && /^
 const _clone = typeof structuredClone === 'function' ? structuredClone : o => JSON.parse(JSON.stringify(o));
 
 // ── LOCAL STORAGE (tolerante a JSON corrompido e cota cheia) ─────────────────
+// Toda leitura/escrita passa por aqui. O modo preview usa um namespace próprio e NUNCA
+// toca nos dados reais — antes, abrir index.html?preview num navegador onde alguém já
+// tinha usado o app mostrava as finanças salvas sem login (e testes as alteravam).
+const LS_PREFIX = PREVIEW_MODE ? 'preview:' : '';
+const lsKey = k => LS_PREFIX + k;
+function lsGet(k) { try { return localStorage.getItem(lsKey(k)); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(lsKey(k), v); return true; } catch (e) { return false; } }
+function lsDel(k) { try { localStorage.removeItem(lsKey(k)); } catch (e) {} }
 function loadJSON(key, fallback) {
     let raw;
-    try { raw = localStorage.getItem(key); } catch (e) { return fallback; }
+    try { raw = localStorage.getItem(lsKey(key)); } catch (e) { return fallback; }
     if (raw == null) return fallback;
     try { return JSON.parse(raw); }
     catch (e) {
         // Nunca descarta o original: guarda cópia para recuperação manual
         console.error(`Dados corrompidos em ${key}; cópia salva em ${key}_corrupt`, e);
-        try { localStorage.setItem(key + '_corrupt', raw); } catch (_) {}
+        lsSet(key + '_corrupt', raw);
         return fallback;
     }
 }
 let _storageWarned = false;
 function storeJSON(key, val) {
-    try { localStorage.setItem(key, JSON.stringify(val)); return true; }
+    try { localStorage.setItem(lsKey(key), JSON.stringify(val)); return true; }
     catch (e) {
         console.error('Falha ao salvar ' + key, e);
         if (!_storageWarned) { _storageWarned = true; toast('⚠️ Não foi possível salvar no navegador (armazenamento cheio?). Exporte um backup.', '#dc2626'); }
@@ -2439,7 +2498,7 @@ function restoreState(s) { ({ tx, cats, goals, cards, budget } = s); _invalidate
 function snapshotState() { return _clone({ tx, cats, goals, cards, budget }); }
 function loadLocalState() {
     let hasData = false;
-    try { hasData = localStorage.getItem('fin5_data') != null; } catch (e) {}
+    hasData = lsGet('fin5_data') != null;
     const fromVersion = loadJSON('fin5_schema', 2);
     const s = sanitizeState({
         t: loadJSON('fin5_data', (!hasData && PREVIEW_MODE) ? SEED : []),   // dados de exemplo só no modo preview
@@ -2515,6 +2574,7 @@ function renderAll() {
     safeRender(atualizar);
     renderCurrentView();
     safeRender(refreshAllCatCombos);
+    safeRender(renderBackupAge);
 }
 
 const commit      = () => { save(); renderAll(); schedulePush(); };
@@ -2571,9 +2631,10 @@ function init() {
             e.preventDefault(); undo();
         });
         document.addEventListener('keydown', _onGlobalKey);
+        _setupModalFocus();
         // Outra aba do app salvou → recarrega o estado em vez de sobrescrever depois
         window.addEventListener('storage', e => {
-            if (!e.key || !/^fin5_(data|cats|goals|cards|budget)$/.test(e.key)) return;
+            if (!e.key || !e.key.startsWith(LS_PREFIX) || !/^fin5_(data|cats|goals|cards|budget)$/.test(e.key.slice(LS_PREFIX.length))) return;
             loadLocalState();
             undoStack = []; _updateUndoBtn();   // snapshots antigos desfariam a mudança da outra aba
             renderAll();
@@ -2630,6 +2691,54 @@ function _onGlobalKey(e) {
     const ie = el.id.match(/^ie-(?:desc|valor|data)-(\d+)$/);
     if (ie) { e.preventDefault(); saveInlineEdit(+ie[1]); return; }
     if (['desc', 'valor', 'data'].includes(el.id)) { e.preventDefault(); adicionar(); }
+}
+
+// Foco dos modais sem tocar em cada função de abrir: observa a classe "open" dos modais
+// do registro. Ao abrir, foca o 1º campo (Enter/Esc funcionam sem precisar clicar);
+// ao fechar, devolve o foco a quem abriu. No celular não foca campo (abriria o teclado
+// só para visualizar). Overlays viram role="dialog" para leitores de tela.
+//
+// Botão "voltar" (celular/navegador): cada modal aberto empilha uma entrada no histórico;
+// voltar fecha o modal do topo em vez de sair do app (e perder o que estava digitado).
+// Fechar pela interface consome a entrada. O conflito de sync (sem close) não fecha.
+const _modalReturnFocus = new Map();
+let _ignorePop = 0;
+function _setupModalFocus() {
+    if (history.state && history.state.finModal) history.replaceState(null, '');   // sobra de um reload com modal aberto
+    window.addEventListener('popstate', () => {
+        if (_ignorePop > 0) { _ignorePop--; return; }
+        const top = _topModal();
+        if (!top) return;
+        const m = MODALS[top.id];
+        if (m.close) m.close();
+        else history.pushState({ finModal: top.id }, '');   // exige decisão: mantém aberto
+    });
+    Object.keys(MODALS).forEach(id => {
+        const el = $(id);
+        if (!el) return;
+        el.setAttribute('role', 'dialog');
+        el.setAttribute('aria-modal', 'true');
+        new MutationObserver(() => {
+            const open = el.classList.contains('open');
+            if (open && !_modalReturnFocus.has(id)) {
+                history.pushState({ finModal: id }, '');
+                _modalReturnFocus.set(id, document.activeElement);
+                if (IS_MOBILE) return;
+                setTimeout(() => {   // após a função de abrir terminar (e não rAF: pausa em aba oculta)
+                    if (el.contains(document.activeElement)) return;   // a própria função já focou algo
+                    const f = el.querySelector('input:not([type=hidden]):not([type=checkbox]):not([type=file]):not([disabled]), select:not([disabled]), textarea')
+                           || el.querySelector('button:not([disabled])');
+                    if (f && f.offsetParent !== null) f.focus({ preventScroll: true });
+                });
+            } else if (!open && _modalReturnFocus.has(id)) {
+                // Fechado pela interface: remove a entrada que ele empilhou
+                if (history.state && history.state.finModal === id) { _ignorePop++; history.back(); }
+                const prev = _modalReturnFocus.get(id);
+                _modalReturnFocus.delete(id);
+                if (prev && prev.isConnected && prev !== document.body && typeof prev.focus === 'function') prev.focus({ preventScroll: true });
+            }
+        }).observe(el, { attributes: true, attributeFilter: ['class'] });
+    });
 }
 
 // ── VIRADA DE DIA ─────────────────────────────────────────────────────────────
@@ -2863,7 +2972,13 @@ function makeTx(f, base = null) {
         : null;
     if (!t.fixo) delete t.serie;
     else if (!t.serie) t.serie = 'S' + newId();
-    return t;
+    // Fonte única de verdade: o objeto criado pela UI passa pela MESMA normalização dos
+    // dados externos (_sanTx). Antes eram duas regras paralelas que divergiam — ex.:
+    // investimento importado de fatura ficava com cartaoId sem pagamento no crédito.
+    const norm = _sanTx([t], cards, SCHEMA_VERSION, { dropped: [] })[0];
+    if (!norm) throw new Error('Lançamento inválido após normalização: ' + JSON.stringify(t));
+    if (t.extId) norm.extId = t.extId;
+    return norm;
 }
 
 // Garante que a categoria existe na lista do tipo (texto livre da combobox vira categoria real)
@@ -2882,6 +2997,7 @@ function submitTx(f, editId = null, onDone = null) {
     if (editId != null && !old) { toast('⚠️ Lançamento não encontrado (removido em outro dispositivo?).', '#b45309'); return false; }
     pushUndo(old ? `Edição de "${f.desc}"` : `Adição de "${f.desc}"`);
     if (ensureCat(f.tipo, f.cat)) saveCats();
+    if (f.pagamento === 'credito' && f.cartaoId) lsSet('fin5_lastCard', String(f.cartaoId));   // inclui fixos (desviam p/ o modal)
     if (onDone) onDone();
     if (f.fixo && !(old && old.fixo)) {
         // Virou fixo agora → pergunta se replica; a gravação acontece em closeFixoRep
@@ -3229,7 +3345,27 @@ function downloadBlob(blob, filename) {
 function exportar() {
     const data = { t: tx, c: cats, g: goals, k: cards, b: budget, v: SCHEMA_VERSION, exportedAt: new Date().toISOString() };
     downloadBlob(new Blob([JSON.stringify(data)], { type: 'application/json' }), `backup_finances_${todayLocalISO()}.json`);
+    lsSet('fin5_lastExport', todayLocalISO());
+    renderBackupAge();
     toast('Exportado!');
+}
+
+// Nuvem + navegador não bastam como única cópia (conta comprometida, regra errada,
+// exclusão acidental sincronizada). Lembra de exportar um arquivo a cada 30 dias.
+const BACKUP_LEMBRETE_DIAS = 30;
+function renderBackupAge() {
+    const el = $('backupAge');
+    if (!el) return;
+    if (!tx.length) { el.textContent = ''; return; }
+    const last = lsGet('fin5_lastExport');
+    const dias = last && isValidISODate(last)
+        ? Math.round((new Date(todayLocalISO() + 'T00:00:00') - new Date(last + 'T00:00:00')) / 86400000) : null;
+    const atrasado = dias === null || dias > BACKUP_LEMBRETE_DIAS;
+    el.textContent = dias === null ? '⚠️ Nenhum backup em arquivo neste navegador — exporte uma cópia.'
+        : dias === 0 ? '✓ Backup feito hoje.'
+        : `${atrasado ? '⚠️ ' : ''}Último backup há ${dias} dia${dias === 1 ? '' : 's'}${atrasado ? ' — exporte uma cópia.' : '.'}`;
+    el.style.color = atrasado ? '#b45309' : 'var(--text-3)';
+    el.style.fontWeight = atrasado ? '600' : '';
 }
 
 // Exporta o mês filtrado como CSV (BOM + ';' = abre direto no Excel/Sheets pt-BR)
@@ -3306,7 +3442,7 @@ function _inlineEditorHtml(t) {
             <label class="ie-check"><input type="checkbox" id="ie-fixo-${t.id}" ${t.fixo ? 'checked' : ''}> Gasto fixo mensal</label>
             <div id="ie-pag-wrap-${t.id}" style="${t.tipo !== 'saida' ? 'display:none' : ''}">
                 <label class="ie-check">Pagamento:&nbsp;
-                    <select id="ie-pag-${t.id}" onchange="ieUpdateCartao(${t.id})" style="${selStyle}">${pagOpts}</select>
+                    <select id="ie-pag-${t.id}" onchange="ieUpdateCartao(${t.id}, true)" style="${selStyle}">${pagOpts}</select>
                 </label>
             </div>
             <div id="ie-cartao-wrap-${t.id}" style="${(t.pagamento !== 'credito' || !cards.length) ? 'display:none' : ''}">
@@ -3454,7 +3590,7 @@ function closeInlineEdit() {
 
 // ieUpdateCats is defined earlier (with buildCatCombo support) — do not redefine here
 
-function ieUpdateCartao(id) {
+function ieUpdateCartao(id, pagMudou = false) {
     const pagEl = $('ie-pag-' + id);
     if (!pagEl) return;
     const pag  = pagEl.value;
@@ -3468,6 +3604,8 @@ function ieUpdateCartao(id) {
         if (sel && sel.options.length <= 1) {
             sel.innerHTML = '<option value="">—</option>' + cards.map(c => `<option value="${c.id}">${escHtml(c.nome)}</option>`).join('');
         }
+        // Acabou de mudar para crédito: sugere o cartão padrão (mesma regra do formulário)
+        if (pagMudou && sel && !sel.value) sel.value = String(defaultCardId() || '');
     }
 }
 
@@ -4833,6 +4971,7 @@ function bootApp() {
             showApp(user);
             init();
             reconcile({ initial: true });
+            checkDbRules();
             setupAutoSync();
         } else {
             _currentUser = null;
@@ -4923,9 +5062,25 @@ async function signOut() {
     if (!confirm(dirty ? 'Há alterações ainda não sincronizadas. Sincronizar e sair?' : 'Sair da conta?')) return;
     if (dirty) await reconcile({ manual: true });
     if (_localDirty() && !confirm('A sincronização falhou — as alterações ficam só neste navegador. Sair mesmo assim?')) return;
+    // Só oferece apagar quando tudo já está na nuvem (nada se perde)
+    const wipe = !_localDirty() && confirm('Apagar também os dados guardados NESTE navegador?\n\nRecomendado em computador compartilhado. Seus dados continuam na nuvem e voltam no próximo login.');
     clearInterval(_autoSyncTimer);
+    stopRemoteWatch();
     await fbAuth.signOut();
-    toast('Até logo!', '#52525b');
+    if (wipe) wipeLocalData();
+    toast(wipe ? 'Até logo! Dados deste navegador apagados.' : 'Até logo!', '#52525b');
+}
+
+// Remove do navegador os dados do app (do namespace atual) e zera o estado em memória
+function wipeLocalData() {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(LS_PREFIX) && /^(fin5_|fb_)/.test(k.slice(LS_PREFIX.length))) keys.push(k);
+    }
+    keys.forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
+    restoreState(sanitizeState({}));
+    undoStack = []; _updateUndoBtn();
 }
 
 // ── SYNC UI ───────────────────────────────────────────────────────────────────
@@ -4939,7 +5094,7 @@ function setSyncState(state, label) {
 }
 
 function updateSyncTime() {
-    const t  = localStorage.getItem('fb_lastSync');
+    const t  = lsGet('fb_lastSync');
     const el = $('syncTime');
     if (!t) { el.textContent = ''; return; }
     const diff = Math.round((Date.now() - parseInt(t, 10)) / 60000);
@@ -5005,7 +5160,7 @@ function _setSyncBase(st, ts) {
     if (!_currentUser) return;
     const key = _baseKey(_currentUser.uid);
     if (!storeJSON(key, { ts, t: st.tx, c: st.cats, g: st.goals, k: st.cards, b: st.budget })) {
-        try { localStorage.removeItem(key); } catch (e) {}
+        lsDel(key);
     }
 }
 function _getSyncBase() {
@@ -5074,14 +5229,14 @@ function mergeStates(base, local, remote) {
 function _localDirty() { const m = _getSyncMeta(); return SYNC_ENABLED && (!m || m.hash !== _stateHash()); }
 // Versão anterior guardava fb_localTs + fb_lastKnown (cópia completa dos dados)
 function _migrateLegacySyncMeta(uid) {
-    const ts = parseInt(localStorage.getItem('fb_localTs') || '', 10);
+    const ts = parseInt(lsGet('fb_localTs') || '', 10);
     const lastKnown = loadJSON('fb_lastKnown', null);
     if (Number.isFinite(ts) && lastKnown) {
         const base = sanitizeState(lastKnown, 2);
         storeJSON(_syncKey(uid), { ts, hash: _stateHash(base) });
         storeJSON(_baseKey(uid), { ts, t: base.tx, c: base.cats, g: base.goals, k: base.cards, b: base.budget });
     }
-    try { localStorage.removeItem('fb_lastKnown'); localStorage.removeItem('fb_localTs'); } catch (e) {}
+    lsDel('fb_lastKnown'); lsDel('fb_localTs');
 }
 
 function _userRef() {
@@ -5108,7 +5263,7 @@ async function reconcile({ initial = false, manual = false, passive = false } = 
     _syncing = (async () => {
         try {
             const r = await _reconcileOnce();
-            localStorage.setItem('fb_lastSync', String(Date.now()));
+            lsSet('fb_lastSync', String(Date.now()));
             updateSyncTime();
             setSyncState(r === 'conflict' ? 'err' : 'ok', r === 'conflict' ? 'Conflito' : 'Sync');
             if (r === 'pulled' && !initial) toast('🔥 Dados atualizados de outro dispositivo.', '#f97316');
@@ -5231,7 +5386,7 @@ async function resolveConflict(choice) {
             toast('💾 Dados locais enviados ao Firebase.', '#16a34a');
         }
         setSyncState('ok', 'Sync');
-        localStorage.setItem('fb_lastSync', String(Date.now()));
+        lsSet('fb_lastSync', String(Date.now()));
         updateSyncTime();
     } catch (e) {
         setSyncState('err', 'Sync');
@@ -5241,6 +5396,35 @@ async function resolveConflict(choice) {
 
 // ── AUTO-SYNC ─────────────────────────────────────────────────────────────────
 let _syncListenersOn = false, _tsRef = null, _pushingTs = null;
+// ── AUTOVERIFICAÇÃO DAS REGRAS DO FIREBASE ───────────────────────────────────
+// A privacidade real depende das regras do Realtime Database (fora deste arquivo). Teste
+// não intrusivo: ler um caminho VIZINHO inexistente. Com as regras certas
+// (auth.uid === $uid) a leitura é negada; se for permitida, as regras estão abertas e
+// qualquer conta logada leria as finanças das outras. Checa no máximo 1×/dia.
+const DB_RULES_RECOMENDADAS = {
+    rules: { finances: { $uid: { '.read': 'auth != null && auth.uid === $uid', '.write': 'auth != null && auth.uid === $uid' } } }
+};
+async function checkDbRules(db = fbDb) {
+    if (!SYNC_ENABLED || !_currentUser || !db) return null;
+    const hoje = todayLocalISO();
+    if (lsGet('fb_rulesCheck') === hoje) return null;
+    let aberto;
+    try {
+        await db.ref('finances/__probe_' + Math.random().toString(36).slice(2)).once('value');
+        aberto = true;    // leitura permitida fora do próprio uid
+    } catch (e) {
+        if (!/permission/i.test(e.code || e.message || '')) return null;   // erro de rede etc.: tenta outro dia
+        aberto = false;
+    }
+    lsSet('fb_rulesCheck', hoje);
+    if (aberto) {
+        console.warn('⚠️ Regras do Firebase ABERTAS: qualquer conta logada pode ler dados de outras.\n'
+            + 'Firebase Console → Realtime Database → Regras, aplique:\n' + JSON.stringify(DB_RULES_RECOMENDADAS, null, 2));
+        toast('⚠️ Segurança: as regras do Firebase permitem ler dados de outras contas — veja o console.', '#dc2626');
+    }
+    return aberto;
+}
+
 function setupAutoSync() {
     clearInterval(_autoSyncTimer);
     _autoSyncTimer = setInterval(() => { reconcile({ passive: true }); updateSyncTime(); }, 5 * 60 * 1000);
@@ -5389,10 +5573,19 @@ function mobEditCartaoChange() {
 }
 
 // ── SHARED ────────────────────────────────────────────────────
+// Cartão sugerido para compra nova no crédito: o último usado (se ainda existe) ou o
+// único cadastrado. Antes vinha "— sem cartão —" e a compra ficava fora de qualquer fatura.
+function defaultCardId() {
+    const last = toId(lsGet('fin5_lastCard'));
+    if (last && cards.some(c => c.id === last)) return last;
+    return cards.length === 1 ? cards[0].id : '';
+}
 function _populateCardSelect(selId, selectedId) {
     const sel = $(selId);
     if (!sel) return;
-    const prev = selectedId !== undefined ? selectedId : sel.value;
+    // selectedId explícito (edição, inclusive null = "sem cartão") é respeitado
+    let prev = selectedId !== undefined ? selectedId : sel.value;
+    if (selectedId === undefined && !prev) prev = defaultCardId();
     sel.innerHTML = '<option value="">— sem cartão —</option>' +
         cards.map(c => `<option value="${c.id}" ${c.id == prev ? 'selected' : ''}>${escHtml(c.nome)}</option>`).join('');
 }
@@ -5580,6 +5773,7 @@ function resetCartaoForm() {
 // (Havia um segundo sistema de importação completo, nunca aberto por nenhum botão,
 // com parsers e regras duplicados — removido; o que tinha de melhor veio para cá.)
 let _extParsed = []; // [{ checked, date, desc, valor, tipo, cat, flag, extId }]
+let _extSkipped = 0;  // linhas com conteúdo mas data/valor ilegível no último arquivo lido
 
 // Texto normalizado para comparação: sem acento, minúsculo, só letras/dígitos/espaço
 const _normTxt = s => fold(s).replace(/[^a-z0-9]+/g, ' ').trim();
@@ -5678,17 +5872,39 @@ function _readFileText(file) {
 }
 
 // Datas: YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY, DD/MM/YY — com ou sem hora; valida calendário
-function parseFlexDate(raw) {
+// Meses por extenso/abreviados (pt e en) → número
+const _MES_NOME = { jan: 1, fev: 2, feb: 2, mar: 3, abr: 4, apr: 4, mai: 5, may: 5, jun: 6, jul: 7, ago: 8, aug: 8,
+                    set: 9, sep: 9, out: 10, oct: 10, nov: 11, dez: 12, dec: 12 };
+// Faturas costumam trazer "15/09" ou "15 SET" sem ano: escolhe o ano que deixa a data mais
+// próxima de hoje, aceitando no máximo ~2 meses no futuro (lançamentos agendados/parcelas)
+function _inferirAno(dia, mes, hoje = new Date()) {
+    const ref = hoje.getTime(), limite = ref + 62 * 86400000;
+    let best = null;
+    for (const y of [hoje.getFullYear() - 1, hoje.getFullYear(), hoje.getFullYear() + 1]) {
+        const iso = `${y}-${pad2(mes)}-${pad2(dia)}`;
+        if (!isValidISODate(iso)) continue;
+        const t = new Date(iso + 'T00:00:00').getTime();
+        if (t > limite) continue;
+        if (!best || Math.abs(t - ref) < Math.abs(best.t - ref)) best = { iso, t };
+    }
+    return best ? best.iso : null;
+}
+// Datas: YYYY-MM-DD, DD/MM/YYYY, DD-MM-YY, DD/MM (sem ano), "15 SET 2026", "15 set" —
+// com ou sem hora; valida calendário. Antes, datas sem ano/mês por extenso eram
+// descartadas em silêncio na importação.
+function parseFlexDate(raw, hoje = new Date()) {
     if (!raw) return null;
     const s = String(raw).trim().replace(/['"]/g, '');
     let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:$|[T\s])/);
     let iso = m ? `${m[1]}-${pad2(m[2])}-${pad2(m[3])}` : null;
-    if (!iso) {
-        m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2}|\d{4})(?:$|\s)/);
-        if (m) {
-            const y = m[3].length === 2 ? (parseInt(m[3], 10) > 50 ? '19' : '20') + m[3] : m[3];
-            iso = `${y}-${pad2(m[2])}-${pad2(m[1])}`;
-        }
+    if (!iso && (m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2}|\d{4})(?:$|\s)/))) {
+        const y = m[3].length === 2 ? (parseInt(m[3], 10) > 50 ? '19' : '20') + m[3] : m[3];
+        iso = `${y}-${pad2(m[2])}-${pad2(m[1])}`;
+    }
+    if (!iso && (m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})(?:$|\s)/))) iso = _inferirAno(+m[1], +m[2], hoje);
+    if (!iso && (m = fold(s).match(/^(\d{1,2})[\s\/\-.]+([a-z]{3})[a-z]*\.?(?:[\s\/\-.]+(\d{2}|\d{4}))?(?:$|\s)/)) && _MES_NOME[m[2]]) {
+        const mes = _MES_NOME[m[2]];
+        iso = m[3] ? `${m[3].length === 2 ? '20' + m[3] : m[3]}-${pad2(mes)}-${pad2(m[1])}` : _inferirAno(+m[1], mes, hoje);
     }
     return iso && isValidISODate(iso) ? iso : null;
 }
@@ -5766,27 +5982,31 @@ function _extParseCSV(text) {
     }
     if (cols.desc < 0) cols.desc = rows[Math.max(hIdx, 0)].findIndex((_, i) => ![cols.date, cols.valor, cols.credit, cols.debit, cols.id].includes(i));
 
-    const results = [];
+    const results = []; let skipped = 0;
     for (const row of rows.slice(hIdx + 1)) {
         const date = parseFlexDate(row[cols.date]);
-        if (!date) continue;
+        const temConteudo = row.some(c => c && c.trim());
+        if (!date) { if (temConteudo) skipped++; continue; }
         let valor;
         if (cols.valor >= 0) valor = parseValor(row[cols.valor]);
         else {
             const cr = parseValor(row[cols.credit]), db = parseValor(row[cols.debit]);
             valor = cr > 0 ? cr : (Number.isFinite(db) && db !== 0 ? -Math.abs(db) : NaN);
         }
-        if (!Number.isFinite(valor) || valor === 0) continue;
+        if (!Number.isFinite(valor)) { skipped++; continue; }
+        if (valor === 0) continue;   // linha de saldo/informativa
         const extId = cols.id >= 0 && row[cols.id] ? 'csv:' + row[cols.id] : null;
         results.push({ date, desc: (row[cols.desc] || '').replace(/\s+/g, ' ').trim(), valor, extId });
     }
+    // Linhas com conteúdo mas data/valor ilegível são contadas e mostradas na revisão
+    results.skipped = skipped;
     return results.length ? results : null;
 }
 
 // ── OFX PARSER ──────────────────────────────────────────────────
 // OFX pode ser SGML (tags de valor sem fechamento) — parse por regex, bloco a bloco
 function _extParseOFX(text) {
-    const transactions = [];
+    const transactions = []; let skipped = 0;
     text.split(/<STMTTRN>/i).slice(1).forEach(chunk => {
         const end = chunk.search(/<\/STMTTRN>/i);
         const block = end >= 0 ? chunk.slice(0, end) : chunk;
@@ -5797,11 +6017,13 @@ function _extParseOFX(text) {
         const rawDate = getField('DTPOSTED');
         const date    = rawDate ? parseFlexDate(`${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`) : null;
         const valor   = parseValor(getField('TRNAMT'));
-        if (!date || !Number.isFinite(valor) || valor === 0) return;
+        if (!date || !Number.isFinite(valor)) { skipped++; return; }
+        if (valor === 0) return;
         const fitid = getField('FITID');
         const desc  = (getField('MEMO') || getField('NAME') || getField('PAYEE') || '').replace(/\s+/g, ' ').trim();
         transactions.push({ date, desc, valor, extId: fitid ? 'ofx:' + fitid : null });
     });
+    transactions.skipped = skipped;
     return transactions.length ? transactions : null;
 }
 
@@ -5858,6 +6080,7 @@ async function extHandleFile(file) {
         $('extFileInput').value = '';
         return;
     }
+    _extSkipped = raw.skipped || 0;
 
     // Fatura de cartão: normaliza sinais. CSV da Nubank traz compras com valor
     // POSITIVO (viravam "Ganho"); OFX traz compras negativas. O sinal majoritário
@@ -5914,6 +6137,7 @@ function _extRenderPreview() {
         <div class="ext-stat"><strong>${newCount}</strong> novas</div>
         ${dupCount ? `<div class="ext-stat amber"><strong>${dupCount}</strong> possíveis duplicatas</div>` : ''}
         ${trCount ? `<div class="ext-stat gray"><strong>${trCount}</strong> transferências</div>` : ''}
+        ${_extSkipped ? `<div class="ext-stat amber" title="Linhas com data ou valor que não foi possível ler — confira no arquivo"><strong>${_extSkipped}</strong> linha${_extSkipped > 1 ? 's' : ''} ignorada${_extSkipped > 1 ? 's' : ''} (data/valor ilegível)</div>` : ''}
     `;
 
     $('extTbody').innerHTML = _extParsed.map((r, i) => {
@@ -6070,20 +6294,24 @@ function renderPatrimonio() {
     }
     deltaEl.className = 'patrimonio-delta ' + (diff >= 0 ? 'up' : 'down');
 
-    // Projeção: average of the last up-to-6 monthly deltas
-    const recentDeltas = yms.slice(-6).map(ym => monthly[ym] || 0);
-    const avg = recentDeltas.reduce((s, v) => s + v, 0) / recentDeltas.length;
-    const projLabels = [addMonth(curYm, 1), addMonth(curYm, 2), addMonth(curYm, 3)];
-    const proj = [latest + avg, latest + 2 * avg, latest + 3 * avg];
-    $('patrimonioSub').textContent = avg
-        ? `Projeção: ${fmt(proj[2])} em ${mlabel(projLabels[2])} · ritmo ${avg >= 0 ? '+' : ''}${fmt(avg)}/mês`
-        : 'acumulado desde o início dos registros';
+    // Projeção: média dos últimos (até 6) meses COMPLETOS. O mês em andamento fica de fora
+    // (só parte dele aconteceu — ex.: salário já entrou, gastos não) e exige-se histórico
+    // mínimo; antes 1 mês incompleto virava "ritmo" e projetava R$ 17 mil em 3 meses.
+    const MIN_MESES_PROJECAO = 2;
+    const mesAtualReal = todayLocalISO().slice(0, 7);
+    const completos = yms.filter(ym => ym < mesAtualReal).slice(-6);
+    const temProjecao = completos.length >= MIN_MESES_PROJECAO;
+    const avg = temProjecao ? roundMoney(completos.reduce((s, ym) => s + (monthly[ym] || 0), 0) / completos.length) : 0;
+    const projLabels = temProjecao ? [addMonth(curYm, 1), addMonth(curYm, 2), addMonth(curYm, 3)] : [];
+    const proj = projLabels.map((_, i) => latest + (i + 1) * avg);
+    $('patrimonioSub').textContent = temProjecao
+        ? `Projeção: ${fmt(proj[2])} em ${mlabel(projLabels[2])} · ritmo ${avg >= 0 ? '+' : ''}${fmt(avg)}/mês (média de ${completos.length} meses)`
+        : `acumulado desde o início dos registros · projeção após ${MIN_MESES_PROJECAO} meses completos de histórico`;
 
     const labels   = windowPts.map(p => mlabel(p.ym)).concat(projLabels.map(mlabel));
-    const actual   = windowPts.map(p => p.v).concat([null, null, null]);
+    const actual   = windowPts.map(p => p.v).concat(proj.map(() => null));
     const projData = windowPts.map(() => null);
-    projData[projData.length - 1] = latest;
-    projData.push(...proj);
+    if (temProjecao) { projData[projData.length - 1] = latest; projData.push(...proj); }
 
     upsertChart('grafPatrimonio', $('grafPatrimonio'), {
         type: 'line',
@@ -6311,10 +6539,10 @@ function renderHeroAnual() {
 // ── COLLAPSIBLE SIDEBAR ───────────────────────────────────────────────────────
 function toggleSidebar() {
     const collapsed = document.body.classList.toggle('sidebar-collapsed');
-    try { localStorage.setItem('fin5_sidebar_collapsed', collapsed ? '1' : '0'); } catch (e) {}
+    lsSet('fin5_sidebar_collapsed', collapsed ? '1' : '0');
     const btn = $('sidebarToggle'); if (btn) btn.textContent = collapsed ? '»' : '«';
 }
-try { if (localStorage.getItem('fin5_sidebar_collapsed') === '1') document.body.classList.add('sidebar-collapsed'); } catch (e) {}
+if (lsGet('fin5_sidebar_collapsed') === '1') document.body.classList.add('sidebar-collapsed');
 { const _sbt = $('sidebarToggle'); if (_sbt) _sbt.textContent = document.body.classList.contains('sidebar-collapsed') ? '»' : '«'; }
 
 // ── AUTOTESTE (?selftest) ────────────────────────────────────────────────────
@@ -6347,8 +6575,12 @@ function runSelfTests() {
     eq('addMonths fim de mês', addMonthsISO('2026-01-31', 1), '2026-02-28');
     eq('addMonths virada de ano', addMonthsISO('2026-11-15', 3), '2027-02-15');
     eq('addMonths negativo', addMonthsISO('2026-01-15', -1), '2025-12-15');
-    eq('parseFlexDate formatos', ['01/02/2026', '2026-02-01 10:00', '1/2/26', '31/02/2026'].map(parseFlexDate),
+    eq('parseFlexDate formatos', ['01/02/2026', '2026-02-01 10:00', '1/2/26', '31/02/2026'].map(d => parseFlexDate(d)),
        ['2026-02-01', '2026-02-01', '2026-02-01', null]);
+    const ref = new Date('2026-01-10T12:00:00');
+    eq('parseFlexDate sem ano (infere)', ['15/12', '05/01', '20/02'].map(d => parseFlexDate(d, ref)), ['2025-12-15', '2026-01-05', '2026-02-20']);
+    eq('parseFlexDate mês por extenso', ['15 SET 2026', '3 dez', '07/jan/25', '15 xyz'].map(d => parseFlexDate(d, ref)), ['2026-09-15', '2025-12-03', '2025-01-07', null]);
+    eq('CSV conta linhas ilegíveis', (_extParseCSV('data,descricao,valor\n10/01/2026,A,5\nxx/yy,B,7\n11/01/2026,C,abc\n') || {}).skipped, 2);
 
     // Fatura
     const cVF = { fechamento: 25, vencimento: 5 }, cFV = { fechamento: 3, vencimento: 10 };
@@ -6463,11 +6695,22 @@ async function runFuzz(seeds = [11, 23, 97, 1234], steps = 400) {
                 goal() { abrirNovaGoal(); $('goalNome').value = 'G'; $('goalMeta').value = String(ri(100, 5000)); salvarGoal(); const g = pick(goals); abrirAporte(g.id); $('aporteValor').value = String(ri(1, 300)); $('aporteData').value = date(); confirmarAporte(); },
                 card() { $('cartaoEditId').value = String(cards[0].id); $('cartaoNome').value = 'Fuzz'; $('cartaoFech').value = String(ri(1, 28)); $('cartaoVenc').value = String(ri(1, 28)); salvarCartao(); if ($('ovRecalcFatura').classList.contains('open')) doRecalcFaturas(pick(['all', 'future', 'none'])); },
                 budget() { _budgetMonth = ri(0, 11); _budgetYear = 2026; $('budgetTotal').value = String(ri(0, 9000)); onBudgetTotalChange(true); if (cats.saida.length) updateBudgetCatPct(encodeURIComponent(pick(cats.saida)), String(ri(0, 60))); },
+                // Caminho mobile (formulários do celular) — usados também no desktop, onde o DOM existe
+                mobAdd() { openMobForm(); $('mob-tipo').value = pick(TIPOS); mobOnTipoChange(); $('mob-desc').value = pick(['Pão', "D'Ávila"]); $('mob-valor').value = pick(['12,5', '0', '3.000']); $('mob-data').value = pick([date(), '']); $('mob-fixo').checked = rnd() < 0.2; mobAdicionar(); closeRep(); closeMobForm(); },
+                mobEdit() { if (!tx.length) return; const t = pick(tx); openMobEdit(t.id); $('mob-edit-valor').value = pick([String(ri(1, 900)), '-1']); $('mob-edit-tipo').value = pick(TIPOS); mobEditTipoChange(); $('mob-edit-fixo').checked = rnd() < 0.3; if (rnd() < 0.8) mobEditSave(); else mobEditDelete(); closeRep(); closeMobEdit(); },
+                // Importação de extrato (assíncrona: leitura do arquivo)
+                async importar() {
+                    const linhas = Array.from({ length: ri(1, 6) }, () => `${date()},${pick(['Loja', 'PIX ENVIADO', 'Pagamento de fatura', 'Uber'])} ${ri(1, 9)},${pick(['10.5', '-20,00', '1.234,56', '-7'])}`);
+                    abrirExtrato(); $('extAccType').value = pick(['debito', 'credito']); extOnAccTypeChange(); $('extCardId').value = pick(['', String(cards[0].id)]);
+                    await extHandleFile(new File(['date,title,amount\n' + linhas.join('\n')], 'fuzz.csv'));
+                    if (_extParsed.length) { if (rnd() < 0.5) extSelectAll(true); if (_extParsed[0]) _extChangeType(0, pick(TIPOS)); extConfirmImport(); }
+                    closeExtrato();
+                },
             };
             const names = Object.keys(actions);
             for (let step = 0; step < steps && violations.length < 10; step++) {
                 const act = pick(names), e0 = errs.length, v = m => violations.push(`seed ${S} passo ${step} (${act}): ${m}`);
-                try { actions[act](); } catch (e) { v('exceção ' + e.message); }
+                try { await actions[act](); } catch (e) { v('exceção ' + e.message); }
                 if (errs.length > e0) v('console.error ' + errs.slice(e0).join(' | ').slice(0, 150));
                 const ids = tx.map(t => t.id);
                 if (new Set(ids).size !== ids.length) v('ids duplicados');
@@ -6486,6 +6729,77 @@ async function runFuzz(seeds = [11, 23, 97, 1234], steps = 400) {
     console[violations.length ? 'warn' : 'info'](`runFuzz: ${total} ações, ${violations.length} violação(ões)`, violations);
     toast(violations.length ? `❌ Fuzz: ${violations.length} violação(ões) — veja o console` : `✅ Fuzz: ${total} ações sem violações`, violations.length ? '#dc2626' : '#16a34a');
     return violations;
+}
+
+// ── FUZZ DE SINCRONIZAÇÃO (só no modo preview) ───────────────────────────────
+// runSyncFuzz() no console de ?preview: simula DOIS dispositivos (estado, meta e base
+// próprios) contra um Firebase em memória que imita o real (remove vazios, reordena
+// chaves, transaction com cache vazio na 1ª chamada). Edições e sincronizações
+// aleatórias; conflitos resolvidos ao acaso. Invariante: após sincronizar sem edições
+// novas, dispositivo A, dispositivo B e servidor convergem para o mesmo estado.
+async function runSyncFuzz(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120) {
+    if (!PREVIEW_MODE) { console.warn('runSyncFuzz só roda em ?preview'); return; }
+    const saved = snapshotState(), savedLS = {}, savedUser = _currentUser, savedRef = _userRef, savedToast = toast, savedConfirm = window.confirm;
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); savedLS[k] = localStorage.getItem(k); }
+    const server = { data: null }, norm = v => _canon(v) ?? null, clone = v => JSON.parse(JSON.stringify(v));
+    const mockRef = {
+        once: async () => ({ val: () => server.data ? clone(server.data) : null }),
+        transaction: async fn => {
+            let r = fn(null);
+            if (r !== undefined && server.data !== null) r = fn(clone(server.data));
+            if (r === undefined) return { committed: false, snapshot: { val: () => server.data } };
+            server.data = norm(r);
+            return { committed: true, snapshot: { val: () => server.data } };
+        },
+        child: () => ({ on() {}, off() {} }),
+    };
+    const problems = [], stats = { merged: 0, conflict: 0 };
+    _userRef = () => mockRef; _currentUser = { uid: 'syncfuzz' }; toast = () => {}; window.confirm = () => true;
+    const MK = _syncKey('syncfuzz'), BK = _baseKey('syncfuzz');
+    const use = d => { restoreState(_clone(d.state)); undoStack = []; for (const [k, v] of [[MK, d.meta], [BK, d.base]]) v ? lsSet(k, JSON.stringify(v)) : lsDel(k); };
+    const keep = d => { d.state = snapshotState(); d.meta = loadJSON(MK, null); d.base = loadJSON(BK, null); };
+    try {
+        for (const S of seeds) {
+            let seed = S * 7919;
+            const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+            const pick = a => a[Math.floor(rnd() * a.length)], ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
+            server.data = null;
+            const A = { n: 'A', state: sanitizeState({ t: SEED }) }, B = { n: 'B', state: sanitizeState({}) };
+            const sync = async d => {
+                use(d);
+                const r = await _reconcileOnce();
+                if (r in stats) stats[r]++;
+                if (r === 'conflict') await resolveConflict(pick(['local', 'remote']));
+                keep(d);
+            };
+            const ops = [
+                d => { tx = tx.concat(makeTx({ desc: d.n + ri(1, 99), valor: ri(1, 500), data: `2026-${pad2(ri(1, 12))}-${pad2(ri(1, 28))}`, tipo: pick(TIPOS), cat: '', fixo: false, pagamento: undefined, cartaoId: null })); },
+                () => { if (tx.length) { const t = pick(tx); tx = tx.map(x => x.id === t.id ? makeTx({ ...x, valor: ri(1, 900) }, x) : x); } },
+                () => { if (tx.length) { const t = pick(tx); tx = tx.filter(x => x.id !== t.id); } },
+                d => { ensureCat(pick(TIPOS), 'Cat' + d.n + ri(1, 5)); },
+                () => { if (cats.saida.length) { budget.allocs[pick(cats.saida)] = ri(1, 40); } },
+            ];
+            await sync(A); await sync(B);
+            for (let step = 0; step < steps; step++) {
+                const d = rnd() < 0.5 ? A : B;
+                if (rnd() < 0.35) await sync(d);
+                else { use(d); pick(ops)(d); _invalidateTxCache(); keep(d); }
+                if (_stateHash(d.state) !== _stateHash(sanitizeState({ t: d.state.tx, c: d.state.cats, g: d.state.goals, k: d.state.cards, b: d.state.budget })))
+                    problems.push(`seed ${S} passo ${step}: estado inválido em ${d.n}`);
+            }
+            for (let k = 0; k < 4; k++) { await sync(A); await sync(B); }
+            const hS = server.data ? _stateHash(sanitizeState(_mapKeys(server.data, _fbKeyDec))) : null;
+            if (!(_stateHash(A.state) === _stateHash(B.state) && _stateHash(B.state) === hS)) problems.push(`seed ${S}: dispositivos/servidor NÃO convergiram`);
+        }
+    } finally {
+        _userRef = savedRef; _currentUser = savedUser; toast = savedToast; window.confirm = savedConfirm;
+        $('ovConflict').classList.remove('open'); _conflictOpen = false; _pendingConflictRemote = null;
+        try { localStorage.clear(); Object.entries(savedLS).forEach(([k, v]) => localStorage.setItem(k, v)); } catch (e) {}
+        restoreState(saved); undoStack = []; _updateUndoBtn(); renderAll(); renderGoals(); renderCartoesMini();
+    }
+    console[problems.length ? 'warn' : 'info'](`runSyncFuzz: ${seeds.length} cenários, ${stats.merged} merges, ${stats.conflict} conflitos resolvidos, ${problems.length} problema(s)`, problems);
+    toast(problems.length ? `❌ Sync fuzz: ${problems.length} problema(s) — veja o console` : `✅ Sync fuzz: ${seeds.length} cenários convergiram (${stats.merged} merges)`, problems.length ? '#dc2626' : '#16a34a');
+    return problems;
 }
 
 // ── BOOT ─────────────────────────────────────────────────────────────────────
