@@ -56,7 +56,7 @@
       • FIXOS: "Gastos Fixos" (orçamento, popup, sidebar) somava entradas fixas como
         gasto (salário inflava o total); agora só saídas somam e entradas aparecem em verde.
       • AUTOTESTE: abra index.html?preview&selftest (ou runSelfTests() no console) após
-        qualquer mudança — 47 verificações de parsers, datas, fatura, sanitização
+        qualquer mudança — 85 verificações de parsers, datas, fatura, sanitização
         (idempotência) e ida-e-volta pelo Firebase. Não altera dados.
       • METAS: goalProgress() — % truncado (99,6% não mostra "100%" com "Faltam"),
         ritmo necessário por mês até o prazo e aviso de prazo vencido; histórico por data
@@ -126,6 +126,110 @@
         fora de qualquer fatura/vencimento. Edição respeita "sem cartão" explícito. Vale
         também ao trocar Débito→Crédito na edição inline e registra o cartão de fixos.
         Inspeção visual mobile (375 px): sem overflow horizontal.
+      • DATAS NA IMPORTAÇÃO: faturas com data sem ano ("15/09" — ano inferido pelo mais
+        próximo de hoje, até ~2 meses à frente), mês por extenso ("15 SET", "02/ago/2026"),
+        mês antes do dia ("Sep 15, 2026") e ISO com / ou . ("2026/09/15") eram descartadas
+        em silêncio. LINHAS IGNORADAS: a revisão mostra quantas linhas tinham data ou valor
+        ilegível (tem dígito mas não lê); rótulos sem dígito ("Total", "Saldo anterior") e
+        células de valor vazias/"-" (saldo em extrato crédito/débito) seguem silenciosos.
+        Arquivo sem nenhuma linha legível avisa quantas falharam em vez de "verifique o formato".
+      • HERO "QUANTO POSSO GASTAR" (mensal e anual): periodoFase() — mês/ano PASSADO vira
+        balanço ("Sobrou do limite", "fechou usando N%"), FUTURO vira previsão ("Você poderá
+        gastar", só agendados) e ritmo/"por dia até o fim do mês" só aparecem no período em
+        andamento (antes: "R$ X por dia até o fim do mês" em mês encerrado e "R$ 0,00 abaixo
+        do ritmo" em mês futuro). Sem orçamento, o limite é renda − investimentos (antes só
+        a renda: o hero dizia "ainda pode gastar R$ 2.500" com saldo de R$ 500); agora bate
+        com o KPI de saldo. pctDoLimite(): % de uso nunca cruza 100 no arredondamento
+        (99,6% mostrava "100% gasto" com saldo; categoria com 100,4% não aparecia estourada)
+        — hero, painel e blocos do orçamento.
+      • CSV: exportação neutraliza fórmulas (descrição de extrato começando com = + - @
+        executava no Excel — CSV injection); a importação remove o prefixo. Coluna de
+        natureza (D/C, Débito/Crédito, "tipo" saída/entrada — nome exato, valores
+        reconhecidos) define o sinal: bancos com valor sempre positivo importavam todo
+        débito como ganho. Categoria do arquivo é usada quando já existe no app (casa pelo
+        rótulo sem ícone: "Transporte" do Nubank → "🚗 Transporte"). O CSV exportado pelo
+        app agora volta pela importação com tipo, texto e categoria (testado ida e volta).
+      • ORÇAMENTO: toda gravação local marca o dashboard para re-render (_persist) — mudar
+        total/alocações na aba Orçamento e voltar mostrava hero e painel "restante" com o
+        orçamento antigo. Alocação digitada em R$ guarda o % com 6 casas (com 2, R$ 1.000
+        de R$ 7.777 voltava como R$ 1.000,12). Alocações somando > 100% ficam em vermelho
+        com o excedente em R$ (a pizza normaliza e escondia). fmtPct(): % em pt-BR.
+      • DESFAZER NO ORÇAMENTO: total, alocações e necessidade/desejo eram as únicas
+        gravações sem pushUndo (varredura de todas as funções que salvam estado). pushUndo
+        ganhou "grupo": edições seguidas do mesmo campo em até 10 s viram UM passo com o
+        estado de antes da primeira (digitar "5000" = 1 passo, não 4 — a pilha tem 30).
+        Só empilha quando o valor muda de fato.
+      • CORES E % DAS CATEGORIAS: coresCategorias() — cor estável por categoria (posição
+        na lista), igual em todos os meses e nos 3 gráficos (distribuição, barras da
+        análise mensal, pizza do orçamento); antes vinha do ranking do mês e a mesma
+        categoria mudava de cor. "(sem categoria)" em cinza. pctPartes() (maior resto):
+        participações somam exatamente 100% (Math.round dava 33+33+33 = 99%).
+        runFuzz() também restaura os campos de formulário (ficavam com dados do fuzz).
+      • CARTÕES COM FECHAMENTO/VENCIMENTO 29–31: validação, sanitização e formulário
+        limitavam a 1–28 — quem tem cartão que fecha dia 30 (ex.: vence dia 7, fecha 7 dias
+        antes) cadastrava 28 e as compras dos dias 29–30 caíam na fatura seguinte. Agora
+        1–31; o cálculo usa o último dia em meses curtos (vencimento 31 em fevereiro = 28,
+        e o aviso "vence dia" mostra o dia real). Fuzz cobre dias 1–31 e datas 29–31.
+      • APORTES COM A SYNC EM TEMPO REAL: o modal "Editar aporte" guardava só o índice; a
+        sync aplica mudanças de outro dispositivo com o modal aberto e, se um aporte anterior
+        sumisse, salvar DUPLICAVA o aporte (índice inexistente caía em "adicionar") ou
+        sobrescrevia outro. Agora guarda a assinatura (data|valor|nota) e relocaliza ao
+        salvar; se o próprio aporte sumiu, avisa e não grava. Meta removida remotamente
+        também avisa (antes o botão não fazia nada). Lançamentos/cartões/metas já usam id.
+      • TRAVAMENTO AO ABRIR (regressão da marcação de dashboard sujo): num navegador/aparelho
+        novo (esquema salvo < atual) o load grava → dashboard "sujo" → showApp() renderizava
+        ANTES de init() montar os selects → filtro() = NaN → hero quebrava e o patrimônio
+        entrava em laço infinito ("2026-02" <= "NaN-NaN" é sempre verdadeiro). Correção
+        pela origem: filtro() nunca devolve NaN (mês atual como fallback; todas as leituras
+        diretas dos selects passam por ele) e init() roda antes de showApp() no preview e no
+        login. Reproduzido com fin5_schema = 2 e verificado sem erros.
+      • FORMULÁRIOS (desktop, celular, editar no celular): tipo/pagamento/cartão/aviso de
+        fatura eram 3 cópias de cada handler; agora formTipoChange/formPagChange/
+        formFaturaInfo guiados pelos descritores FORM_*, e o evento da data é ligado pelo
+        descritor. Divergência que isso corrigiu: no "editar" do celular trocar a data não
+        atualizava o aviso "fatura de X". Estorno (entrada no crédito) não mostra mais um
+        seletor de cartão que era ignorado.
+      • FUZZ: runFuzz/runSyncFuzz exclusivos — duas rodadas simultâneas (chamada que estoura
+        o tempo no console e é repetida) gravavam o estado bagunçado como "original".
+      • EDITOR INLINE (desktop): era a 4ª cópia da lógica de pagamento/cartão; agora usa
+        formTipoChange/formPagChange pelo descritor formInline (só o combobox de categoria
+        é próprio). Mesmo comportamento dos outros formulários: sugestão do último cartão ao
+        mudar para crédito, "sem cartão" explícito respeitado ao salvar.
+      • TROCA DE CONTA SEM PERDA: ao entrar outra conta no mesmo navegador, os dados do dono
+        anterior eram sobrescritos — se ele tinha alterações não sincronizadas (sessão
+        expirou sem "Sair", navegador fechado offline), elas se perdiam. Agora ficam em
+        fin5_pendente_<uid> e voltam quando ele entrar de novo (a sync de 3 vias mescla com
+        a nuvem). "Apagar dados deste navegador" ao sair preserva pendentes/metadados de
+        OUTRAS contas (não estão na nuvem). Testado: A pendente → B entra → A volta; B sai
+        apagando → A entra com navegador vazio e recupera.
+      • LOGIN: erros em pt-BR por código (antes "Firebase: Error (auth/…)" cru); fechar o
+        popup não mostra erro; popup bloqueado/sem suporte (celular, navegador embutido) cai
+        para login por redirecionamento, cujo erro de retorno aparece na tela de login.
+      • QUARENTENA VISÍVEL: registros sem data/valor válido iam para fin5_quarantine só com
+        um console.warn — para o usuário o lançamento sumia. Agora: toast quando algo é
+        separado, aviso na seção Backup (quantos, lista no tooltip, "baixar" JSON e
+        "descartar" com confirmação), e a quarentena vai junto no backup JSON e volta na
+        importação. Verificado com registro inválido já no carregamento (sem erros no boot).
+      • ACESSIBILIDADE: auditoria achou 47 de 53 campos sem nome acessível (<label> sem
+        "for"), 17 botões só com ícone sem nome e 23 clicáveis fora do teclado (inclusive
+        "↑ Exportar"/"↓ Importar" backup, cabeçalhos ordenáveis, "Nova Meta"). Uma rotina
+        _a11y() aplicada ao DOM inicial e, via MutationObserver, a tudo que é renderizado
+        depois: associa rótulo→campo, usa title/placeholder como nome, nomeia botões por
+        title ou pelo glifo (✕ Fechar, ◀ Anterior, 🗑 Excluir…), e põe clicáveis não nativos
+        no Tab com role="button" e ativação por Enter/Espaço (fundos de modal e containers
+        que só barram o clique ficam de fora). Seletores de cor com nome e aria-pressed.
+        Depois: 0 campos sem nome, 0 botões sem nome, 0 clicáveis fora do Tab.
+      • CONTRASTE (WCAG AA): auditoria mediu texto × fundo efetivo — cinza de rótulos/abas
+        2,4:1 (51 textos), verde 3,3:1, vermelho 3,8:1, botão azul-claro 2,8:1. Tokens do
+        :root escurecidos o mínimo, na mesma matiz, para ≥ 4,5:1 sobre branco, fundo da página
+        e fundos de alerta (text-2, text-3, success, danger, credit). Cores escolhidas pelo
+        usuário (metas, cartões) usadas como texto ou fundo de texto branco passam por
+        corLegivel() — vale para cores antigas já salvas; toast() aplica o mesmo ao fundo.
+        Depois: 0 de 227 textos abaixo de AA.
+      • CONTEÚDO FECHADO FORA DO TAB: modais e folhas do celular fechados só tinham opacity:0 —
+        no desktop o Tab percorria ~20 campos invisíveis antes do formulário. Agora fechado =
+        visibility:hidden (atrasada até o fim da animação de saída). Foco sempre visível nos
+        clicáveis que _a11y() põe no Tab (alguns tinham outline:none).
       Ferramentas de manutenção (use após qualquer mudança, em index.html?preview):
         runSelfTests() · runFuzz() · runSyncFuzz()
     -->
@@ -145,11 +249,13 @@
             /* Visor redesign palette */
             --accent: #0b62f0; --accent2: #0147e3;
             --accent-soft: #eaf1fe; --accent-grad: linear-gradient(135deg, #0a84fb 0%, #0247e6 100%);
-            --success: #16a34a; --danger: #ef4444; --invest: #7c3aed;
-            --credit: #0284c7; --debit: #1d4ed8;
+            /* Texto ≥ 4,5:1 (WCAG AA) sobre branco, --bg e fundos claros de alerta. Antes:
+               --text-3 2,4:1 (51 textos: rótulos, abas), verde 3,3:1, vermelho 3,8:1 */
+            --success: #15803d; --danger: #b91c1c; --invest: #7c3aed;
+            --credit: #0369a1; --debit: #1d4ed8;
             --bg: #f4f6f9; --surface: #ffffff;
             --border: #ecedf1; --border-light: #f4f5f8;
-            --text: #0f172a; --text-2: #64748b; --text-3: #97a1b0;
+            --text: #0f172a; --text-2: #4f5d70; --text-3: #687079;
             --sidebar-w: 300px;
             --radius: 16px; --radius-sm: 10px; --radius-lg: 22px;
             --shadow-sm: 0 1px 2px rgba(16,24,40,.04), 0 1px 3px rgba(16,24,40,.06);
@@ -441,6 +547,13 @@
         /* MODALS */
         .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.25); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); z-index: 200; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity .18s; }
         .overlay.open { opacity: 1; pointer-events: all; }
+        /* Fechado = fora do Tab e do leitor de tela. Antes só opacity:0/pointer-events:none —
+           no desktop o Tab percorria ~20 campos invisíveis (folhas do celular, modais) antes
+           do formulário. A visibilidade só some DEPOIS da animação de saída; ao abrir, na hora. */
+        .overlay, .mob-form-sheet, .mob-edit-sheet { visibility: hidden; }
+        .overlay { transition: opacity .18s, visibility 0s linear .18s; }
+        .mob-form-sheet, .mob-edit-sheet { transition: visibility 0s linear .35s; }
+        .overlay.open, .mob-form-sheet.open, .mob-edit-sheet.open { visibility: visible; transition-delay: 0s; }
         .modal { background: var(--surface); border-radius: 14px; padding: 24px; box-shadow: 0 20px 50px rgba(0,0,0,.15); max-width: 95vw; transform: translateY(10px) scale(.98); transition: transform .22s cubic-bezier(.4,0,.2,1), opacity .22s; opacity: 0; }
         .modal-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
         .modal-sub { font-size: 12px; color: var(--text-3); margin-bottom: 16px; }
@@ -729,6 +842,8 @@
 
         /* ── IMPROVED FOCUS RINGS ── */
         input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        /* Clicáveis que _a11y() pôs no Tab: foco sempre visível (alguns tinham outline:none) */
+        [data-a11y-ativar]:focus-visible, textarea:focus-visible, a:focus-visible { outline: 2px solid var(--accent) !important; outline-offset: 2px; }
         input:focus, select:focus { box-shadow: 0 0 0 3px rgba(24,24,27,.08); }
 
         /* ── BETTER SELECTION COLOR ── */
@@ -966,8 +1081,8 @@
             <span class="month-nav-label" id="yearNavLabel" style="min-width:44px">—</span>
             <button class="month-nav-btn" onclick="changeYear(1)" title="Próximo ano">›</button>
         </div>
-        <select id="filtroMes" onchange="onFiltroChange()" style="display:none"></select>
-        <select id="filtroAno" onchange="onFiltroChange()" style="display:none"></select>
+        <select id="filtroMes" aria-label="Mês" onchange="onFiltroChange()" style="display:none"></select>
+        <select id="filtroAno" aria-label="Ano" onchange="onFiltroChange()" style="display:none"></select>
     </div>
 </div>
 
@@ -975,8 +1090,8 @@
 <div class="mob-month-bar" id="mobMonthBar">
     <span class="mob-view-label" id="mobViewLabel">Início</span>
     <span class="mob-month-spacer"></span>
-    <select id="mobFiltroMes" onchange="mobFiltroChange()"></select>
-    <select id="mobFiltroAno" onchange="mobFiltroChange()"></select>
+    <select id="mobFiltroMes" aria-label="Mês" onchange="mobFiltroChange()"></select>
+    <select id="mobFiltroAno" aria-label="Ano" onchange="mobFiltroChange()"></select>
 </div>
 
 <!-- MOBILE: add-transaction bottom sheet -->
@@ -999,7 +1114,7 @@
             </div>
             <div class="field">
                 <label>Data</label>
-                <input type="date" id="mob-data" oninput="mobOnCartaoChange()">
+                <input type="date" id="mob-data">
             </div>
         </div>
         <div class="g2">
@@ -1137,7 +1252,7 @@
                 </div>
                 <div class="field">
                     <label>Data</label>
-                    <input type="date" id="data" oninput="onCartaoChange()">
+                    <input type="date" id="data">
                 </div>
             </div>
             <div class="g2">
@@ -1197,6 +1312,7 @@
                 <label class="backup-btn">↓ Importar<input type="file" hidden onchange="importar(this)"></label>
             </div>
             <div id="backupAge" style="font-size:10px;margin-top:5px;line-height:1.4;color:var(--text-3)"></div>
+            <div id="quarentenaBox"></div>
             <div class="backup-row" style="margin-top:6px">
                 <div class="backup-btn" onclick="exportarCSV()" title="Exporta os lançamentos do mês filtrado em CSV (Excel/Sheets)">⇪ CSV do mês</div>
             </div>
@@ -1607,7 +1723,7 @@
         <div class="modal-sub" id="recalcFaturaSub"></div>
         <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
             <button class="btn-confirm" style="padding:10px" onclick="doRecalcFaturas('all')">Todos os lançamentos deste cartão</button>
-            <button class="btn-confirm" style="padding:10px;background:#0ea5e9" onclick="doRecalcFaturas('future')">Somente deste mês em diante</button>
+            <button class="btn-confirm" style="padding:10px;background:var(--credit)" onclick="doRecalcFaturas('future')">Somente deste mês em diante</button>
             <button class="btn-mcancel" style="padding:10px" onclick="doRecalcFaturas('none')">Não recalcular</button>
         </div>
     </div>
@@ -1777,8 +1893,8 @@
             <input type="hidden" id="cartaoEditId">
             <div class="field"><label>Nome</label><input type="text" id="cartaoNome" placeholder="Ex: Nubank, Itaú Platinum"></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-                <div class="field"><label>Dia fechamento</label><input type="number" id="cartaoFech" min="1" max="28" placeholder="Ex: 15"></div>
-                <div class="field"><label>Dia vencimento</label><input type="number" id="cartaoVenc" min="1" max="28" placeholder="Ex: 22"></div>
+                <div class="field"><label>Dia fechamento</label><input type="number" id="cartaoFech" min="1" max="31" placeholder="Ex: 15" title="Em meses mais curtos, vale o último dia"></div>
+                <div class="field"><label>Dia vencimento</label><input type="number" id="cartaoVenc" min="1" max="31" placeholder="Ex: 22" title="Em meses mais curtos, vale o último dia"></div>
             </div>
             <div class="field" style="margin-bottom:4px"><label>Cor</label>
                 <div class="card-color-picker" id="cardColorPicker"></div>
@@ -1842,7 +1958,7 @@
                     <table class="ext-table">
                         <thead>
                             <tr>
-                                <th style="width:30px"><input type="checkbox" id="extCheckAll" onchange="extToggleAll(this.checked)"></th>
+                                <th style="width:30px"><input type="checkbox" id="extCheckAll" aria-label="Selecionar todas" onchange="extToggleAll(this.checked)"></th>
                                 <th>Data</th>
                                 <th>Descrição</th>
                                 <th style="text-align:right">Valor</th>
@@ -1893,6 +2009,34 @@ const pad2 = n => String(n).padStart(2, '0');
 const isoDate = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 function todayLocalISO() { return isoDate(new Date()); }
 const ymKey = (m, a) => `${a}-${pad2(m + 1)}`;          // m é 0-indexado
+// Onde um mês (ou ano, com m = null) está em relação a hoje: textos de "ainda pode gastar",
+// ritmo e "por dia até o fim do mês" só fazem sentido no período em andamento
+function periodoFase(a, m = null, now = new Date()) {
+    const ny = now.getFullYear(), nm = now.getMonth();
+    if (a !== ny) return a < ny ? 'passado' : 'futuro';
+    if (m == null || m === nm) return 'atual';
+    return m < nm ? 'passado' : 'futuro';
+}
+// % de uso de um limite, inteiro que nunca cruza 100 no arredondamento: 99,6% → 99
+// (ainda sobra), 100,2% → 101 (estourou). Math.round mostrava "100% gasto" com saldo.
+// Participações inteiras que somam EXATAMENTE 100 (maior resto) — com Math.round três
+// fatias iguais davam 33% + 33% + 33% = 99% e listas longas passavam de 100%
+function pctPartes(valores) {
+    const pos = valores.map(v => Math.max(0, +v || 0)), total = pos.reduce((s, v) => s + v, 0);
+    if (!(total > 0)) return pos.map(() => 0);
+    const brutos = pos.map(v => v / total * 100), out = brutos.map(Math.floor);
+    let falta = 100 - out.reduce((s, v) => s + v, 0);
+    brutos.map((b, i) => [b - out[i], i]).sort((x, y) => y[0] - x[0] || x[1] - y[1])
+        .forEach(([, i]) => { if (falta > 0) { out[i]++; falta--; } });
+    return out;
+}
+// % com até 2 casas no formato pt-BR ("107,86%", não "107.86%")
+const fmtPct = p => (+(+p || 0).toFixed(2)).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + '%';
+function pctDoLimite(parte, limite) {
+    if (!(limite > 0)) return 0;
+    const p = +(parte / limite * 100).toFixed(6);          // resíduo de float não vira 101%
+    return p < 100 ? Math.floor(p) : Math.ceil(p);
+}
 function isValidISODate(s) {
     if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
     const [y, m, d] = s.split('-').map(Number);
@@ -1971,6 +2115,24 @@ function escHtml(s) { return s == null ? '' : String(s).replace(/[&<>"']/g, c =>
 function jsStr(s) { return escHtml(JSON.stringify(String(s == null ? '' : s))); }
 // Cores vão para atributos style — só aceita hex
 function safeColor(c, fallback = '#6d28d9') { return typeof c === 'string' && /^#[0-9a-f]{3,8}$/i.test(c) ? c : fallback; }
+// Cor escolhida pelo usuário (meta, cartão) usada como TEXTO sobre branco ou como FUNDO de
+// texto branco: escurece mantendo a matiz até 4,5:1 (WCAG AA). Amarelo/rosa/verde da paleta
+// ficavam entre 2:1 e 3,5:1. Variáveis CSS (tokens já ajustados) passam direto.
+function _lumRel(c) {
+    const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+}
+function corLegivel(cor, alvo = 4.5) {
+    let h = typeof cor === 'string' ? cor.trim() : '';
+    if (/^#[0-9a-f]{3}$/i.test(h)) h = '#' + [...h.slice(1)].map(x => x + x).join('');
+    if (!/^#[0-9a-f]{6}$/i.test(h)) return cor;
+    const c0 = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+    for (let k = 0; k < 1; k += 0.02) {
+        const c = c0.map(v => v * (1 - k));
+        if ((1.05) / (_lumRel(c) + 0.05) >= alvo) return k ? '#' + c.map(v => Math.round(v).toString(16).padStart(2, '0')).join('') : h;
+    }
+    return '#000000';
+}
 
 // structuredClone polyfill for older browsers
 const _clone = typeof structuredClone === 'function' ? structuredClone : o => JSON.parse(JSON.stringify(o));
@@ -2149,14 +2311,12 @@ function refreshAllCatCombos() {
     });
 }
 
+// Editor inline: só o combobox de categoria é próprio (reconstruído com a lista do novo
+// tipo); pagamento/cartão seguem o fluxo comum dos formulários (formTipoChange)
 function ieUpdateCats(id) {
-    const tipo = $('ie-tipo-' + id).value;
-    // Rebuild the combobox for the new tipo
     const wrap = $('ie-cat-wrap-' + id);
-    if (wrap) wrap.innerHTML = buildCatCombo('ie-cat-' + id, tipo, '');
-    $('ie-pag-wrap-' + id).style.display = tipo === 'saida' ? '' : 'none';
-    if (tipo !== 'saida') $('ie-cartao-wrap-' + id).style.display = 'none';
-    else ieUpdateCartao(id);
+    if (wrap) wrap.innerHTML = buildCatCombo('ie-cat-' + id, $('ie-tipo-' + id).value, '');
+    formTipoChange(formInline(id));
 }
 
 function populateCatSelect(el, tipo, selected) {
@@ -2213,18 +2373,6 @@ function openMobForm() {
 
 function closeMobForm() { $('mobFormSheet').classList.remove('open'); }
 
-function mobOnTipoChange() {
-    const tipo = $('mob-tipo').value;
-    $('mobPagamentoField').style.display = tipo === 'saida' ? '' : 'none';
-    if (tipo !== 'saida') {
-        $('mobCartaoField').style.display = 'none';
-        $('mobFaturaInfo').style.display  = 'none';
-    } else {
-        mobOnPagChange();
-    }
-    populateCatSelect($('mob-categoria'), tipo);
-}
-
 function mobAdicionar() {
     submitTx(readTxForm(FORM_MOBILE), null, closeMobForm);
 }
@@ -2240,26 +2388,16 @@ function openMobEdit(id) {
     $('mob-edit-fixo').checked = t.fixo;
     $('mob-edit-pag').value = t.pagamento || 'debito';
     mobEditTipoChange(t.cat);
-    if (t.pagamento === 'credito') {
-        $('mobEditCartaoField').style.display = cards.length ? '' : 'none';
+    // Cartão DESTE lançamento (formPagChange sugeriu o padrão). Só saídas mostram cartão:
+    // antes um estorno (entrada no crédito) exibia um seletor de cartão que era ignorado.
+    if (t.tipo === 'saida' && t.pagamento === 'credito') {
         _populateCardSelect('mob-edit-cartao', t.cartaoId);
-        const fi = _faturaInfoHtml(t.cartaoId, t.data);
-        const el = $('mobEditFaturaInfo');
-        if (fi) { el.innerHTML = fi; el.style.display = ''; } else { el.style.display = 'none'; }
+        formFaturaInfo(FORM_MOB_EDIT);
     }
     $('mobEditSheet').classList.add('open');
 }
 
 function closeMobEdit() { $('mobEditSheet').classList.remove('open'); }
-
-function mobEditTipoChange(selectedCat) {
-    const tipo = $('mob-edit-tipo').value;
-    $('mobEditPagField').style.display    = tipo === 'saida' ? '' : 'none';
-    $('mobEditCartaoField').style.display  = 'none';
-    $('mobEditFaturaInfo').style.display   = 'none';
-    if (tipo === 'saida') mobEditPagChange();
-    populateCatSelect($('mob-edit-cat'), tipo, selectedCat);   // undefined (troca de tipo) = mantém se existir
-}
 
 function mobEditSave() {
     submitTx(readTxForm(FORM_MOB_EDIT), toId($('mob-edit-id').value), closeMobEdit);
@@ -2347,6 +2485,20 @@ function renderMobList() {
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const GOAL_COLORS = ['#16a34a','#0284c7','#6d28d9','#dc2626','#f59e0b','#ec4899','#0f766e','#b45309','#0e7490'];
 const CAT_COLORS  = ['#ef4444','#f59e0b','#0b62f0','#10b981','#ec4899','#8b5cf6','#06b6d4','#84cc16','#f97316','#14b8a6'];
+// Cor ESTÁVEL por categoria (posição na lista de gastos+investimentos), igual em todos os
+// meses e gráficos — antes vinha da posição no ranking do mês e "Alimentação" era vermelha
+// num mês e azul no outro. Dentro de um gráfico, colisão (> 10 categorias) pega a próxima livre.
+const COR_SEM_CATEGORIA = '#a1a1aa';
+function coresCategorias(nomes) {
+    const lista = [...(cats.saida || []), ...(cats.investimento || [])], usadas = new Set(), n = CAT_COLORS.length;
+    return nomes.map(nome => {
+        const idx = lista.indexOf(nome);
+        if (idx < 0 && (!nome || nome === '(sem categoria)')) return COR_SEM_CATEGORIA;
+        let i = idx >= 0 ? idx : [...nome].reduce((h, ch) => (h * 31 + ch.codePointAt(0)) >>> 0, 0);
+        for (let k = 0; k < n && usadas.has(CAT_COLORS[i % n]); k++) i++;
+        const cor = CAT_COLORS[i % n]; usadas.add(cor); return cor;
+    });
+}
 
 const CHART_COMMON_OPTS = {
     responsive: true, maintainAspectRatio: false,
@@ -2391,7 +2543,10 @@ function _normDate(v) {
 }
 function _sanCards(list) {
     const seen = new Set();
-    const day = v => Math.min(28, Math.max(1, parseInt(v, 10) || 1));
+    // 1–31: cartões que fecham/vencem dia 29–31 existem (ex.: vence dia 7, fecha 7 dias antes);
+    // _calcFatura limita ao último dia de meses curtos. Antes era 1–28 e a compra do dia
+    // 29–31 caía na fatura seguinte.
+    const day = v => Math.min(31, Math.max(1, parseInt(v, 10) || 1));
     return _asList(list).filter(c => c && typeof c === 'object').map(c => {
         let id = toId(c.id);
         if (!id || seen.has(id)) id = newId();
@@ -2490,6 +2645,34 @@ function _quarantine(report) {
     if (!novos.length) return;
     console.warn(`${novos.length} registro(s) inválido(s) movidos para fin5_quarantine`, novos);
     storeJSON('fin5_quarantine', cur.concat(novos).slice(-500));
+    // Antes só havia o console.warn: para o usuário o lançamento simplesmente sumia
+    if (typeof toast === 'function' && $('toast')) toast(`⚠️ ${novos.length} registro(s) sem data/valor válido separado(s) — veja em Backup.`, '#b45309');
+    if (typeof renderQuarentena === 'function') renderQuarentena();
+}
+
+// Quarentena visível (seção Backup): quantos registros foram separados, o que são
+// (tooltip) e como baixar/descartar. Também vai junto no backup JSON.
+const _descQuarentena = x => x && x.aporteDe ? `Aporte em "${x.aporteDe}"` : String((x && (x.desc || x.descricao || x.nome)) || '(sem descrição)');
+function renderQuarentena() {
+    const box = $('quarentenaBox');
+    if (!box) return;
+    const q = loadJSON('fin5_quarantine', []);
+    if (!q.length) { box.innerHTML = ''; return; }
+    const lista = q.slice(-15).map(x => '• ' + _descQuarentena(x)).join('\n') + (q.length > 15 ? `\n… e mais ${q.length - 15}` : '');
+    box.innerHTML = `<div style="font-size:10px;line-height:1.5;color:#b45309;margin-top:5px" title="${escHtml(lista)}">
+        ⚠️ ${q.length} registro${q.length > 1 ? 's' : ''} sem data/valor válido separado${q.length > 1 ? 's' : ''} (não entra${q.length > 1 ? 'm' : ''} nos totais).
+        <button class="link-btn" onclick="baixarQuarentena()">baixar</button> ·
+        <button class="link-btn" onclick="descartarQuarentena()">descartar</button></div>`;
+}
+function baixarQuarentena() {
+    downloadBlob(new Blob([JSON.stringify(loadJSON('fin5_quarantine', []), null, 2)], { type: 'application/json' }), `quarentena_finances_${todayLocalISO()}.json`);
+}
+function descartarQuarentena() {
+    const n = loadJSON('fin5_quarantine', []).length;
+    if (!n || !confirm(`Descartar ${n} registro(s) inválido(s)? Baixe antes se quiser conferir — não dá para desfazer.`)) return;
+    lsDel('fin5_quarantine');
+    renderQuarentena();
+    toast('Quarentena descartada.', '#52525b');
 }
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
@@ -2526,7 +2709,13 @@ let _dashDirty = false; // tracks if dashboard needs re-render after returning f
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 const _fmtBRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmt     = v => _fmtBRL.format(roundMoney(+v || 0));
-const filtro  = () => ({ m: parseInt($('filtroMes').value), a: parseInt($('filtroAno').value) });
+// Período filtrado — NUNCA NaN: antes de init() montar os selects (ou com valor inválido)
+// vale o mês atual. Com NaN, o hero quebrava e renderPatrimonio entrava em laço infinito
+// ("2026-02" <= "NaN-NaN" é sempre verdadeiro) e o app travava ao abrir.
+function filtro() {
+    const now = new Date(), m = parseInt($('filtroMes').value, 10), a = parseInt($('filtroAno').value, 10);
+    return { m: m >= 0 && m <= 11 ? m : now.getMonth(), a: a >= 1900 && a <= 9999 ? a : now.getFullYear() };
+}
 
 // Índice mês → lançamentos, construído numa única passada e reaproveitado por todas
 // as telas (a visão anual fazia 12 filtros completos sobre tx). Autovalidável:
@@ -2547,11 +2736,15 @@ function _txIndex() {
 const txMes       = (m, a) => _txIndex().byYm.get(ymKey(m, a))  || _EMPTY;   // por data da compra
 const txFaturaMes = (m, a) => _txIndex().byFat.get(ymKey(m, a)) || _EMPTY;   // por vencimento da fatura
 
-function save()       { _invalidateTxCache(); storeJSON('fin5_data', tx); }
-function saveGoals()  { storeJSON('fin5_goals', goals); }
-function saveCats()   { storeJSON('fin5_cats', cats); }
-function saveCards()  { storeJSON('fin5_cards', cards); }
-function saveBudget() { storeJSON('fin5_budget', budget); schedulePush(); }
+// Toda gravação local deixa o dashboard pendente de re-render (quem está nele re-renderiza
+// e limpa a marca). Antes, mudar orçamento na aba Orçamento e voltar mostrava hero e
+// painel "restante" calculados com o orçamento antigo.
+const _persist = (key, val) => { storeJSON(key, val); _dashDirty = true; };
+function save()       { _invalidateTxCache(); _persist('fin5_data', tx); }
+function saveGoals()  { _persist('fin5_goals', goals); }
+function saveCats()   { _persist('fin5_cats', cats); }
+function saveCards()  { _persist('fin5_cards', cards); }
+function saveBudget() { _persist('fin5_budget', budget); schedulePush(); }
 function persistAll() {
     save(); saveCats(); saveGoals(); saveCards(); storeJSON('fin5_budget', budget);
     storeJSON('fin5_schema', SCHEMA_VERSION);
@@ -2575,6 +2768,7 @@ function renderAll() {
     renderCurrentView();
     safeRender(refreshAllCatCombos);
     safeRender(renderBackupAge);
+    safeRender(renderQuarentena);
 }
 
 const commit      = () => { save(); renderAll(); schedulePush(); };
@@ -2595,7 +2789,7 @@ const txPre  = t => t.tipo === 'entrada' ? '+' : '−';
 
 function toast(msg, bg = '#18181b') {
     const el = $('toast');
-    el.textContent = msg; el.style.background = bg;
+    el.textContent = msg; el.style.background = corLegivel(bg);   // texto branco legível em qualquer cor
     el.style.opacity = 1; el.style.transform = 'translateY(0)';
     clearTimeout(el._tid);
     el._tid = setTimeout(() => { el.style.opacity = 0; el.style.transform = 'translateY(6px)'; }, 2400);
@@ -2623,6 +2817,9 @@ function init() {
         $('aporteData').value = todayLocalISO();
 
         $('busca').addEventListener('input', debounce(renderTabela, 150));
+        // A data decide a fatura: o aviso acompanha a data nos 3 formulários (ligado pelo
+        // descritor — antes era atributo por <input> e o de edição no celular ficou sem)
+        [FORM_DESKTOP, FORM_MOBILE, FORM_MOB_EDIT].forEach(F => $(F.data)?.addEventListener('input', () => formFaturaInfo(F)));
         document.addEventListener('keydown', e => {
             if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z' || e.shiftKey) return;
             // Dentro de campos de texto o Ctrl+Z é do navegador (desfazer digitação)
@@ -2632,6 +2829,7 @@ function init() {
         });
         document.addEventListener('keydown', _onGlobalKey);
         _setupModalFocus();
+        safeRender(_setupA11y);   // acessibilidade nunca pode impedir o app de abrir
         // Outra aba do app salvou → recarrega o estado em vez de sobrescrever depois
         window.addEventListener('storage', e => {
             if (!e.key || !e.key.startsWith(LS_PREFIX) || !/^fin5_(data|cats|goals|cards|budget)$/.test(e.key.slice(LS_PREFIX.length))) return;
@@ -2691,6 +2889,62 @@ function _onGlobalKey(e) {
     const ie = el.id.match(/^ie-(?:desc|valor|data)-(\d+)$/);
     if (ie) { e.preventDefault(); saveInlineEdit(+ie[1]); return; }
     if (['desc', 'valor', 'data'].includes(el.id)) { e.preventDefault(); adicionar(); }
+}
+
+// ── ACESSIBILIDADE ──────────────────────────────────────────────────────────────
+// Uma rotina para o DOM inicial e para tudo que é renderizado depois (MutationObserver).
+// Auditoria antes: 47 de 53 campos sem nome acessível (<label> sem "for"), 17 botões só
+// com ícone sem nome e 23 clicáveis fora do alcance do teclado (ex.: "Exportar" backup,
+// cabeçalhos ordenáveis, "Nova Meta", importar arquivo).
+const _A11Y_NATIVO = /^(BUTTON|A|INPUT|SELECT|TEXTAREA|OPTION|TR|TD)$/;
+const _A11Y_GLIFOS = { '✕': 'Fechar', '×': 'Fechar', '◀': 'Anterior', '▶': 'Próximo', '‹': 'Anterior', '›': 'Próximo',
+                       '🗑': 'Excluir', '✏': 'Editar', '＋': 'Adicionar', '+': 'Adicionar', '✓': 'Confirmar', '↩': 'Desfazer' };
+const _textoVisivel = el =>(el.textContent || '').replace(/[\p{Extended_Pictographic}️‍\s✓✕▼›⌄«»＋+↑↓⇪↩←→·•×↕]/gu, '');
+function _a11y(root) {
+    if (!root || !root.querySelectorAll) return;
+    const todos = sel => [...(root.matches && root.matches(sel) ? [root] : []), ...root.querySelectorAll(sel)];
+    // 1) rótulo do bloco → campo
+    todos('.field, .ie-field').forEach(f => {
+        const l = f.querySelector(':scope > label'), c = f.querySelector('input:not([type=hidden]), select, textarea');
+        if (!l || !c || l.htmlFor || l.contains(c)) return;
+        if (c.id) l.htmlFor = c.id; else if (!c.hasAttribute('aria-label')) c.setAttribute('aria-label', l.textContent.trim());
+    });
+    // 2) campo ainda sem nome: title/placeholder
+    todos('input:not([type=hidden]), select, textarea').forEach(c => {
+        if ((c.labels && c.labels.length) || c.hasAttribute('aria-label') || c.hasAttribute('aria-labelledby')) return;
+        const n = c.getAttribute('title') || c.getAttribute('placeholder');
+        if (n) c.setAttribute('aria-label', n);
+    });
+    // 3) botão só com ícone: title vira nome; sem title, o significado do glifo
+    todos('button').forEach(b => {
+        if (b.hasAttribute('aria-label') || _textoVisivel(b)) return;
+        const n = b.title || _A11Y_GLIFOS[(b.textContent || '').replace(/[\s️]/g, '')];
+        if (n) b.setAttribute('aria-label', n);
+    });
+    // 4) clicáveis que não são controles: Tab + Enter/Espaço (fundos de modal ficam de fora — Esc fecha)
+    // (sem :has() — navegadores mais antigos lançariam SyntaxError e derrubariam o init)
+    todos('[onclick], label').forEach(el => {
+        if (el.tagName === 'LABEL' && !el.querySelector(':scope > input[type=file][hidden]')) return;
+        if (_A11Y_NATIVO.test(el.tagName) || /(^|\s)(overlay|[\w-]*backdrop)(\s|$)/.test(el.className)) return;
+        // fundo de modal (fecha ao clicar fora) e containers que só barram o clique (painel de
+        // detalhe do orçamento: event.stopPropagation()) não são botões
+        const oc = el.getAttribute('onclick') || '';
+        if (/event\.target\s*===\s*this/.test(oc) || /^\s*event\.stopPropagation\(\)\s*;?\s*$/.test(oc)) return;
+        el.dataset.a11yAtivar = '1';
+        if (!el.hasAttribute('tabindex')) el.tabIndex = 0;
+        if (el.tagName !== 'TH' && !el.hasAttribute('role')) el.setAttribute('role', 'button');
+        if (!el.hasAttribute('aria-label') && !_textoVisivel(el) && el.title) el.setAttribute('aria-label', el.title);
+    });
+}
+function _setupA11y() {
+    _a11y(document.body);
+    new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => { if (n.nodeType === 1) _a11y(n); })))
+        .observe(document.body, { childList: true, subtree: true });
+    // Enter/Espaço ativam os clicáveis marcados (como um <button> faria)
+    document.addEventListener('keydown', e => {
+        const el = e.target;
+        if ((e.key === 'Enter' || e.key === ' ') && el && el.dataset && el.dataset.a11yAtivar && !e.repeat) { e.preventDefault(); el.click(); }
+    });
 }
 
 // Foco dos modais sem tocar em cada função de abrir: observa a classe "open" dos modais
@@ -2824,8 +3078,14 @@ function goToMensal(m, a) {
 // Snapshot do estado inteiro (lançamentos, categorias, metas, cartões, orçamento):
 // antes só `tx` era salvo, então desfazer uma remoção de categoria/meta/cartão
 // ou uma importação de backup não restaurava nada além dos lançamentos.
-function pushUndo(label) {
-    undoStack.push({ snap: snapshotState(), label });
+// grupo: edições seguidas do MESMO campo (cada tecla do total do orçamento, ajustes de uma
+// alocação) viram UM passo, com o estado de antes da primeira — sem isso, um passo por
+// tecla esgotaria as 30 posições da pilha. Janela de 10 s renovada a cada edição.
+const UNDO_GRUPO_MS = 10000;
+function pushUndo(label, grupo = null) {
+    const top = undoStack[undoStack.length - 1], agora = Date.now();
+    if (grupo && top && top.grupo === grupo && agora - top.at < UNDO_GRUPO_MS) { top.at = agora; return; }
+    undoStack.push({ snap: snapshotState(), label, grupo, at: agora });
     if (undoStack.length > 30) undoStack.shift();
     _updateUndoBtn();
 }
@@ -2900,26 +3160,19 @@ function setTab(tab) {
 }
 
 // ── TIPO / PAGAMENTO ──────────────────────────────────────────────────────────
-function onTipoChange() {
-    const tipo = $('tipo').value;
-    $('pagamentoField').style.display = tipo === 'saida' ? '' : 'none';
-    if (tipo !== 'saida') {
-        $('cartaoField').style.display = 'none';
-        $('faturaInfo').style.display  = 'none';
-    } else {
-        onPagChange();
-    }
-    populateCatSelect($('categoria'), tipo);
-}
-
 // ── LANÇAMENTOS: fluxo único de salvar ───────────────────────────────────────
 // Todos os formulários (sidebar, mobile, edição mobile, edição inline) passam por
 // readTxForm → submitTx → makeTx. Antes eram 4 cópias com regras divergentes
 // (cartaoId salvo como string, validação diferente, fatura recalculada ou não).
-const FORM_DESKTOP  = { desc: 'desc', valor: 'valor', data: 'data', tipo: 'tipo', cat: 'categoria', fixo: 'fixo', pag: 'pagamento', cartao: 'cartao' };
-const FORM_MOBILE   = { desc: 'mob-desc', valor: 'mob-valor', data: 'mob-data', tipo: 'mob-tipo', cat: 'mob-categoria', fixo: 'mob-fixo', pag: 'mob-pagamento', cartao: 'mob-cartao' };
-const FORM_MOB_EDIT = { desc: 'mob-edit-desc', valor: 'mob-edit-valor', data: 'mob-edit-data', tipo: 'mob-edit-tipo', cat: 'mob-edit-cat', fixo: 'mob-edit-fixo', pag: 'mob-edit-pag', cartao: 'mob-edit-cartao' };
-const formInline = id => ({ desc: 'ie-desc-' + id, valor: 'ie-valor-' + id, data: 'ie-data-' + id, tipo: 'ie-tipo-' + id, cat: 'ie-cat-' + id, fixo: 'ie-fixo-' + id, pag: 'ie-pag-' + id, cartao: 'ie-cartao-' + id });
+// pagField/cartaoField/faturaInfo: blocos que formTipoChange/formPagChange mostram e ocultam
+const FORM_DESKTOP  = { desc: 'desc', valor: 'valor', data: 'data', tipo: 'tipo', cat: 'categoria', fixo: 'fixo', pag: 'pagamento', cartao: 'cartao',
+                        pagField: 'pagamentoField', cartaoField: 'cartaoField', faturaInfo: 'faturaInfo' };
+const FORM_MOBILE   = { desc: 'mob-desc', valor: 'mob-valor', data: 'mob-data', tipo: 'mob-tipo', cat: 'mob-categoria', fixo: 'mob-fixo', pag: 'mob-pagamento', cartao: 'mob-cartao',
+                        pagField: 'mobPagamentoField', cartaoField: 'mobCartaoField', faturaInfo: 'mobFaturaInfo' };
+const FORM_MOB_EDIT = { desc: 'mob-edit-desc', valor: 'mob-edit-valor', data: 'mob-edit-data', tipo: 'mob-edit-tipo', cat: 'mob-edit-cat', fixo: 'mob-edit-fixo', pag: 'mob-edit-pag', cartao: 'mob-edit-cartao',
+                        pagField: 'mobEditPagField', cartaoField: 'mobEditCartaoField', faturaInfo: 'mobEditFaturaInfo' };
+const formInline = id => ({ desc: 'ie-desc-' + id, valor: 'ie-valor-' + id, data: 'ie-data-' + id, tipo: 'ie-tipo-' + id, cat: 'ie-cat-' + id, fixo: 'ie-fixo-' + id, pag: 'ie-pag-' + id, cartao: 'ie-cartao-' + id,
+                            pagField: 'ie-pag-wrap-' + id, cartaoField: 'ie-cartao-wrap-' + id });   // sem aviso de fatura
 
 const fmtValorInput = v => v.toFixed(2).replace('.', ',');
 
@@ -3344,6 +3597,8 @@ function downloadBlob(blob, filename) {
 
 function exportar() {
     const data = { t: tx, c: cats, g: goals, k: cards, b: budget, v: SCHEMA_VERSION, exportedAt: new Date().toISOString() };
+    const q = loadJSON('fin5_quarantine', []);
+    if (q.length) data.q = q;   // registros separados também vão para a cópia (e voltam na importação)
     downloadBlob(new Blob([JSON.stringify(data)], { type: 'application/json' }), `backup_finances_${todayLocalISO()}.json`);
     lsSet('fin5_lastExport', todayLocalISO());
     renderBackupAge();
@@ -3368,12 +3623,18 @@ function renderBackupAge() {
     el.style.fontWeight = atrasado ? '600' : '';
 }
 
+// Excel/Sheets executam como FÓRMULA células que começam com = + - @ (CSV injection) — e
+// descrições vêm de extratos, texto de terceiros. O export prefixa "'"; a importação de
+// extrato remove esse prefixo, então o CSV do próprio app volta com o texto original.
+const _csvSeguro = s => /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
+const _csvDesfaz = s => s.replace(/^'(?=[=+\-@\t\r])/, '');
+
 // Exporta o mês filtrado como CSV (BOM + ';' = abre direto no Excel/Sheets pt-BR)
 function exportarCSV() {
     const { m, a } = filtro();
     const lista = [...txMes(m, a)].sort((x, y) => x.data.localeCompare(y.data));
     if (!lista.length) { toast('Nada para exportar neste mês.', '#52525b'); return; }
-    const q = s => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
+    const q = s => '"' + _csvSeguro(String(s == null ? '' : s)).replace(/"/g, '""') + '"';
     const cardName = id => { const c = cards.find(c => c.id === id); return c ? c.nome : ''; };
     const head = 'data;tipo;descricao;categoria;pagamento;cartao;fixo;valor';
     const rows = lista.map(t => [
@@ -3404,6 +3665,7 @@ function importar(input) {
             }, Number(d.v) || 2);
             pushUndo('Importação de backup');
             _quarantine(s.report);
+            if (Array.isArray(d.q) && d.q.length) _quarantine({ dropped: d.q });
             restoreState(s);
             commitAll();
             renderGoals(); renderCartoesMini();
@@ -3430,7 +3692,7 @@ function _inlineEditorHtml(t) {
         <div class="ie-inner">
             <div class="ie-field"><label>Descrição</label><input id="ie-desc-${t.id}" value="${escHtml(t.desc)}" type="text"></div>
             <div class="ie-field"><label>Valor (R$)</label><input id="ie-valor-${t.id}" value="${fmtValorInput(t.valor)}" type="text" inputmode="decimal"></div>
-            <div class="ie-field"><label>Data</label><input id="ie-data-${t.id}" value="${t.data}" type="date" oninput="ieUpdateCartao(${t.id})"></div>
+            <div class="ie-field"><label>Data</label><input id="ie-data-${t.id}" value="${t.data}" type="date"></div>
             <div class="ie-field"><label>Tipo</label><select id="ie-tipo-${t.id}" onchange="ieUpdateCats(${t.id})">${tipoOpts}</select></div>
             <div class="ie-field"><label>Categoria</label><div class="cat-combo" id="ie-cat-wrap-${t.id}">${buildCatCombo('ie-cat-' + t.id, t.tipo, t.cat)}</div></div>
             <div class="ie-actions">
@@ -3442,12 +3704,12 @@ function _inlineEditorHtml(t) {
             <label class="ie-check"><input type="checkbox" id="ie-fixo-${t.id}" ${t.fixo ? 'checked' : ''}> Gasto fixo mensal</label>
             <div id="ie-pag-wrap-${t.id}" style="${t.tipo !== 'saida' ? 'display:none' : ''}">
                 <label class="ie-check">Pagamento:&nbsp;
-                    <select id="ie-pag-${t.id}" onchange="ieUpdateCartao(${t.id}, true)" style="${selStyle}">${pagOpts}</select>
+                    <select id="ie-pag-${t.id}" onchange="ieUpdateCartao(${t.id})" style="${selStyle}">${pagOpts}</select>
                 </label>
             </div>
             <div id="ie-cartao-wrap-${t.id}" style="${(t.pagamento !== 'credito' || !cards.length) ? 'display:none' : ''}">
                 <label class="ie-check">Cartão:&nbsp;
-                    <select id="ie-cartao-${t.id}" style="${selStyle}"><option value="">—</option>${cardOpts}</select>
+                    <select id="ie-cartao-${t.id}" style="${selStyle}"><option value="">— sem cartão —</option>${cardOpts}</select>
                 </label>
             </div>
         </div>
@@ -3588,26 +3850,9 @@ function closeInlineEdit() {
     _openInlineId = null;
 }
 
-// ieUpdateCats is defined earlier (with buildCatCombo support) — do not redefine here
-
-function ieUpdateCartao(id, pagMudou = false) {
-    const pagEl = $('ie-pag-' + id);
-    if (!pagEl) return;
-    const pag  = pagEl.value;
-    const wrap = $('ie-cartao-wrap-' + id);
-    if (!wrap) return;
-    wrap.style.display = (pag === 'credito' && cards.length > 0) ? '' : 'none';
-    if (pag === 'credito' && cards.length > 0) {
-        const sel = $('ie-cartao-' + id);
-        // Só popula se ainda não tem os cartões (a checagem antiga era sempre
-        // verdadeira e recriava as options, perdendo o cartão selecionado)
-        if (sel && sel.options.length <= 1) {
-            sel.innerHTML = '<option value="">—</option>' + cards.map(c => `<option value="${c.id}">${escHtml(c.nome)}</option>`).join('');
-        }
-        // Acabou de mudar para crédito: sugere o cartão padrão (mesma regra do formulário)
-        if (pagMudou && sel && !sel.value) sel.value = String(defaultCardId() || '');
-    }
-}
+// Mudou o pagamento no editor inline: mesmo fluxo dos formulários (mostra o cartão e, se
+// vazio, sugere o padrão — _populateCardSelect preserva o cartão já escolhido)
+function ieUpdateCartao(id) { formPagChange(formInline(id)); }
 
 function saveInlineEdit(id) {
     submitTx(readTxForm(formInline(id)), id, closeInlineEdit);
@@ -3722,7 +3967,7 @@ function renderVencimentos() {
                          ['em ' + dias + 'd', 'var(--text-3)', 'var(--bg)'];
         return `<div style="display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid var(--border-light);font-size:12px">
             <span style="font-weight:600;color:var(--text-2);width:42px;flex-shrink:0">${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}</span>
-            <span style="font-size:9px;font-weight:700;letter-spacing:.5px;padding:2px 6px;border-radius:4px;color:white;background:${i.cor};flex-shrink:0">${i.badge}</span>
+            <span style="font-size:9px;font-weight:700;letter-spacing:.5px;padding:2px 6px;border-radius:4px;color:white;background:${corLegivel(i.cor)};flex-shrink:0">${i.badge}</span>
             <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500">${escHtml(i.desc)}</span>
             <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;color:${chipColor};background:${chipBg};flex-shrink:0">${chipTxt}</span>
             <span style="font-weight:700;color:var(--danger);flex-shrink:0">${fmt(i.valor)}</span>
@@ -4022,7 +4267,7 @@ function renderBudgetRemaining() {
     const pctUsed    = Math.min(100, pctRaw);
     const overBudget = remaining < 0;
     const gaugeColor  = overBudget ? '#dc2626' : pctUsed > 80 ? '#f59e0b' : '#16a34a';
-    const remainColor = overBudget ? '#dc2626' : '#16a34a';
+    const remainColor = overBudget ? 'var(--danger)' : 'var(--success)';   // texto: tokens com contraste AA
 
     // ── SVG arc gauge ────────────────────────────────────────────────────────
     // Semi-circle: center (100,108), radius 82, sweep=1 = clockwise = goes UP
@@ -4048,7 +4293,7 @@ function renderBudgetRemaining() {
                         ${overBudget ? '−' : ''}${fmt(Math.abs(remaining))}
                     </div>
                     <div style="font-size:10px;color:var(--text-3);margin-top:2px">
-                        ${overBudget ? '⚠️ acima do limite' : 'restante'} · ${Math.round(pctUsed)}% gasto
+                        ${overBudget ? '⚠️ acima do limite' : 'restante'} · ${pctDoLimite(totalSpent, spendBudget)}% gasto
                     </div>
                 </div>
             </div>
@@ -4063,7 +4308,7 @@ function renderBudgetRemaining() {
 
 // ── ANNUAL VIEW ───────────────────────────────────────────────────────────────
 function renderAnual() {
-    const a = parseInt($('filtroAno').value);
+    const a = filtro().a;
     $('anualSubtitle').textContent = `Resumo completo de ${a}`;
     const yearLabel = $('anualYearLabel');
     if (yearLabel) yearLabel.textContent = a;
@@ -4236,12 +4481,13 @@ function renderMensal() {
     saidas.forEach(t => { catMap[catLabel(t)] = (catMap[catLabel(t)] || 0) + t.valor; });
     const sorted2 = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
     const maxVal = sorted2[0]?.[1] || 1;
+    const cores = coresCategorias(sorted2.map(e => e[0])), pcts = pctPartes(sorted2.map(e => e[1]));
     $('catBreakdownList').innerHTML = sorted2.length
         ? sorted2.map(([cat, val], i) => `
             <div class="cat-bar-row">
                 <div class="cat-bar-name" title="${escHtml(cat)}">${escHtml(cat)}</div>
-                <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${Math.round((val/maxVal)*100)}%;background:${CAT_COLORS[i % CAT_COLORS.length]}"></div></div>
-                <div class="cat-bar-pct">${gas > 0 ? Math.round((val / gas) * 100) : 0}%</div>
+                <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${Math.round((val/maxVal)*100)}%;background:${cores[i]}"></div></div>
+                <div class="cat-bar-pct">${pcts[i]}%</div>
                 <div class="cat-bar-val">${fmt(val)}</div>
             </div>`).join('')
         : '<div class="split-empty">Sem gastos neste mês.</div>';
@@ -4299,14 +4545,14 @@ function renderGoals() {
                 </div>
             </div>
             <div class="goal-desc">${g.descricao ? escHtml(g.descricao) : '&nbsp;'}</div>
-            <div class="goal-amounts"><div class="goal-atual" style="color:${g.cor}">${fmt(atual)}</div><div class="goal-target">de ${fmt(g.meta)}</div></div>
+            <div class="goal-amounts"><div class="goal-atual" style="color:${corLegivel(g.cor)}">${fmt(atual)}</div><div class="goal-target">de ${fmt(g.meta)}</div></div>
             <div class="goal-track"><div class="goal-fill" style="width:${pct}%;background:${g.cor}"></div></div>
             <div class="goal-meta-row">
-                <span class="goal-pct" style="color:${g.cor}">${pct}% concluído</span>
+                <span class="goal-pct" style="color:${corLegivel(g.cor)}">${pct}% concluído</span>
                 <span>${done ? '✓ Concluído!' : 'Faltam ' + fmt(falta)}</span>
             </div>
             <div style="font-size:11px;color:var(--text-3);margin-bottom:12px">📅 Prazo: ${prazoStr}${ritmo ? ` · <span style="${ritmo.startsWith('⚠️') ? 'color:var(--danger);font-weight:600' : ''}">${ritmo}</span>` : ''}</div>
-            <button class="btn-aporte" style="background:${g.cor}" onclick="abrirAporte(${g.id})">+ Adicionar Aporte</button>
+            <button class="btn-aporte" style="background:${corLegivel(g.cor)}" onclick="abrirAporte(${g.id})">+ Adicionar Aporte</button>
             ${g.aportes.length ? `
                 <button class="goal-hist-toggle" onclick="toggleHistory(this, ${g.id})">${histOpen ? 'Ocultar histórico' : `Ver histórico (${g.aportes.length} aportes)`}</button>
                 <div class="goal-history ${histOpen ? 'open' : ''}">${aportesList}</div>` : ''}
@@ -4328,7 +4574,7 @@ function toggleHistory(btn, goalId) {
 
 function renderColorPicker() {
     $('colorPicker').innerHTML = GOAL_COLORS.map(c => `
-        <div class="color-opt ${c === selectedGoalColor ? 'selected' : ''}" style="background:${c}" onclick="selectColor('${c}')"></div>`).join('');
+        <div class="color-opt ${c === selectedGoalColor ? 'selected' : ''}" style="background:${c}" title="Cor ${c}" aria-pressed="${c === selectedGoalColor}" onclick="selectColor('${c}')"></div>`).join('');
 }
 
 function selectColor(c) { selectedGoalColor = c; renderColorPicker(); }
@@ -4404,10 +4650,21 @@ function abrirAporte(id) {
     $('ovAporte').classList.add('open');
 }
 
+// Aportes não têm id: o modal de edição guarda o índice E a assinatura do aporte. A sync
+// em tempo real aplica mudanças de outro dispositivo com o modal aberto — se um aporte
+// anterior sumir, o índice passa a apontar para OUTRO e salvar sobrescrevia o errado.
+const _aporteSig = a => a ? `${a.data}|${a.valor}|${a.nota || ''}` : '';
+let _aporteEditSig = '';
+function _localizarAporte(goal, idx, sig) {
+    if (goal.aportes[idx] && _aporteSig(goal.aportes[idx]) === sig) return idx;
+    return goal.aportes.findIndex(a => _aporteSig(a) === sig);
+}
+
 function editAporte(goalId, aporteIdx) {
     const g = goals.find(x => x.id === goalId);
     if (!g || !g.aportes[aporteIdx]) return;
     const a = g.aportes[aporteIdx];
+    _aporteEditSig = _aporteSig(a);
     $('aporteGoalId').value   = goalId;
     $('aporteEditIdx').value  = aporteIdx;
     $('aporteGoalNome').textContent = g.nome;
@@ -4433,19 +4690,23 @@ function deleteAporte(goalId, aporteIdx) {
 function closeAporte(e) { closeOverlay('ovAporte', e); }
 
 function confirmarAporte() {
-    const id    = parseInt($('aporteGoalId').value);
-    const editIdx = parseInt($('aporteEditIdx').value);
+    const id    = toId($('aporteGoalId').value);
+    let editIdx = parseInt($('aporteEditIdx').value, 10);
     const valor = numInput($('aporteValor'));
     const data  = $('aporteData').value;
     const nota  = $('aporteNota').value.trim();
     if (!(valor > 0)) return toast('⚠️ Valor inválido.', '#b45309');
     if (!isValidISODate(data)) return toast('⚠️ Selecione uma data.', '#b45309');
     const goal = goals.find(g => g.id === id);
-    if (!goal) return;
+    if (!goal) { closeAporte(); return toast('⚠️ Meta não encontrada (removida em outro dispositivo?).', '#b45309'); }
     if (!Array.isArray(goal.aportes)) goal.aportes = [];
+    if (editIdx >= 0) {
+        editIdx = _localizarAporte(goal, editIdx, _aporteEditSig);
+        if (editIdx < 0) { closeAporte(); return toast('⚠️ Este aporte foi alterado em outro dispositivo — confira e edite de novo.', '#b45309'); }
+    }
     pushUndo(editIdx >= 0 ? `Edição de aporte em "${goal.nome}"` : `Aporte em "${goal.nome}"`);
 
-    if (editIdx >= 0 && goal.aportes[editIdx]) {
+    if (editIdx >= 0) {
         // Edit existing aporte
         goal.aportes[editIdx] = { valor: roundMoney(valor), data, nota };
         commitGoals(); closeAporte();
@@ -4585,11 +4846,13 @@ const _renderBudgetSoon = debounce(() => renderBudget(), 250);
 function onBudgetTotalChange(final = false) {
     const parsed = parseValor($('budgetTotal').value);
     const v = parsed > 0 ? roundMoney(parsed) : 0;
-    const key = ymKey(_budgetMonth, _budgetYear);
-    if (isMonthCustom(_budgetMonth, _budgetYear)) {
+    const key = ymKey(_budgetMonth, _budgetYear), custom = isMonthCustom(_budgetMonth, _budgetYear);
+    if (custom && !(v > 0) && !final) return;
+    if (custom ? !(v > 0) || budget.monthTotals[key] !== v : budget.total !== v)
+        pushUndo(custom ? `Orçamento de ${MESES[_budgetMonth]}/${_budgetYear}` : 'Orçamento padrão', 'orc-total:' + (custom ? key : 'padrao'));
+    if (custom) {
         if (v > 0) budget.monthTotals[key] = v;
-        else if (final) delete budget.monthTotals[key];   // campo vazio ao sair = volta ao padrão
-        else return;
+        else delete budget.monthTotals[key];   // campo vazio ao sair (final) = volta ao padrão
     } else {
         budget.total = v;
     }
@@ -4597,8 +4860,11 @@ function onBudgetTotalChange(final = false) {
     if (final) renderBudget(); else _renderBudgetSoon();
 }
 
-function _setAlloc(catName, pct) {
-    pct = Number.isFinite(pct) ? Math.max(0, Math.min(100, Math.round(pct * 100) / 100)) : 0;   // até 2 casas
+// casas = 2 quando o % é digitado; ao converter de R$ guarda 6 casas — com 2, R$ 1.000 de
+// um total de R$ 7.777 virava 12,86% e voltava como R$ 1.000,12
+function _setAlloc(catName, pct, casas = 2) {
+    pct = Number.isFinite(pct) ? Math.max(0, Math.min(100, +pct.toFixed(casas))) : 0;
+    if ((budget.allocs[catName] || 0) !== pct) pushUndo(`Alocação de "${catName}"`, 'orc-alloc:' + catName);
     if (pct > 0) budget.allocs[catName] = pct; else delete budget.allocs[catName];
     saveBudget();
     renderBudget();
@@ -4612,11 +4878,13 @@ function updateBudgetCatValue(safeKey, val) {
     const total = getBudgetTotal(_budgetMonth, _budgetYear);
     if (!total || total <= 0) { toast('⚠️ Defina o Orçamento Total do mês primeiro.', '#b45309'); renderBudget(); return; }
     const value = parseValor(val);
-    _setAlloc(decodeURIComponent(safeKey), value > 0 ? (value / total) * 100 : 0);
+    _setAlloc(decodeURIComponent(safeKey), value > 0 ? (value / total) * 100 : 0, 6);
 }
 
 function setBudgetCatGroup(safeKey, group) {
-    budget.needsWants[decodeURIComponent(safeKey)] = group;
+    const nome = decodeURIComponent(safeKey);
+    if (budget.needsWants[nome] !== group) pushUndo(`"${nome}" como ${group === 'needs' ? 'necessidade' : 'desejo'}`, 'orc-nw:' + nome);
+    budget.needsWants[nome] = group;
     saveBudget();
     renderBudget();
 }
@@ -4678,9 +4946,16 @@ function renderBudget() {
     const elSpent = $('budgetSpent');
     const elRemain = $('budgetRemaining');
     if (elAlloc) { elAlloc.textContent = fmt(totalAllocVal); }
-    if ($('budgetAllocatedPct')) $('budgetAllocatedPct').textContent = `${+totalAllocPct.toFixed(2)}% do total`;
+    // Alocações somando > 100% prometem mais do que o total — a pizza normaliza e escondia isso
+    const elAllocPct = $('budgetAllocatedPct');
+    if (elAllocPct) {
+        const sobre = +totalAllocPct.toFixed(2) > 100;
+        elAllocPct.textContent = `${fmtPct(totalAllocPct)} do total${sobre ? ` · ⚠️ ${fmt(totalAllocVal - totalBudget)} além do total` : ''}`;
+        elAllocPct.style.color = sobre ? 'var(--danger)' : '';
+        elAllocPct.style.fontWeight = sobre ? '600' : '';
+    }
     if (elSpent) { elSpent.textContent = fmt(totalSpent); }
-    if ($('budgetSpentPct')) $('budgetSpentPct').textContent = spendBudget > 0 ? `${Math.round((totalSpent / spendBudget) * 100)}% do orçamento de gastos` : '';
+    if ($('budgetSpentPct')) $('budgetSpentPct').textContent = spendBudget > 0 ? `${pctDoLimite(totalSpent, spendBudget)}% do orçamento de gastos` : '';
     if (elRemain) {
         const rem = roundMoney(spendBudget - totalSpent);
         elRemain.textContent = fmt(rem);
@@ -4764,7 +5039,7 @@ function renderBudgetCatList(m, a, saidas, investList, totalBudget) {
         const isInvest  = _isBudgetCatInvest(catName);
         const allocated = totalBudget * (pct / 100);
         const spent     = _getSpentForBudgetCat(catName, saidas, investList);
-        const pctUsed   = allocated > 0 ? Math.round((spent / allocated) * 100) : 0;
+        const pctUsed   = pctDoLimite(spent, allocated);   // > 100 ⇔ gastou mais que o alocado
         return { catName, pct, isInvest, allocated, spent, pctUsed, group: _budgetGroup(catName) };
     });
     if (_budgetCatSort === 'alloc_desc')      enriched.sort((a, b) => b.pct - a.pct);
@@ -4789,7 +5064,7 @@ function renderBudgetCatList(m, a, saidas, investList, totalBudget) {
         const nameText = escHtml(parts.label || catName);
         const detail   = _budgetCatExpanded.has(catName) ? 'flex' : 'none';
         const renameRow = `<div class="btd-row">
-                <input type="text" id="bcat-rename-${escHtml(safeKey)}" class="btd-rename" value="${escHtml(catName)}" onkeydown="if(event.key==='Enter')renameBudgetCat(${k},${tp})">
+                <input type="text" id="bcat-rename-${escHtml(safeKey)}" class="btd-rename" value="${escHtml(catName)}" aria-label="Nome da categoria" onkeydown="if(event.key==='Enter')renameBudgetCat(${k},${tp})">
                 <button class="btd-save" onclick="renameBudgetCat(${k},${tp})">&#10003; Renomear</button>
                 <button class="btd-del" onclick="deleteBudgetCat(${k},${tp})">&#128465;&#65039;</button>
             </div>`;
@@ -4824,7 +5099,7 @@ function renderBudgetCatList(m, a, saidas, investList, totalBudget) {
                 <span class="btd-lbl">Valor</span>
                 <input type="text" class="btd-value" inputmode="decimal" value="${allocated ? allocated.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}" placeholder="0,00" onchange="updateBudgetCatValue(${k}, this.value)" title="Valor em R$ para o mês">
                 <span class="btd-lbl">ou</span>
-                <input type="number" class="budget-cat-pct-input" value="${pct}" min="0" max="100" step="0.01" onchange="updateBudgetCatPct(${k}, this.value)" title="% do orçamento">
+                <input type="number" class="budget-cat-pct-input" value="${+pct.toFixed(2)}" min="0" max="100" step="0.01" onchange="updateBudgetCatPct(${k}, this.value)" title="% do orçamento">
                 <span class="btd-lbl">%</span>
             </div>
             ${renameRow}
@@ -4847,7 +5122,7 @@ function renderBudgetCatList(m, a, saidas, investList, totalBudget) {
         if (g.key !== 'entrada') {
             const gSpent = items.reduce((s, c) => s + c.spent, 0);
             const gPct   = items.reduce((s, c) => s + c.pct, 0);
-            sub = ` <span style="color:var(--text-3);font-weight:600">&middot; ${fmt(gSpent)}${gPct ? ` &middot; ${+gPct.toFixed(2)}%` : ''}</span>`;
+            sub = ` <span style="color:var(--text-3);font-weight:600">&middot; ${fmt(gSpent)}${gPct ? ` &middot; ${fmtPct(gPct)}` : ''}</span>`;
         }
         html += `<div class="budget-tiles-group">
             <div class="budget-tiles-group-label">${g.label}${sub}</div>
@@ -4869,7 +5144,7 @@ function renderBudgetPie(totalBudget) {
     const data    = allCats.map(c => budget.allocs[c] || 0);
     const totalPct = data.reduce((s, v) => s + v, 0);
     if (totalPct < 100) { labels.push('Não alocado'); data.push(100 - totalPct); }
-    const colors = allCats.map((_, i) => CAT_COLORS[i % CAT_COLORS.length]);
+    const colors = coresCategorias(allCats);
     if (totalPct < 100) colors.push('#e4e4e7');
     upsertChart('budgetPie', ensureCanvas(wrap, 'budgetPieCanvas', 200), {
         type: 'doughnut',
@@ -4905,16 +5180,17 @@ function renderBudgetFixos(m, a) {
 
 // ── MONTH NAV (arrow buttons in topbar) ──────────────────────────────────────
 function changeMonth(delta) {
-    setFiltro(parseInt($('filtroMes').value, 10) + delta, $('filtroAno').value);
+    const { m, a } = filtro();
+    setFiltro(m + delta, a);
 }
 
 function changeYear(delta) {
-    setFiltro($('filtroMes').value, parseInt($('filtroAno').value, 10) + delta);
+    const { m, a } = filtro();
+    setFiltro(m, a + delta);
 }
 
 function updateMonthNavLabel() {
-    const m = parseInt($('filtroMes').value);
-    const a = parseInt($('filtroAno').value);
+    const { m, a } = filtro();
     const el = $('monthNavLabel');
     if (el) el.textContent = MESES[m] + ' ' + a;
     const yr = $('yearNavLabel');
@@ -4954,8 +5230,8 @@ function bootApp() {
     if (PREVIEW_MODE) {
         const previewUser = { uid: 'preview', displayName: 'Preview', email: 'preview@local', photoURL: null };
         _currentUser = previewUser;
+        init();                 // selects/listeners ANTES do 1º render (showApp → navTo)
         showApp(previewUser);
-        init();
         console.info('%cFinances preview mode — no login, no cloud sync.', 'color:#0b62f0;font-weight:600');
         return;
     }
@@ -4964,12 +5240,15 @@ function bootApp() {
         $('loginError').textContent = 'Não foi possível carregar o Firebase. Verifique a conexão e recarregue a página.';
         return;
     }
+    // Volta de um login por redirecionamento (fallback do popup): o sucesso chega pelo
+    // onAuthStateChanged; aqui só aparece o erro, se houver
+    fbAuth.getRedirectResult().catch(e => { const msg = _authErroMsg(e); if (msg) $('loginError').textContent = msg; });
     fbAuth.onAuthStateChanged(user => {
         if (user) {
             _currentUser = user;
             _claimLocalData(user.uid);
+            init();             // selects/listeners ANTES do 1º render (showApp → navTo)
             showApp(user);
-            init();
             reconcile({ initial: true });
             checkDbRules();
             setupAutoSync();
@@ -4985,11 +5264,28 @@ function bootApp() {
 // Os dados locais pertencem a UM usuário. Ao entrar com outra conta no mesmo
 // navegador, antes o app mostrava (e enviava para a conta nova!) os dados de quem
 // usou o navegador antes.
+// Dados do dono anterior que NÃO chegaram à nuvem (sessão expirou sem "Sair", navegador
+// fechado offline) ficam guardados à parte e voltam quando ele entrar de novo — a sync de
+// 3 vias os mescla com a nuvem. Antes eram sobrescritos pela conta nova e se perdiam.
+const _pendKey = uid => 'fin5_pendente_' + uid;
 function _claimLocalData(uid) {
     const owner = loadJSON('fin5_owner', null);
-    if (owner && owner !== uid) {
-        restoreState(sanitizeState({}));          // vazio + categorias padrão
+    const h = _stateHash(), vazio = h === _stateHash(sanitizeState({}));
+    const deOutro = !!owner && owner !== uid;
+    if (deOutro) {
+        const meta = loadJSON(_syncKey(owner), null);
+        if ((!meta || meta.hash !== h) && !vazio)
+            storeJSON(_pendKey(owner), { t: tx, c: cats, g: goals, k: cards, b: budget });
+    }
+    const pend = loadJSON(_pendKey(uid), null);
+    // Pendentes desta conta voltam se o que está no navegador é de outra conta ou está vazio
+    // (ex.: alguém saiu apagando os dados deste navegador — o que remove o registro de dono)
+    if (deOutro || (pend && vazio)) {
+        const s = sanitizeState(pend || {});      // pendentes desta conta, ou vazio + categorias padrão
+        _quarantine(s.report);
+        restoreState(s);
         persistAll();
+        lsDel(_pendKey(uid));
         undoStack = []; _updateUndoBtn();
     } else if (!owner) {
         _migrateLegacySyncMeta(uid);              // instalação anterior: dados são deste usuário
@@ -5037,6 +5333,26 @@ function showApp(user) {
     navTo('dashboard');
 }
 
+// Erros de login em pt-BR (antes aparecia o texto cru do Firebase, ex.: "Firebase: Error
+// (auth/popup-blocked)"). null = o próprio usuário cancelou → sem mensagem.
+const _AUTH_ERROS = {
+    'auth/popup-closed-by-user':  null,
+    'auth/cancelled-popup-request': null,
+    'auth/user-cancelled':        null,
+    'auth/network-request-failed': 'Sem conexão com a internet. Verifique e tente de novo.',
+    'auth/too-many-requests':     'Muitas tentativas seguidas. Aguarde alguns minutos e tente de novo.',
+    'auth/user-disabled':         'Esta conta foi desativada.',
+    'auth/unauthorized-domain':   'Este endereço não está autorizado no Firebase (Authentication → Settings → Authorized domains).',
+    'auth/web-storage-unsupported': 'O navegador está bloqueando o armazenamento (modo privado/cookies). Libere e tente de novo.',
+};
+// Popup bloqueado ou impossível no ambiente (celular, navegador embutido) → redirecionamento
+const _AUTH_USA_REDIRECT = new Set(['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment']);
+function _authErroMsg(e) {
+    const code = e && e.code;
+    if (code in _AUTH_ERROS) return _AUTH_ERROS[code];
+    return 'Não foi possível entrar' + (code ? ` (${code.replace(/^auth\//, '')})` : '') + '. Tente de novo.';
+}
+
 async function signInWithGoogle() {
     const btn = $('btnGoogleSignIn');
     const err = $('loginError');
@@ -5044,12 +5360,15 @@ async function signInWithGoogle() {
     btn.innerHTML = '<div class="login-spinner"></div> Entrando...';
     btn.disabled  = true;
     err.textContent = '';
+    const provider = new firebase.auth.GoogleAuthProvider();
     try {
-        const provider = new firebase.auth.GoogleAuthProvider();
         await fbAuth.signInWithPopup(provider);
         // onAuthStateChanged handles the rest
     } catch (e) {
-        err.textContent = 'Erro ao entrar: ' + (e.message || e.code);
+        if (_AUTH_USA_REDIRECT.has(e && e.code)) {
+            try { await fbAuth.signInWithRedirect(provider); return; }   // a página sai; o boot trata o retorno
+            catch (e2) { err.textContent = _authErroMsg(e2) || ''; }
+        } else err.textContent = _authErroMsg(e) || '';
     } finally {
         btn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google"> Entrar com Google';
         btn.disabled  = false;
@@ -5064,19 +5383,25 @@ async function signOut() {
     if (_localDirty() && !confirm('A sincronização falhou — as alterações ficam só neste navegador. Sair mesmo assim?')) return;
     // Só oferece apagar quando tudo já está na nuvem (nada se perde)
     const wipe = !_localDirty() && confirm('Apagar também os dados guardados NESTE navegador?\n\nRecomendado em computador compartilhado. Seus dados continuam na nuvem e voltam no próximo login.');
+    const uid = _currentUser && _currentUser.uid;   // _currentUser vira null no signOut
     clearInterval(_autoSyncTimer);
     stopRemoteWatch();
     await fbAuth.signOut();
-    if (wipe) wipeLocalData();
+    if (wipe) wipeLocalData(uid);
     toast(wipe ? 'Até logo! Dados deste navegador apagados.' : 'Até logo!', '#52525b');
 }
 
-// Remove do navegador os dados do app (do namespace atual) e zera o estado em memória
-function wipeLocalData() {
+// Remove do navegador os dados do app (do namespace atual) e zera o estado em memória.
+// Preserva o que é de OUTRA conta (alterações pendentes e metadados de sync dela): não
+// estão na nuvem, e "apagar os dados deste navegador" é sobre a conta que está saindo.
+function wipeLocalData(uid = null) {
     const keys = [];
     for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k && k.startsWith(LS_PREFIX) && /^(fin5_|fb_)/.test(k.slice(LS_PREFIX.length))) keys.push(k);
+        if (!k || !k.startsWith(LS_PREFIX)) continue;
+        const nome = k.slice(LS_PREFIX.length), dono = nome.match(/^(?:fin5_pendente_|fb_sync_|fb_base_)(.+)$/);
+        if (dono && dono[1] !== uid) continue;
+        if (/^(fin5_|fb_)/.test(nome)) keys.push(k);
     }
     keys.forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
     restoreState(sanitizeState({}));
@@ -5493,84 +5818,46 @@ function _faturaInfoHtml(cardId, spendDate) {
     if (!card) return null;
     const fd = calcFaturaData(cardId, spendDate);
     if (!fd) return null;
-    const [fy, fm] = fd.split('-');
-    return `💳 <strong>${escHtml(card.nome)}</strong> &mdash; fatura de <strong>${MESES[parseInt(fm)-1]}</strong> (vence dia ${card.vencimento})`;
+    const [fy, fm, fdia] = fd.split('-');   // dia real (vencimento 31 em fevereiro = dia 28)
+    return `💳 <strong>${escHtml(card.nome)}</strong> &mdash; fatura de <strong>${MESES[parseInt(fm)-1]}</strong> (vence dia ${+fdia})`;
 }
 
-// ── DESKTOP FORM CARD HANDLERS ────────────────────────────────
-function onPagChange() {
-    const pag  = $('pagamento').value;
-    const show = pag === 'credito' && cards.length > 0;
-    $('cartaoField').style.display = show ? '' : 'none';
-    $('faturaInfo').style.display  = 'none';
-    if (show) {
-        _populateCardSelect('cartao');
-        onCartaoChange();
-    }
+// ── TIPO / PAGAMENTO / CARTÃO / AVISO DE FATURA — os 3 formulários ────────────
+// Uma implementação guiada pelos descritores FORM_*. Antes eram 3 cópias de cada
+// handler (desktop, celular, editar no celular) e a de edição no celular ficou sem
+// atualizar o aviso "fatura de X" ao trocar a data (mostrava a fatura antiga).
+function _mostrar(id, on) { const el = id && $(id); if (el) el.style.display = on ? '' : 'none'; }
+function formTipoChange(F, selectedCat) {
+    const tipo = $(F.tipo).value;
+    _mostrar(F.pagField, tipo === 'saida');
+    if (tipo === 'saida') formPagChange(F);
+    else { _mostrar(F.cartaoField, false); _mostrar(F.faturaInfo, false); }
+    populateCatSelect($(F.cat), tipo, selectedCat);   // undefined (troca de tipo) = mantém se existir
 }
-
-function onCartaoChange() {
-    if ($('tipo').value !== 'saida' || $('pagamento').value !== 'credito') {
-        $('faturaInfo').style.display = 'none';
-        return;
-    }
-    const cartaoId = $('cartao')?.value;
-    const data     = $('data').value;
-    const html     = _faturaInfoHtml(cartaoId, data);
-    const el       = $('faturaInfo');
-    if (html) { el.innerHTML = html; el.style.display = ''; }
-    else       { el.style.display = 'none'; }
+function formPagChange(F) {
+    const show = $(F.pag).value === 'credito' && cards.length > 0;
+    _mostrar(F.cartaoField, show);
+    _mostrar(F.faturaInfo, false);
+    if (show) { _populateCardSelect(F.cartao); formFaturaInfo(F); }
 }
-
-// ── MOBILE FORM CARD HANDLERS ─────────────────────────────────
-function mobOnPagChange() {
-    const pag  = $('mob-pagamento').value;
-    const show = pag === 'credito' && cards.length > 0;
-    $('mobCartaoField').style.display = show ? '' : 'none';
-    $('mobFaturaInfo').style.display  = 'none';
-    if (show) {
-        _populateCardSelect('mob-cartao');
-        mobOnCartaoChange();
-    }
+function formFaturaInfo(F) {
+    const el = F.faturaInfo && $(F.faturaInfo);   // editor inline não tem aviso
+    if (!el) return;
+    const html = $(F.tipo).value === 'saida' && $(F.pag).value === 'credito'
+        ? _faturaInfoHtml($(F.cartao)?.value, $(F.data).value) : null;
+    if (html) el.innerHTML = html;
+    el.style.display = html ? '' : 'none';
 }
-
-function mobOnCartaoChange() {
-    if ($('mob-tipo').value !== 'saida' || $('mob-pagamento').value !== 'credito') {
-        $('mobFaturaInfo').style.display = 'none';
-        return;
-    }
-    const cartaoId = $('mob-cartao')?.value;
-    const data     = $('mob-data').value;
-    const html     = _faturaInfoHtml(cartaoId, data);
-    const el       = $('mobFaturaInfo');
-    if (html) { el.innerHTML = html; el.style.display = ''; }
-    else       { el.style.display = 'none'; }
-}
-
-// ── MOBILE EDIT CARD HANDLERS ─────────────────────────────────
-function mobEditPagChange() {
-    const pag  = $('mob-edit-pag').value;
-    const show = pag === 'credito' && cards.length > 0;
-    $('mobEditCartaoField').style.display = show ? '' : 'none';
-    $('mobEditFaturaInfo').style.display  = 'none';
-    if (show) {
-        _populateCardSelect('mob-edit-cartao');
-        mobEditCartaoChange();
-    }
-}
-
-function mobEditCartaoChange() {
-    if ($('mob-edit-tipo').value !== 'saida' || $('mob-edit-pag').value !== 'credito') {
-        $('mobEditFaturaInfo').style.display = 'none';
-        return;
-    }
-    const cartaoId = $('mob-edit-cartao')?.value;
-    const data     = $('mob-edit-data').value;
-    const html     = _faturaInfoHtml(cartaoId, data);
-    const el       = $('mobEditFaturaInfo');
-    if (html) { el.innerHTML = html; el.style.display = ''; }
-    else       { el.style.display = 'none'; }
-}
+// Nomes usados pelos atributos on* do HTML
+function onTipoChange()            { formTipoChange(FORM_DESKTOP); }
+function onPagChange()             { formPagChange(FORM_DESKTOP); }
+function onCartaoChange()          { formFaturaInfo(FORM_DESKTOP); }
+function mobOnTipoChange()         { formTipoChange(FORM_MOBILE); }
+function mobOnPagChange()          { formPagChange(FORM_MOBILE); }
+function mobOnCartaoChange()       { formFaturaInfo(FORM_MOBILE); }
+function mobEditTipoChange(cat)    { formTipoChange(FORM_MOB_EDIT, cat); }
+function mobEditPagChange()        { formPagChange(FORM_MOB_EDIT); }
+function mobEditCartaoChange()     { formFaturaInfo(FORM_MOB_EDIT); }
 
 // ── SHARED ────────────────────────────────────────────────────
 // Cartão sugerido para compra nova no crédito: o último usado (se ainda existe) ou o
@@ -5661,7 +5948,7 @@ function _renderCardColorPicker() {
     const el = $('cardColorPicker');
     if (!el) return;
     el.innerHTML = CARD_COLORS.map(c =>
-        `<div class="card-color-opt ${c === _selCardColor ? 'sel' : ''}" style="background:${c}" onclick="selectCardColor('${c}')"></div>`
+        `<div class="card-color-opt ${c === _selCardColor ? 'sel' : ''}" style="background:${c}" title="Cor ${c}" aria-pressed="${c === _selCardColor}" onclick="selectCardColor('${c}')"></div>`
     ).join('');
 }
 
@@ -5674,8 +5961,8 @@ function salvarCartao() {
     const editId = toId($('cartaoEditId').value);
 
     if (!nome)                          return toast('⚠️ Digite o nome do cartão.', '#b45309');
-    if (!(fech >= 1 && fech <= 28))     return toast('⚠️ Dia de fechamento inválido (1-28).', '#b45309');
-    if (!(venc >= 1 && venc <= 28))     return toast('⚠️ Dia de vencimento inválido (1-28).', '#b45309');
+    if (!(fech >= 1 && fech <= 31))     return toast('⚠️ Dia de fechamento inválido (1-31).', '#b45309');
+    if (!(venc >= 1 && venc <= 31))     return toast('⚠️ Dia de vencimento inválido (1-31).', '#b45309');
 
     const idx = editId ? cards.findIndex(c => c.id === editId) : -1;
     if (editId && idx < 0) return toast('⚠️ Cartão não encontrado.', '#b45309');
@@ -5871,7 +6158,6 @@ function _readFileText(file) {
     });
 }
 
-// Datas: YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY, DD/MM/YY — com ou sem hora; valida calendário
 // Meses por extenso/abreviados (pt e en) → número
 const _MES_NOME = { jan: 1, fev: 2, feb: 2, mar: 3, abr: 4, apr: 4, mai: 5, may: 5, jun: 6, jul: 7, ago: 8, aug: 8,
                     set: 9, sep: 9, out: 10, oct: 10, nov: 11, dez: 12, dec: 12 };
@@ -5889,13 +6175,13 @@ function _inferirAno(dia, mes, hoje = new Date()) {
     }
     return best ? best.iso : null;
 }
-// Datas: YYYY-MM-DD, DD/MM/YYYY, DD-MM-YY, DD/MM (sem ano), "15 SET 2026", "15 set" —
-// com ou sem hora; valida calendário. Antes, datas sem ano/mês por extenso eram
-// descartadas em silêncio na importação.
+// Datas: YYYY-MM-DD (ou com / .), DD/MM/YYYY, DD-MM-YY, DD/MM (sem ano), "15 SET 2026",
+// "15 set", "Sep 15, 2026" — com ou sem hora; valida calendário. Antes, datas sem ano/mês
+// por extenso eram descartadas em silêncio na importação.
 function parseFlexDate(raw, hoje = new Date()) {
     if (!raw) return null;
     const s = String(raw).trim().replace(/['"]/g, '');
-    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:$|[T\s])/);
+    let m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})(?:$|[T\s])/);
     let iso = m ? `${m[1]}-${pad2(m[2])}-${pad2(m[3])}` : null;
     if (!iso && (m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2}|\d{4})(?:$|\s)/))) {
         const y = m[3].length === 2 ? (parseInt(m[3], 10) > 50 ? '19' : '20') + m[3] : m[3];
@@ -5905,6 +6191,11 @@ function parseFlexDate(raw, hoje = new Date()) {
     if (!iso && (m = fold(s).match(/^(\d{1,2})[\s\/\-.]+([a-z]{3})[a-z]*\.?(?:[\s\/\-.]+(\d{2}|\d{4}))?(?:$|\s)/)) && _MES_NOME[m[2]]) {
         const mes = _MES_NOME[m[2]];
         iso = m[3] ? `${m[3].length === 2 ? '20' + m[3] : m[3]}-${pad2(mes)}-${pad2(m[1])}` : _inferirAno(+m[1], mes, hoje);
+    }
+    // Mês antes do dia (exportações em inglês: "Sep 15, 2026", "SET 15")
+    if (!iso && (m = fold(s).match(/^([a-z]{3})[a-z]*\.?[\s\/\-.]+(\d{1,2})(?:,?[\s\/\-.]+(\d{2}|\d{4}))?(?:$|\s)/)) && _MES_NOME[m[1]]) {
+        const mes = _MES_NOME[m[1]];
+        iso = m[3] ? `${m[3].length === 2 ? '20' + m[3] : m[3]}-${pad2(mes)}-${pad2(m[2])}` : _inferirAno(+m[2], mes, hoje);
     }
     return iso && isValidISODate(iso) ? iso : null;
 }
@@ -5952,15 +6243,34 @@ const _CSV_ALIASES = {
     credit: ['credito','credit','entrada','entradas'],
     debit:  ['debito','debit','saida','saidas'],
     id:     ['identificador','id transacao','fitid','id'],
+    // Só nome EXATO: "Tipo de pagamento: Crédito" (meio de pagamento) não pode virar sinal
+    sinal:  ['d c','dc','c d','deb cred','debito credito','credito debito','natureza','tipo','tipo lancamento',
+             'tipo de lancamento','tipo transacao','tipo de transacao','sinal'],
+    cat:    ['categoria','category'],
 };
 function _csvFindCols(header) {
     const h = header.map(_normTxt);
     const find = (aliases, exclude = []) => h.findIndex((c, i) => !exclude.includes(i) && aliases.some(a => c === a || c.startsWith(a + ' ')));
+    const findExact = (aliases, exclude = []) => h.findIndex((c, i) => !exclude.includes(i) && aliases.includes(c));
     const date = find(_CSV_ALIASES.date);
     const valor = find(_CSV_ALIASES.valor);
-    const cols = { date, valor, desc: find(_CSV_ALIASES.desc, [date, valor]), id: find(_CSV_ALIASES.id, [date, valor]) };
+    const cols = { date, valor, desc: find(_CSV_ALIASES.desc, [date, valor]), id: find(_CSV_ALIASES.id, [date, valor]),
+                   sinal: findExact(_CSV_ALIASES.sinal, [date, valor]), cat: findExact(_CSV_ALIASES.cat, [date, valor]) };
     if (valor < 0) { cols.credit = find(_CSV_ALIASES.credit); cols.debit = find(_CSV_ALIASES.debit); }
     return cols;
+}
+
+// Célula de valor sem nenhum dígito ("", "-", "—") = vazia → 0 (linha de saldo/informativa);
+// com dígito mas ilegível → NaN, contada como ignorada na revisão
+const _valorCel = c => /\d/.test(c || '') ? parseValor(c) : 0;
+// Coluna de natureza (D/C, Débito/Crédito, saída/entrada — inclusive o CSV do próprio app):
+// bancos como Santander/Caixa exportam o valor sempre positivo e todo débito virava ganho.
+// Valor não reconhecido ("PIX", "Compra") não mexe no sinal.
+const _SINAL_NEG = new Set(['d', 'db', 'deb', 'debito', 'saida', 'despesa', 'gasto', 'investimento', '-']);
+const _SINAL_POS = new Set(['c', 'cr', 'cred', 'credito', 'entrada', 'receita', 'ganho', '+']);
+function _sinalCel(c) {
+    const v = fold(c).trim().replace(/\.$/, '');
+    return _SINAL_NEG.has(v) ? -1 : _SINAL_POS.has(v) ? 1 : 0;
 }
 
 function _extParseCSV(text) {
@@ -5980,27 +6290,32 @@ function _extParseCSV(text) {
         cols = w >= 4 ? { date: 0, desc: 2, valor: 3, id: -1 } : { date: 0, desc: 1, valor: 2, id: -1 };
         hIdx = parseFlexDate(rows[0][0]) ? -1 : 0;
     }
-    if (cols.desc < 0) cols.desc = rows[Math.max(hIdx, 0)].findIndex((_, i) => ![cols.date, cols.valor, cols.credit, cols.debit, cols.id].includes(i));
+    if (cols.desc < 0) cols.desc = rows[Math.max(hIdx, 0)].findIndex((_, i) => ![cols.date, cols.valor, cols.credit, cols.debit, cols.id, cols.sinal, cols.cat].includes(i));
 
     const results = []; let skipped = 0;
     for (const row of rows.slice(hIdx + 1)) {
         const date = parseFlexDate(row[cols.date]);
-        const temConteudo = row.some(c => c && c.trim());
-        if (!date) { if (temConteudo) skipped++; continue; }
+        // Sem dígito na coluna de data é rótulo ("Total", "Saldo anterior"), não data ilegível
+        if (!date) { if (/\d/.test(row[cols.date] || '')) skipped++; continue; }
         let valor;
-        if (cols.valor >= 0) valor = parseValor(row[cols.valor]);
-        else {
-            const cr = parseValor(row[cols.credit]), db = parseValor(row[cols.debit]);
-            valor = cr > 0 ? cr : (Number.isFinite(db) && db !== 0 ? -Math.abs(db) : NaN);
+        if (cols.valor >= 0) {
+            valor = _valorCel(row[cols.valor]);
+            const sg = cols.sinal >= 0 ? _sinalCel(row[cols.sinal]) : 0;
+            if (sg && Number.isFinite(valor)) valor = sg * Math.abs(valor);
+        } else {
+            const cr = _valorCel(row[cols.credit]), db = _valorCel(row[cols.debit]);
+            valor = cr > 0 ? cr : (!Number.isFinite(cr) || !Number.isFinite(db) ? NaN : db !== 0 ? -Math.abs(db) : 0);
         }
         if (!Number.isFinite(valor)) { skipped++; continue; }
         if (valor === 0) continue;   // linha de saldo/informativa
         const extId = cols.id >= 0 && row[cols.id] ? 'csv:' + row[cols.id] : null;
-        results.push({ date, desc: (row[cols.desc] || '').replace(/\s+/g, ' ').trim(), valor, extId });
+        const r = { date, desc: _csvDesfaz((row[cols.desc] || '').replace(/\s+/g, ' ').trim()), valor, extId };
+        if (cols.cat >= 0 && row[cols.cat]) r.catHint = _csvDesfaz(row[cols.cat].trim());
+        results.push(r);
     }
     // Linhas com conteúdo mas data/valor ilegível são contadas e mostradas na revisão
     results.skipped = skipped;
-    return results.length ? results : null;
+    return results.length || skipped ? results : null;
 }
 
 // ── OFX PARSER ──────────────────────────────────────────────────
@@ -6024,7 +6339,7 @@ function _extParseOFX(text) {
         transactions.push({ date, desc, valor, extId: fitid ? 'ofx:' + fitid : null });
     });
     transactions.skipped = skipped;
-    return transactions.length ? transactions : null;
+    return transactions.length || skipped ? transactions : null;
 }
 
 // ── MAIN IMPORT LOGIC ───────────────────────────────────────────
@@ -6076,7 +6391,9 @@ async function extHandleFile(file) {
         console.error('Falha ao ler extrato', e);
     }
     if (!raw || !raw.length) {
-        toast('⚠️ Não foi possível ler o extrato. Verifique o formato.', '#b45309');
+        toast(raw && raw.skipped
+            ? `⚠️ Nenhuma transação lida: ${raw.skipped} linha${raw.skipped > 1 ? 's' : ''} com data ou valor em formato não reconhecido.`
+            : '⚠️ Não foi possível ler o extrato. Verifique o formato.', '#b45309');
         $('extFileInput').value = '';
         return;
     }
@@ -6106,10 +6423,18 @@ async function extHandleFile(file) {
         if (dup) { checked = false; flag = 'dup'; }
 
         return { idx: i, checked, date: r.date, desc: r.desc || '(sem descrição)', valor, tipo,
-                 cat: _extAutoCategory(r.desc, tipo, learned), flag, extId: r.extId || null };
+                 cat: _extCatDoArquivo(r.catHint, tipo) || _extAutoCategory(r.desc, tipo, learned), flag, extId: r.extId || null };
     });
 
     _extRenderPreview();
+}
+
+// Categoria vinda do arquivo (CSV do próprio app, coluna "category" do Nubank) só vale se
+// já existir para o tipo — pelo nome exato ou pelo rótulo sem ícone/acento/pontuação
+function _extCatDoArquivo(hint, tipo) {
+    if (!hint) return '';
+    const list = cats[tipo] || [], h = _normTxt(splitCatName(hint).label);
+    return list.find(c => c === hint) || (h && list.find(c => _normTxt(splitCatName(c).label) === h)) || '';
 }
 
 function _extCatOptions(tipo, selected) {
@@ -6328,8 +6653,8 @@ function renderPatrimonio() {
             responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => fmt(c.parsed.y) } } },
             scales: {
-                x: { grid: { display: false }, ticks: { font: { size: 9, family: 'Inter' }, color: '#97a1b0', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } },
-                y: { grid: { color: '#f1f2f5' }, ticks: { font: { size: 9 }, color: '#97a1b0', callback: v => 'R$' + (Math.abs(v) >= 1000 ? (v / 1000).toFixed(1) + 'k' : v) } }
+                x: { grid: { display: false }, ticks: { font: { size: 9, family: 'Inter' }, color: '#687079', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } },
+                y: { grid: { color: '#f1f2f5' }, ticks: { font: { size: 9 }, color: '#687079', callback: v => 'R$' + (Math.abs(v) >= 1000 ? (v / 1000).toFixed(1) + 'k' : v) } }
             }
         }
     });
@@ -6346,9 +6671,10 @@ function renderDistribution(dados) {
         return;
     }
     const total  = entries.reduce((s, e) => s + e[1], 0);
-    const colorOf = i => CAT_COLORS[i % CAT_COLORS.length];
+    const cores = coresCategorias(entries.map(e => e[0])), colorOf = i => cores[i];
+    const pcts = pctPartes(entries.map(e => e[1]));
     const rows = entries.map(([name, val], i) => {
-        const pct = total > 0 ? Math.round(val / total * 100) : 0;
+        const pct = pcts[i];
         return `<div class="dist-row">
             <span class="dist-dot" style="background:${colorOf(i)}"></span>
             <span class="dist-name">${escHtml(name)}</span>
@@ -6386,35 +6712,38 @@ function renderHero() {
     const lista = txMes(m, a);
     const daysInMonth = new Date(a, m + 1, 0).getDate();
     const perDay = Array(daysInMonth + 1).fill(0); // index 1..daysInMonth
-    let ent = 0, gas = 0;
+    let ent = 0, gas = 0, inv = 0;
     lista.forEach(t => {
         if (t.tipo === 'entrada') { ent += t.valor; return; }
+        if (t.tipo === 'investimento') { inv += t.valor; return; }
         if (t.tipo !== 'saida') return;
         gas += t.valor;
         const d = parseInt((t.data || '').slice(8, 10), 10);
         if (d >= 1 && d <= daysInMonth) perDay[d] += t.valor;
     });
 
-    // Monthly spend ceiling: budget's spendable portion, else this month's income
+    // Teto do mês: parte gastável do orçamento; sem orçamento, a renda menos o que foi
+    // investido (antes ignorava investimentos e o "ainda pode gastar" passava do saldo)
     const totalBudget = getBudgetTotal(m, a);
-    const limit = totalBudget ? spendBudgetOf(totalBudget) : ent;
+    const limit = roundMoney(totalBudget ? spendBudgetOf(totalBudget) : ent - inv);
     if (!limit || limit <= 0) { card.style.display = 'none'; destroyChart('heroPace'); return; }
     card.style.display = '';
 
+    // Mês passado é balanço, futuro é previsão (só agendados); ritmo/"por dia" só no atual
+    const fase = periodoFase(a, m);
     const remaining = roundMoney(limit - gas);
     const overLimit = remaining < 0;
     const numEl = $('heroNum');
     numEl.textContent = overLimit ? fmt(-remaining) : fmt(remaining);
     numEl.classList.toggle('neg', overLimit);
-    $('heroLabel').textContent = overLimit ? 'Você passou do limite em' : 'Você ainda pode gastar';
-    $('heroSub').textContent = `do limite de ${fmt(limit)} ${totalBudget ? 'deste mês' : '· renda do mês'}`;
+    $('heroLabel').textContent = overLimit ? 'Você passou do limite em'
+        : { passado: 'Sobrou do limite', futuro: 'Você poderá gastar', atual: 'Você ainda pode gastar' }[fase];
+    $('heroSub').textContent = `do limite de ${fmt(limit)} ${totalBudget ? 'deste mês' : inv ? '· renda − investimentos do mês' : '· renda do mês'}`;
 
-    // "today" within the viewed month (full month if viewing a past/future month)
+    // "Hoje" dentro do mês exibido: mês inteiro se passado, nenhum dia se futuro
     const now = new Date();
-    const isCur = (now.getFullYear() === a && now.getMonth() === m);
-    const isFuture = a > now.getFullYear() || (a === now.getFullYear() && m > now.getMonth());
-    const todayDay = isCur ? Math.min(now.getDate(), daysInMonth) : (isFuture ? 0 : daysInMonth);
-    const daysLeft = Math.max(1, daysInMonth - todayDay + (isCur ? 1 : 0));   // inclui hoje
+    const todayDay = fase === 'atual' ? Math.min(now.getDate(), daysInMonth) : fase === 'futuro' ? 0 : daysInMonth;
+    const daysLeft = daysInMonth - todayDay + (fase === 'atual' ? 1 : 0);   // inclui hoje
 
     // cumulative actual (up to today) vs linear pace line
     // Ritmo compara só o gasto ATÉ HOJE — fixos já lançados para dias futuros do mês
@@ -6426,19 +6755,21 @@ function renderHero() {
     const expectedToday = limit * todayDay / daysInMonth;
     const paceDiff = roundMoney(expectedToday - spentToDate); // >0 => below pace (on track)
 
+    // Ritmo só existe com o mês em andamento (passado = o próprio saldo; futuro = R$ 0)
     const pill = $('heroPacePill');
     if (paceDiff >= 0) { pill.textContent = `${fmt(paceDiff)} abaixo do ritmo`; pill.classList.remove('over'); }
     else { pill.textContent = `${fmt(-paceDiff)} acima do ritmo`; pill.classList.add('over'); }
-    pill.style.display = '';
+    pill.style.display = fase === 'atual' ? '' : 'none';
 
     // Local, rule-based tip (no LLM)
-    const usedPct = limit > 0 ? Math.round(gas / limit * 100) : 0;
+    const usedPct = pctDoLimite(gas, limit);
     const tip = $('heroTip'), tipText = $('heroTipText');
-    if (remaining > 0) {
-        tipText.textContent = `Você já usou ${usedPct}% do limite. Dá pra gastar cerca de ${fmt(remaining / daysLeft)} por dia até o fim do mês.`;
-    } else {
-        tipText.textContent = `Você passou do limite em ${fmt(-remaining)}. Segure os gastos para fechar o mês no azul.`;
-    }
+    tipText.textContent =
+        fase === 'passado' ? (overLimit ? `O mês fechou ${fmt(-remaining)} acima do limite.` : `Você fechou o mês usando ${usedPct}% do limite.`)
+      : fase === 'futuro'  ? (overLimit ? `Os gastos já agendados passam do limite em ${fmt(-remaining)}.`
+                                        : `${gas ? `Já há ${fmt(gas)} em gastos agendados (${usedPct}% do limite). ` : ''}Isso dá cerca de ${fmt(remaining / daysLeft)} por dia.`)
+      : overLimit ? `Você passou do limite em ${fmt(-remaining)}. Segure os gastos para fechar o mês no azul.`
+                  : `Você já usou ${usedPct}% do limite. Dá pra gastar cerca de ${fmt(remaining / daysLeft)} por dia até o fim do mês.`;
     tip.style.display = '';
 
     // Spending-pace chart
@@ -6466,38 +6797,43 @@ function renderHero() {
 function renderHeroAnual() {
     const card = $('heroCardAnual');
     if (!card) return;
-    const a = parseInt($('filtroAno').value);
+    const a = filtro().a;
     const perMonth = Array(12).fill(0);
-    let entYear = 0, gasYear = 0;
+    let entYear = 0, gasYear = 0, invYear = 0;
     for (let mo = 0; mo < 12; mo++) {             // índice mensal em vez de varrer todos os anos
         txMes(mo, a).forEach(t => {
             if (t.tipo === 'entrada') entYear += t.valor;
+            else if (t.tipo === 'investimento') invYear += t.valor;
             else if (t.tipo === 'saida') { gasYear += t.valor; perMonth[mo] += t.valor; }
         });
     }
 
-    // Yearly spendable ceiling: sum of each month's budget (minus investment allocation), else year income
+    // Teto do ano: soma dos orçamentos mensais (sem a fatia de investimento); sem
+    // orçamento, renda do ano menos investimentos — mesmo critério do hero mensal
     let limit = 0, anyBudget = false;
     for (let mm = 0; mm < 12; mm++) {
         const tb = getBudgetTotal(mm, a);
         if (tb) { anyBudget = true; limit += spendBudgetOf(tb); }
     }
-    if (!anyBudget) limit = entYear;
+    if (!anyBudget) limit = entYear - invYear;
+    limit = roundMoney(limit);
     if (!limit || limit <= 0) { card.style.display = 'none'; destroyChart('heroPaceAnual'); return; }
     card.style.display = '';
 
+    const fase = periodoFase(a);
     const remaining = roundMoney(limit - gasYear);
     const overLimit = remaining < 0;
     $('heroNumAnual').textContent = overLimit ? fmt(-remaining) : fmt(remaining);
     $('heroNumAnual').classList.toggle('neg', overLimit);
-    $('heroLabelAnual').textContent = overLimit ? `Você passou do limite de ${a} em` : `Você ainda pode gastar em ${a}`;
-    $('heroSubAnual').textContent = `do limite de ${fmt(limit)} ${anyBudget ? 'no ano' : '· renda do ano'}`;
+    $('heroLabelAnual').textContent = overLimit ? `Você passou do limite de ${a} em`
+        : { passado: `Sobrou do limite de ${a}`, futuro: `Você poderá gastar em ${a}`, atual: `Você ainda pode gastar em ${a}` }[fase];
+    $('heroSubAnual').textContent = `do limite de ${fmt(limit)} ${anyBudget ? 'no ano' : invYear ? '· renda − investimentos do ano' : '· renda do ano'}`;
 
     const now = new Date();
     // Ano passado: tudo decorrido · ano futuro: nada decorrido
-    const curMonthIdx = now.getFullYear() === a ? now.getMonth() : (a < now.getFullYear() ? 11 : -1);
+    const curMonthIdx = fase === 'atual' ? now.getMonth() : fase === 'passado' ? 11 : -1;
     const monthsElapsed = curMonthIdx + 1;
-    const monthsLeft = Math.max(1, 12 - curMonthIdx - (a === now.getFullYear() ? 0 : 1));   // inclui o mês atual
+    const monthsLeft = fase === 'atual' ? 12 - curMonthIdx : 12;   // inclui o mês atual
 
     // Só meses já decorridos entram no ritmo (fixos replicados para os próximos meses não)
     const cum = []; let run = 0, spentToDate = 0;
@@ -6508,12 +6844,15 @@ function renderHeroAnual() {
     const pill = $('heroPacePillAnual');
     if (paceDiff >= 0) { pill.textContent = `${fmt(paceDiff)} abaixo do ritmo`; pill.classList.remove('over'); }
     else { pill.textContent = `${fmt(-paceDiff)} acima do ritmo`; pill.classList.add('over'); }
-    pill.style.display = '';
+    pill.style.display = fase === 'atual' ? '' : 'none';
 
-    const usedPct = Math.round(gasYear / limit * 100);
-    $('heroTipTextAnual').textContent = remaining > 0
-        ? `Você já usou ${usedPct}% do limite anual. Dá pra gastar cerca de ${fmt(remaining / monthsLeft)} por mês até dezembro.`
-        : `Você passou do limite anual em ${fmt(-remaining)}. Segure os gastos para fechar o ano no azul.`;
+    const usedPct = pctDoLimite(gasYear, limit);
+    $('heroTipTextAnual').textContent =
+        fase === 'passado' ? (overLimit ? `${a} fechou ${fmt(-remaining)} acima do limite.` : `Você fechou ${a} usando ${usedPct}% do limite anual.`)
+      : fase === 'futuro'  ? (overLimit ? `Os gastos já agendados para ${a} passam do limite em ${fmt(-remaining)}.`
+                                        : `${gasYear ? `Já há ${fmt(gasYear)} em gastos agendados (${usedPct}% do limite). ` : ''}Isso dá cerca de ${fmt(remaining / monthsLeft)} por mês.`)
+      : overLimit ? `Você passou do limite anual em ${fmt(-remaining)}. Segure os gastos para fechar o ano no azul.`
+                  : `Você já usou ${usedPct}% do limite anual. Dá pra gastar cerca de ${fmt(remaining / monthsLeft)} por mês até dezembro.`;
     $('heroTipAnual').style.display = '';
 
     const labels = MESES.map(mn => mn.slice(0, 3));
@@ -6568,6 +6907,56 @@ function runSelfTests() {
     eq('roundMoney float', roundMoney(0.1 + 0.2), 0.3);
     eq('roundMoney simétrico', [roundMoney(12.345), roundMoney(-12.345)], [12.35, -12.35]);
     eq('roundMoney -0', Object.is(roundMoney(-1e-17), 0), true);
+    {   // pilha de desfazer: agrupa edições seguidas do mesmo campo (usa pilha temporária)
+        const pilhaReal = undoStack; undoStack = [];
+        try {
+            pushUndo('a', 'g1'); pushUndo('b', 'g1'); pushUndo('c', 'g2'); pushUndo('d'); pushUndo('e');
+            pushUndo('x', 'g3'); undoStack[undoStack.length - 1].at -= UNDO_GRUPO_MS + 1; pushUndo('y', 'g3');
+            eq('undo agrupa edições do mesmo campo', undoStack.map(u => u.label), ['a', 'c', 'd', 'e', 'x', 'y']);
+        } finally { undoStack = pilhaReal; _updateUndoBtn(); }
+    }
+    {   // contraste: cor do usuário escurece até 4,5:1 com branco; o que já passa não muda
+        const razao = h => 1.05 / (_lumRel([1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16))) + 0.05);
+        eq('corLegivel', [razao(corLegivel('#f59e0b')) >= 4.5, razao(corLegivel('#16a34a')) >= 4.5, razao(corLegivel('#fff')) >= 4.5,
+                          corLegivel('#1d4ed8'), corLegivel('var(--credit)'), corLegivel('#18181b')],
+           [true, true, true, '#1d4ed8', 'var(--credit)', '#18181b']);
+    }
+    {   // acessibilidade: rótulo associado, clicável no Tab, fundo de modal/container ignorados, glifo nomeado
+        const d = document.createElement('div');
+        d.innerHTML = '<div class="field"><label>Valor</label><input id="__a11yT"></div><div onclick="f()">Abrir</div>'
+            + '<div onclick="event.stopPropagation()"><input></div><div class="overlay" onclick="if(event.target===this)x()"></div><button>✕</button>';
+        _a11y(d);
+        const [, clic, stop, ov] = d.children;
+        eq('acessibilidade (_a11y)', [d.querySelector('label').htmlFor, clic.getAttribute('role'), clic.tabIndex, stop.hasAttribute('role'), ov.hasAttribute('tabindex'), d.querySelector('button').getAttribute('aria-label')],
+           ['__a11yT', 'button', 0, false, false, 'Fechar']);
+    }
+    eq('descrição da quarentena', [_descQuarentena({ desc: 'Mercado', data: '' }), _descQuarentena({ aporteDe: 'Viagem', valor: 1 }), _descQuarentena({})],
+       ['Mercado', 'Aporte em "Viagem"', '(sem descrição)']);
+    eq('erros de login em pt-BR', [_authErroMsg({ code: 'auth/popup-closed-by-user' }), _authErroMsg({ code: 'auth/network-request-failed' }).startsWith('Sem conexão'),
+        _authErroMsg({ code: 'auth/xyz' }), _authErroMsg({})], [null, true, 'Não foi possível entrar (xyz). Tente de novo.', 'Não foi possível entrar. Tente de novo.']);
+    {   // filtro() sem selects montados/valor inválido = mês atual (antes NaN travava o boot)
+        const selM = $('filtroMes'), selA = $('filtroAno'), vM = selM.value, vA = selA.value, now = new Date();
+        try { selM.value = '__x'; selA.value = '__x'; eq('filtro() nunca NaN', filtro(), { m: now.getMonth(), a: now.getFullYear() }); }
+        finally { selM.value = vM; selA.value = vA; }
+    }
+    {   // aporte editado com índice desatualizado (sync removeu um anterior) é relocalizado
+        const A = { data: '2026-01-05', valor: 100, nota: '' }, B = { data: '2026-02-05', valor: 200, nota: 'x' }, C = { data: '2026-03-05', valor: 300, nota: '' };
+        const sigC = _aporteSig(C), g1 = { aportes: [A, B, C] }, g2 = { aportes: [B, C] }, g3 = { aportes: [A, B] };
+        eq('aporte relocalizado por assinatura', [_localizarAporte(g1, 2, sigC), _localizarAporte(g2, 2, sigC), _localizarAporte(g3, 2, sigC)], [2, 1, -1]);
+    }
+    eq('pctPartes soma 100', [pctPartes([1, 1, 1]), pctPartes([50, 30, 20]), pctPartes([0, 0]), pctPartes([2, 1, 1, 1, 1, 1, 1]).reduce((s, v) => s + v, 0)],
+       [[34, 33, 33], [50, 30, 20], [0, 0], 100]);
+    {   // cor estável: independe da ordem/ranking e do subconjunto exibido
+        const [c0, c1] = (cats.saida || []).concat(['__a', '__b']);
+        const [x0, x1] = coresCategorias([c0, c1]), [y1, y0] = coresCategorias([c1, c0]);
+        eq('cor da categoria estável', [x0 === y0, x1 === y1, x0 !== x1, coresCategorias(['(sem categoria)'])[0]], [true, true, true, COR_SEM_CATEGORIA]);
+    }
+    eq('fmtPct pt-BR', [fmtPct(107.8584), fmtPct(50), fmtPct(0.005), fmtPct(NaN)], ['107,86%', '50%', '0,01%', '0%']);
+    eq('pctDoLimite não cruza 100', [pctDoLimite(99.6, 100), pctDoLimite(100, 100), pctDoLimite(100.2, 100), pctDoLimite(0.1 + 0.2, 0.3), pctDoLimite(5, 0)], [99, 100, 101, 100, 0]);
+    const hj = new Date('2026-09-25T12:00:00');
+    eq('periodoFase', [periodoFase(2026, 8, hj), periodoFase(2026, 7, hj), periodoFase(2026, 9, hj), periodoFase(2025, 11, hj), periodoFase(2027, 0, hj),
+                       periodoFase(2026, null, hj), periodoFase(2025, null, hj), periodoFase(2027, null, hj)],
+       ['atual', 'passado', 'futuro', 'passado', 'futuro', 'atual', 'passado', 'futuro']);
     eq('fmt sem -0', fmt(0.3 - 0.1 - 0.2), fmt(0));
 
     // Datas
@@ -6580,7 +6969,12 @@ function runSelfTests() {
     const ref = new Date('2026-01-10T12:00:00');
     eq('parseFlexDate sem ano (infere)', ['15/12', '05/01', '20/02'].map(d => parseFlexDate(d, ref)), ['2025-12-15', '2026-01-05', '2026-02-20']);
     eq('parseFlexDate mês por extenso', ['15 SET 2026', '3 dez', '07/jan/25', '15 xyz'].map(d => parseFlexDate(d, ref)), ['2026-09-15', '2025-12-03', '2025-01-07', null]);
-    eq('CSV conta linhas ilegíveis', (_extParseCSV('data,descricao,valor\n10/01/2026,A,5\nxx/yy,B,7\n11/01/2026,C,abc\n') || {}).skipped, 2);
+    eq('parseFlexDate ISO com / e .', ['2026/09/15', '2026.09.15 08:00', '2026/02/30'].map(d => parseFlexDate(d, ref)), ['2026-09-15', '2026-09-15', null]);
+    eq('parseFlexDate mês antes do dia', ['Sep 15, 2026', 'SET 15 2026', 'dez 3', 'Mar 3 10:00', 'Total 12'].map(d => parseFlexDate(d, ref)), ['2026-09-15', '2026-09-15', '2025-12-03', '2026-03-03', null]);
+    // Ilegível = tem dígito mas não lê; sem dígito ("Total", vazio, "-") é linha informativa
+    eq('CSV conta linhas ilegíveis', (_extParseCSV('data,descricao,valor\n10/01/2026,A,5\n32/13/2026,B,7\n11/01/2026,C,1O\nTotal,,12\n12/01/2026,Saldo,\n13/01/2026,D,-\n') || {}).skipped, 2);
+    eq('CSV crédito/débito: saldo vazio não é ilegível', (() => { const r = _extParseCSV('data;historico;credito;debito\n10/01/2026;A;5;\n11/01/2026;Saldo;;\n12/01/2026;B;;3,5\n'); return [r.map(x => x.valor), r.skipped]; })(), [[5, -3.5], 0]);
+    eq('CSV só com linhas ilegíveis → lista vazia com contagem', (() => { const r = _extParseCSV('data,descricao,valor\n2026/99/99,A,5\n45/45/2026,B,7\n'); return r && [r.length, r.skipped]; })(), [0, 2]);
 
     // Fatura
     const cVF = { fechamento: 25, vencimento: 5 }, cFV = { fechamento: 3, vencimento: 10 };
@@ -6589,6 +6983,12 @@ function runSelfTests() {
     eq('fatura venc>fech', [_calcFatura(cFV, '2026-01-02'), _calcFatura(cFV, '2026-01-05')], ['2026-01-10', '2026-02-10']);
     eq('fatura virada de ano', _calcFatura(cVF, '2026-12-28'), '2027-02-05');
     eq('fatura legada (migração)', _calcFaturaLegacy(cVF, '2026-01-20'), '2026-01-05');
+    // Fechamento/vencimento 29–31: em meses curtos vale o último dia
+    const c30 = { fechamento: 30, vencimento: 7 }, c31 = { fechamento: 31, vencimento: 10 }, cV31 = { fechamento: 25, vencimento: 31 };
+    eq('fatura fecha dia 30', [_calcFatura(c30, '2026-02-28'), _calcFatura(c30, '2026-04-30'), _calcFatura(c30, '2026-05-31')], ['2026-03-07', '2026-05-07', '2026-07-07']);
+    eq('fatura fecha dia 31', [_calcFatura(c31, '2026-04-30'), _calcFatura(c31, '2026-05-31')], ['2026-05-10', '2026-06-10']);
+    eq('fatura vence dia 31 em fevereiro', _calcFatura(cV31, '2026-02-10'), '2026-02-28');
+    eq('sanitize: dias do cartão 1–31', sanitizeState({ k: [{ id: 1, nome: 'X', fechamento: 30, vencimento: 45 }] }).cards.map(c => [c.fechamento, c.vencimento]), [[30, 31]]);
 
     // Texto / categorias / segurança
     eq('splitCatName emoji ZWJ', splitCatName('👨‍👩‍👧 Família'), { icon: '👨‍👩‍👧', label: 'Família' });
@@ -6602,6 +7002,13 @@ function runSelfTests() {
     // Importação
     eq('CSV aspas escapadas', (_extParseCSV('date,title,amount\n2026-09-02,"iFood, ""X""",45.5\n') || [])[0]?.desc, 'iFood, "X"');
     eq('CSV preâmbulo + crédito/débito', (_extParseCSV('Conta 1\n\nData;Lançamento;Crédito;Débito\n02/09/2026;TARIFA;;29,90\n') || []).map(r => r.valor), [-29.9]);
+    eq('CSV coluna D/C (valor sempre positivo)', (_extParseCSV('Data;Histórico;Valor;D/C\n01/09/2026;TARIFA;29,90;D\n02/09/2026;PIX RECEBIDO;100,00;C\n03/09/2026;X;5;PIX\n') || []).map(r => r.valor), [-29.9, 100, 5]);
+    eq('CSV "Tipo de pagamento" não vira sinal', (_extParseCSV('Data;Descrição;Valor;Tipo de pagamento\n01/09/2026;Loja;-50;Crédito\n') || []).map(r => r.valor), [-50]);
+    eq('CSV do próprio app volta com sinal, texto e categoria', (_extParseCSV('data;tipo;descricao;categoria;pagamento;cartao;fixo;valor\n2026-09-01;saida;"\'=cmd";"🍔 Alimentação";debito;"";;12,50\n2026-09-02;entrada;"Salário";"💰 Salário";;"";sim;5000,00\n') || []).map(r => [r.valor, r.desc, r.catHint]),
+       [[-12.5, '=cmd', '🍔 Alimentação'], [5000, 'Salário', '💰 Salário']]);
+    eq('CSV export neutraliza fórmula', ['=SOMA(A1)', '+1', '-2', '@x', 'Mercado', "'=já"].map(_csvSeguro), ["'=SOMA(A1)", "'+1", "'-2", "'@x", 'Mercado', "'=já"]);
+    const c0 = (cats.saida || [])[0] || '';
+    eq('categoria do arquivo casa pelo rótulo', [_extCatDoArquivo(splitCatName(c0).label.toUpperCase(), 'saida'), _extCatDoArquivo('Inexistente XYZ', 'saida'), _extCatDoArquivo('', 'saida')], [c0 ? c0 : '', '', '']);
     eq('OFX SGML', (_extParseOFX('<STMTTRN><DTPOSTED>20260910<TRNAMT>-1.234,56<FITID>A1<MEMO>X</STMTTRN>') || [])[0], { date: '2026-09-10', desc: 'X', valor: -1234.56, extId: 'ofx:A1' });
     eq('transferência vs tarifa', [_extDetectTransfer('Pagamento de fatura'), _extDetectTransfer('TARIFA PACOTE'), _extDetectTransfer('PIX ENVIADO')], ['transfer', null, 'maybe']);
 
@@ -6666,10 +7073,25 @@ function runSelfTests() {
 // pela UI (lançar, editar, remover, desfazer, fixos, categorias, cartões, metas,
 // orçamento, navegação) e após CADA uma verifica as invariantes do modelo. Restaura
 // estado e localStorage no fim. Use depois de mudanças grandes.
-async function runFuzz(seeds = [11, 23, 97, 1234], steps = 400) {
+// Uma rodada de fuzz por vez: duas simultâneas (ex.: chamada no console que estourou o
+// tempo e foi repetida) salvavam como "original" o estado já bagunçado pela outra e o
+// deixavam gravado ao terminar — os dados de exemplo do preview ficaram poluídos.
+let _fuzzAtivo = null;
+async function _exclusivo(nome, fn) {
+    if (_fuzzAtivo) { console.warn(`${nome}: ${_fuzzAtivo} ainda está rodando — aguarde terminar.`); return null; }
+    _fuzzAtivo = nome;
+    try { return await fn(); } finally { _fuzzAtivo = null; }
+}
+function runFuzz(...args)     { return _exclusivo('runFuzz', () => _runFuzzImpl(...args)); }
+function runSyncFuzz(...args) { return _exclusivo('runSyncFuzz', () => _runSyncFuzzImpl(...args)); }
+
+async function _runFuzzImpl(seeds = [11, 23, 97, 1234], steps = 400) {
     if (!PREVIEW_MODE) { console.warn('runFuzz só roda em ?preview (nunca com dados reais sincronizados)'); return; }
     const saved = snapshotState(), savedLS = {};
     for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); savedLS[k] = localStorage.getItem(k); }
+    // Campos de formulário também voltam ao que eram (o fuzz digita neles — antes o
+    // "Novo lançamento" ficava com "Café"/10/Investimento depois da rodada)
+    const savedForm = [...document.querySelectorAll('input:not([type=file]), select, textarea')].map(el => [el, el.value, el.checked]);
     const origConfirm = window.confirm, origErr = console.error, errs = [];
     window.confirm = () => true;
     console.error = (...a) => { errs.push(a.map(String).join(' ')); };
@@ -6679,9 +7101,10 @@ async function runFuzz(seeds = [11, 23, 97, 1234], steps = 400) {
             let seed = S;
             const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
             const pick = arr => arr[Math.floor(rnd() * arr.length)], ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
-            const date = () => `${pick([2025, 2026])}-${pad2(ri(1, 12))}-${pad2(ri(1, 28))}`;
+            // qualquer dia válido (29–31 incluídos) e cartões que fecham/vencem até dia 31
+            const date = () => { const y = pick([2025, 2026]), mm = ri(1, 12); return `${y}-${pad2(mm)}-${pad2(ri(1, new Date(y, mm, 0).getDate()))}`; };
             restoreState(sanitizeState({ t: SEED })); undoStack = [];
-            cards = [{ id: newId(), nome: 'Fuzz', fechamento: ri(1, 28), vencimento: ri(1, 28), cor: '#6d28d9' }];
+            cards = [{ id: newId(), nome: 'Fuzz', fechamento: ri(1, 31), vencimento: ri(1, 31), cor: '#6d28d9' }];
             const closeRep = () => { if ($('ovFixoRep').classList.contains('open')) closeFixoRep(pick(['sim', 'nao'])); };
             const actions = {
                 add() { const tipo = pick(TIPOS); $('tipo').value = tipo; onTipoChange(); $('desc').value = pick(['Café', "Mc'Do", 'Ágape "x"']); $('valor').value = pick(['10', '1.234,56', '0,99', '-5', 'abc']); $('data').value = pick([date(), '']); $('fixo').checked = rnd() < 0.2; if (tipo === 'saida') { $('pagamento').value = pick(['debito', 'credito']); onPagChange(); } adicionar(); closeRep(); },
@@ -6693,7 +7116,7 @@ async function runFuzz(seeds = [11, 23, 97, 1234], steps = 400) {
                 deleteCat() { const tp = pick(TIPOS); if (!cats[tp].length) return; deleteCategoryFlow(tp, pick(cats[tp])); if ($('ovCatDelete').classList.contains('open')) confirmCatDelete(); },
                 fixo() { renderPopupFixos(); if (!_fixosPopup.length) return; const r = rnd(); if (r < 0.4) { abrirEditFixo(0); $('editFixoVal').value = String(ri(1, 500)); $('editFixoFuturo').checked = rnd() < 0.5; confirmarEdicaoFixo(); } else if (r < 0.7) renovarFixo(0); else removerFixo(0); },
                 goal() { abrirNovaGoal(); $('goalNome').value = 'G'; $('goalMeta').value = String(ri(100, 5000)); salvarGoal(); const g = pick(goals); abrirAporte(g.id); $('aporteValor').value = String(ri(1, 300)); $('aporteData').value = date(); confirmarAporte(); },
-                card() { $('cartaoEditId').value = String(cards[0].id); $('cartaoNome').value = 'Fuzz'; $('cartaoFech').value = String(ri(1, 28)); $('cartaoVenc').value = String(ri(1, 28)); salvarCartao(); if ($('ovRecalcFatura').classList.contains('open')) doRecalcFaturas(pick(['all', 'future', 'none'])); },
+                card() { $('cartaoEditId').value = String(cards[0].id); $('cartaoNome').value = 'Fuzz'; $('cartaoFech').value = String(ri(1, 31)); $('cartaoVenc').value = String(ri(1, 31)); salvarCartao(); if ($('ovRecalcFatura').classList.contains('open')) doRecalcFaturas(pick(['all', 'future', 'none'])); },
                 budget() { _budgetMonth = ri(0, 11); _budgetYear = 2026; $('budgetTotal').value = String(ri(0, 9000)); onBudgetTotalChange(true); if (cats.saida.length) updateBudgetCatPct(encodeURIComponent(pick(cats.saida)), String(ri(0, 60))); },
                 // Caminho mobile (formulários do celular) — usados também no desktop, onde o DOM existe
                 mobAdd() { openMobForm(); $('mob-tipo').value = pick(TIPOS); mobOnTipoChange(); $('mob-desc').value = pick(['Pão', "D'Ávila"]); $('mob-valor').value = pick(['12,5', '0', '3.000']); $('mob-data').value = pick([date(), '']); $('mob-fixo').checked = rnd() < 0.2; mobAdicionar(); closeRep(); closeMobForm(); },
@@ -6723,7 +7146,9 @@ async function runFuzz(seeds = [11, 23, 97, 1234], steps = 400) {
     } finally {
         window.confirm = origConfirm; console.error = origErr;
         try { localStorage.clear(); Object.entries(savedLS).forEach(([k, val]) => localStorage.setItem(k, val)); } catch (e) {}
-        restoreState(saved); undoStack = []; _updateUndoBtn(); renderAll(); renderGoals(); renderCartoesMini();
+        restoreState(saved); undoStack = []; _updateUndoBtn();
+        savedForm.forEach(([el, val, chk]) => { if (el.isConnected) { el.value = val; el.checked = chk; } });
+        renderAll(); renderGoals(); renderCartoesMini();
     }
     const total = seeds.length * steps;
     console[violations.length ? 'warn' : 'info'](`runFuzz: ${total} ações, ${violations.length} violação(ões)`, violations);
@@ -6737,7 +7162,7 @@ async function runFuzz(seeds = [11, 23, 97, 1234], steps = 400) {
 // chaves, transaction com cache vazio na 1ª chamada). Edições e sincronizações
 // aleatórias; conflitos resolvidos ao acaso. Invariante: após sincronizar sem edições
 // novas, dispositivo A, dispositivo B e servidor convergem para o mesmo estado.
-async function runSyncFuzz(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120) {
+async function _runSyncFuzzImpl(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120) {
     if (!PREVIEW_MODE) { console.warn('runSyncFuzz só roda em ?preview'); return; }
     const saved = snapshotState(), savedLS = {}, savedUser = _currentUser, savedRef = _userRef, savedToast = toast, savedConfirm = window.confirm;
     for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); savedLS[k] = localStorage.getItem(k); }
