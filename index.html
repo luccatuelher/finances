@@ -56,7 +56,7 @@
       • FIXOS: "Gastos Fixos" (orçamento, popup, sidebar) somava entradas fixas como
         gasto (salário inflava o total); agora só saídas somam e entradas aparecem em verde.
       • AUTOTESTE: abra index.html?preview&selftest (ou runSelfTests() no console) após
-        qualquer mudança — 89 verificações de parsers, datas, fatura, sanitização
+        qualquer mudança — 91 verificações de parsers, datas, fatura, sanitização
         (idempotência) e ida-e-volta pelo Firebase. Não altera dados.
       • METAS: goalProgress() — % truncado (99,6% não mostra "100%" com "Faltam"),
         ritmo necessário por mês até o prazo e aviso de prazo vencido; histórico por data
@@ -259,6 +259,11 @@
         inputmode decimal e passam por parseValor (1.500 → 1500; 1.500,50 → 1500,5), como
         os demais formulários; ao editar, o valor volta formatado com vírgula. Autoteste
         cobre os dois campos; bateria completa verde.
+      • CSV DO ANO (it. 44): só dava para exportar o mês filtrado (12 arquivos para levar o
+        ano à planilha ou ao contador). Novo botão "CSV do ano" (financas-AAAA.csv), mesma
+        formatação, proteção contra fórmulas e volta pelo importador; a lista sai de helper
+        único (_listaCSV/_csvDe) usado também pelo CSV do mês. Autoteste +2; conferido
+        baixando pela UI (mês vazio, ano com 8 lançamentos).
       Ferramentas de manutenção (use após qualquer mudança, em index.html?preview):
         runSelfTests() · runFuzz() · runSyncFuzz()
     -->
@@ -1344,6 +1349,7 @@
             <div id="quarentenaBox"></div>
             <div class="backup-row" style="margin-top:6px">
                 <div class="backup-btn" onclick="exportarCSV()" title="Exporta os lançamentos do mês filtrado em CSV (Excel/Sheets)">⇪ CSV do mês</div>
+                <div class="backup-btn" onclick="exportarCSV('ano')" title="Exporta os lançamentos do ano filtrado em CSV (Excel/Sheets)">⇪ CSV do ano</div>
             </div>
         </div>
     </aside>
@@ -3667,11 +3673,12 @@ function renderBackupAge() {
 const _csvSeguro = s => /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
 const _csvDesfaz = s => s.replace(/^'(?=[=+\-@\t\r])/, '');
 
-// Exporta o mês filtrado como CSV (BOM + ';' = abre direto no Excel/Sheets pt-BR)
-function exportarCSV() {
-    const { m, a } = filtro();
-    const lista = [...txMes(m, a)].sort((x, y) => x.data.localeCompare(y.data));
-    if (!lista.length) { toast('Nada para exportar neste mês.', '#52525b'); return; }
+// Lançamentos do mês filtrado ou do ano inteiro (por data da compra), em ordem de data
+function _listaCSV(escopo, m, a) {
+    const meses = escopo === 'ano' ? Array.from({ length: 12 }, (_, i) => i) : [m];
+    return meses.flatMap(k => txMes(k, a)).sort((x, y) => x.data.localeCompare(y.data));
+}
+function _csvDe(lista) {
     const q = s => '"' + _csvSeguro(String(s == null ? '' : s)).replace(/"/g, '""') + '"';
     const cardName = id => { const c = cards.find(c => c.id === id); return c ? c.nome : ''; };
     const head = 'data;tipo;descricao;categoria;pagamento;cartao;fixo;valor';
@@ -3679,9 +3686,18 @@ function exportarCSV() {
         t.data, t.tipo, q(t.desc), q(t.cat || ''), t.pagamento || '', q(cardName(t.cartaoId)),
         t.fixo ? 'sim' : '', fmtValorInput(t.valor)
     ].join(';'));
+    return [head, ...rows].join('\r\n');
+}
+
+// Exporta o mês filtrado (ou o ano inteiro) como CSV (BOM + ';' = abre direto no Excel/Sheets pt-BR)
+function exportarCSV(escopo = 'mes') {
+    const { m, a } = filtro();
+    const ano = escopo === 'ano';
+    const lista = _listaCSV(escopo, m, a);
+    if (!lista.length) { toast(ano ? `Nada para exportar em ${a}.` : 'Nada para exportar neste mês.', '#52525b'); return; }
     const BOM = String.fromCharCode(0xFEFF);
-    downloadBlob(new Blob([BOM + [head, ...rows].join('\r\n')], { type: 'text/csv;charset=utf-8' }), `financas-${ymKey(m, a)}.csv`);
-    toast(`CSV de ${MESES[m]} exportado!`);
+    downloadBlob(new Blob([BOM + _csvDe(lista)], { type: 'text/csv;charset=utf-8' }), ano ? `financas-${a}.csv` : `financas-${ymKey(m, a)}.csv`);
+    toast(ano ? `CSV de ${a} exportado!` : `CSV de ${MESES[m]} exportado!`);
 }
 
 function importar(input) {
@@ -7107,6 +7123,12 @@ function runSelfTests() {
     eq('CSV "Tipo de pagamento" não vira sinal', (_extParseCSV('Data;Descrição;Valor;Tipo de pagamento\n01/09/2026;Loja;-50;Crédito\n') || []).map(r => r.valor), [-50]);
     eq('CSV do próprio app volta com sinal, texto e categoria', (_extParseCSV('data;tipo;descricao;categoria;pagamento;cartao;fixo;valor\n2026-09-01;saida;"\'=cmd";"🍔 Alimentação";debito;"";;12,50\n2026-09-02;entrada;"Salário";"💰 Salário";;"";sim;5000,00\n') || []).map(r => [r.valor, r.desc, r.catHint]),
        [[-12.5, '=cmd', '🍔 Alimentação'], [5000, 'Salário', '💰 Salário']]);
+    { // CSV do ano = os 12 meses juntos, em ordem de data, e volta pelo importador
+        const ya = filtro().a, listaA = _listaCSV('ano', 0, ya), soma = Array.from({ length: 12 }, (_, k) => txMes(k, ya).length).reduce((x, y) => x + y, 0);
+        eq('CSV do ano: todos os meses, em ordem', [listaA.length === soma, listaA.every((t, i) => !i || listaA[i - 1].data <= t.data), listaA.every(t => t.data.startsWith(String(ya)))], [true, true, true]);
+        const volta = listaA.length ? _extParseCSV(_csvDe(listaA)) : [];
+        eq('CSV do ano volta pelo importador', volta.length, listaA.length);
+    }
     eq('CSV export neutraliza fórmula', ['=SOMA(A1)', '+1', '-2', '@x', 'Mercado', "'=já"].map(_csvSeguro), ["'=SOMA(A1)", "'+1", "'-2", "'@x", 'Mercado', "'=já"]);
     const c0 = (cats.saida || [])[0] || '';
     eq('categoria do arquivo casa pelo rótulo', [_extCatDoArquivo(splitCatName(c0).label.toUpperCase(), 'saida'), _extCatDoArquivo('Inexistente XYZ', 'saida'), _extCatDoArquivo('', 'saida')], [c0 ? c0 : '', '', '']);
