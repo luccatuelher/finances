@@ -174,6 +174,18 @@ console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · 
 if (falhas) { console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros }, null, 2)); process.exit(1); }
 ```
 
+**Gráficos (Chart.js)**: a CDN é bloqueada no sandbox, então sem preparação a bateria diz
+"gráficos não verificados". Prepare uma vez por sessão (o arquivo tem os mesmos bytes da
+versão fixada no app, o SRI confere; `tools/.cache/` está no `.gitignore`):
+
+```bash
+mkdir -p tools/.cache && (cd tools/.cache && npm pack chart.js@4.5.1 && tar xzf chart.js-4.5.1.tgz \
+  && cp package/dist/chart.umd.min.js .)
+```
+
+Com isso `tools/checks.mjs` serve o Chart.js real e exige canvases pintados nas telas
+Visão Geral, Anual e Mensal (mês dos dados de exemplo). O Firebase continua não carregando.
+
 Estado de partida esperado (fim da iteração 42, reconfirmado na sessão de nuvem): **autoteste 98/98**, `runSyncFuzz` → `[]`,
 `runFuzz` → `[]`, nenhum erro no console. Se não bater, investigue o ambiente antes de
 mudar código.
@@ -260,7 +272,7 @@ Se algum teste gravou no preview: remova as chaves com prefixo `preview:` e reca
 
 ## 8. Estado atual e próximos candidatos
 
-**Última iteração concluída: 52** (30/09/2026). Detalhes de cada uma no changelog do `<head>`.
+**Última iteração concluída: 52** (bateria ampliada: gráficos conferidos com o Chart.js local) (30/09/2026). Detalhes de cada uma no changelog do `<head>`.
 Iterações 40–42 foram feitas após o commit `a50cd5c`.
 
 Resumo das mais recentes:

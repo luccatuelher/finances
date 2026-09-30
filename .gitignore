@@ -1,2 +1,5 @@
 # Configuração local do Claude Code (servidor de teste, travas) — não faz parte do app
 .claude/
+
+# Cópia local do Chart.js para a bateria (ver tools/checks.mjs)
+tools/.cache/
