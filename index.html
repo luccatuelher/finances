@@ -56,7 +56,7 @@
       • FIXOS: "Gastos Fixos" (orçamento, popup, sidebar) somava entradas fixas como
         gasto (salário inflava o total); agora só saídas somam e entradas aparecem em verde.
       • AUTOTESTE: abra index.html?preview&selftest (ou runSelfTests() no console) após
-        qualquer mudança — 93 verificações de parsers, datas, fatura, sanitização
+        qualquer mudança — 94 verificações de parsers, datas, fatura, sanitização
         (idempotência) e ida-e-volta pelo Firebase. Não altera dados.
       • METAS: goalProgress() — % truncado (99,6% não mostra "100%" com "Faltam"),
         ritmo necessário por mês até o prazo e aviso de prazo vencido; histórico por data
@@ -281,6 +281,10 @@
         Agora a quarentena acompanha o dono dos dados (_trocarQuarentena): guardada à parte
         ao trocar de conta e devolvida quando o dono volta. Reproduzido pela UI (B via 1
         registro da A → agora 0; A recupera o seu); autoteste +1.
+      • TABELAS NO CELULAR (it. 48): a caixa .data-table-box (Mês a mês, fixos, faturas...) era
+        overflow:hidden; a tabela anual tem 596 px numa tela de 345 e as colunas "Saldo do
+        mês" e "Saldo do ano" ficavam cortadas, sem como rolar. Agora rola na horizontal
+        dentro da caixa (medido em 375 px: conteúdo 596 > caixa 345, antes inalcançável).
       Ferramentas de manutenção (use após qualquer mudança, em index.html?preview):
         runSelfTests() · runFuzz() · runSyncFuzz()
     -->
@@ -642,6 +646,8 @@
         .chart-wrap-tall { height: 240px; position: relative; }
         .chart-empty-tall { height: 240px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-3); font-size: 12px; gap: 6px; }
         .data-table-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+        /* tabela mais larga que a tela (celular): rola dentro da caixa em vez de cortar as últimas colunas */
+        .data-table-box { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
         .data-table-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text-2); padding: 14px 16px; border-bottom: 1px solid var(--border); }
         .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
         .data-table th { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text-3); padding: 12px 14px; border-bottom: 1px solid var(--border); text-align: right; background: var(--bg); }
@@ -7195,6 +7201,11 @@ function runSelfTests() {
             _trocarQuarentena('QB', 'QA');
             eq('quarentena: some para a conta nova e volta ao dono', [naB, (loadJSON('fin5_quarantine', [])[0] || {}).desc], [0, 'da conta A']);
         } finally { K.forEach((k, i) => salvo[i] == null ? lsDel(k) : lsSet(k, salvo[i])); renderQuarentena(); }
+    }
+    { // Tabela mais larga que a tela rola dentro da caixa (antes cortava as últimas colunas no celular)
+        const bx = document.createElement('div'); bx.className = 'data-table-box'; document.body.appendChild(bx);
+        const ox = getComputedStyle(bx).overflowX; bx.remove();
+        eq('caixa de tabela rola na horizontal', ox, 'auto');
     }
     { // CSV do ano = os 12 meses juntos, em ordem de data, e volta pelo importador
         const ya = filtro().a, listaA = _listaCSV('ano', 0, ya), soma = Array.from({ length: 12 }, (_, k) => txMes(k, ya).length).reduce((x, y) => x + y, 0);
