@@ -56,7 +56,7 @@
       • FIXOS: "Gastos Fixos" (orçamento, popup, sidebar) somava entradas fixas como
         gasto (salário inflava o total); agora só saídas somam e entradas aparecem em verde.
       • AUTOTESTE: abra index.html?preview&selftest (ou runSelfTests() no console) após
-        qualquer mudança — 97 verificações de parsers, datas, fatura, sanitização
+        qualquer mudança — 98 verificações de parsers, datas, fatura, sanitização
         (idempotência) e ida-e-volta pelo Firebase. Não altera dados.
       • METAS: goalProgress() — % truncado (99,6% não mostra "100%" com "Faltam"),
         ritmo necessário por mês até o prazo e aviso de prazo vencido; histórico por data
@@ -298,6 +298,11 @@
         na sanitização). Além disso, 200 caracteres sem espaço esticavam a tabela para 2.627 px;
         colunas de grid com minmax(0,1fr) e overflow-wrap:anywhere em td, KPIs, gráficos e lista
         de detalhe. Varredura das 4 telas com dados extremos (1280/768 px) sem sobras.
+      • NOMES LIMITADOS (it. 51): categoria (60 com o ícone), cartão (40) e meta (200) também não
+        tinham teto. Cortados na sanitização (a categoria do lançamento e a do rol truncam
+        igual, sem categoria órfã), com maxlength nos campos e aviso nos formulários.
+        Limitação: categoria antiga com mais de 60 caracteres perderia o vínculo com o
+        orçamento (não esperado; nomes reais são curtos).
       Ferramentas de manutenção (use após qualquer mudança, em index.html?preview):
         runSelfTests() · runFuzz() · runSyncFuzz()
     -->
@@ -1747,7 +1752,7 @@
                     <div class="ch-add-icon" id="catHubIconBtn" onclick="toggleIconPicker('catHubPicker')" title="Escolher ícone">📦</div>
                     <div class="icon-picker" id="catHubPicker"></div>
                 </div>
-                <input type="text" id="catHubInput" class="budget-add-name" placeholder="Nova categoria…"
+                <input type="text" id="catHubInput" maxlength="50" class="budget-add-name" placeholder="Nova categoria…"
                     onkeydown="if(event.key==='Enter')addBudgetCategory()">
                 <button onclick="addBudgetCategory()" class="btn-save" style="width:auto;margin:0;padding:8px 14px;font-size:13px;flex-shrink:0">＋</button>
             </div>
@@ -2000,7 +2005,7 @@
         <div class="cartao-add-form">
             <div class="cartao-add-title" id="cartaoFormTitle">Novo Cartão</div>
             <input type="hidden" id="cartaoEditId">
-            <div class="field"><label>Nome</label><input type="text" id="cartaoNome" placeholder="Ex: Nubank, Itaú Platinum"></div>
+            <div class="field"><label>Nome</label><input type="text" id="cartaoNome" maxlength="40" placeholder="Ex: Nubank, Itaú Platinum"></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
                 <div class="field"><label>Dia fechamento</label><input type="number" id="cartaoFech" min="1" max="31" placeholder="Ex: 15" title="Em meses mais curtos, vale o último dia"></div>
                 <div class="field"><label>Dia vencimento</label><input type="number" id="cartaoVenc" min="1" max="31" placeholder="Ex: 22" title="Em meses mais curtos, vale o último dia"></div>
@@ -2659,20 +2664,20 @@ function _sanCards(list) {
         let id = toId(c.id);
         if (!id || seen.has(id)) id = newId();
         seen.add(id);
-        return { id, nome: String(c.nome ?? '').trim() || 'Cartão', fechamento: day(c.fechamento), vencimento: day(c.vencimento), cor: safeColor(c.cor) };
+        return { id, nome: String(c.nome ?? '').trim().slice(0, CARD_MAX) || 'Cartão', fechamento: day(c.fechamento), vencimento: day(c.vencimento), cor: safeColor(c.cor) };
     });
 }
 function _sanCats(c) {
     if (!c || typeof c !== 'object') return _clone(DEFAULT_CATS);
     const out = {};
     TIPOS.forEach(tp => {
-        out[tp] = [...new Set(_asList(c[tp]).filter(x => typeof x === 'string').map(x => x.trim()).filter(Boolean))];
+        out[tp] = [...new Set(_asList(c[tp]).filter(x => typeof x === 'string').map(x => x.trim().slice(0, CAT_MAX)).filter(Boolean))];
     });
     return out;
 }
 // Limites plausíveis: acima de ~R$ 90 trilhões o double perde os centavos e as somas ficam
 // erradas; um "0" a mais digitado sem querer ou um extrato corrompido não pode entrar mudo.
-const VALOR_MAX = 1e11, DESC_MAX = 200;
+const VALOR_MAX = 1e11, DESC_MAX = 200, CAT_MAX = 60, CARD_MAX = 40;
 const _valorOk = v => Number.isFinite(v) && Math.abs(v) <= VALOR_MAX;
 function _sanTx(list, cardList, fromVersion, report) {
     const seen = new Set();
@@ -2699,7 +2704,7 @@ function _sanTx(list, cardList, fromVersion, report) {
         if (!id || seen.has(id)) id = newId();
         seen.add(id);
         const o = { id, desc: String(t.desc ?? '').trim().slice(0, DESC_MAX), valor: roundMoney(Math.abs(valor)), data, tipo,
-                    cat: typeof t.cat === 'string' ? t.cat.trim() : '', fixo: !!t.fixo, pagamento, cartaoId, faturaData };
+                    cat: typeof t.cat === 'string' ? t.cat.trim().slice(0, CAT_MAX) : '', fixo: !!t.fixo, pagamento, cartaoId, faturaData };
         // Série de fixos: identidade estável da recorrência (antes era só a descrição)
         if (o.fixo) o.serie = (typeof t.serie === 'string' && t.serie) ? t.serie : `L:${tipo}:${o.desc}`;
         if (typeof t.extId === 'string' && t.extId) o.extId = t.extId;   // id do banco (dedup de importação)
@@ -2720,7 +2725,7 @@ function _sanGoals(list, report) {
             if (_valorOk(v) && v > 0 && d) aportes.push({ valor: roundMoney(v), data: d, nota: String(a.nota ?? '') });
             else report.dropped.push({ aporteDe: g.nome, ...a });
         });
-        return { id, nome: String(g.nome ?? '').trim() || 'Meta', meta: _valorOk(meta) && meta > 0 ? roundMoney(meta) : 0,
+        return { id, nome: String(g.nome ?? '').trim().slice(0, DESC_MAX) || 'Meta', meta: _valorOk(meta) && meta > 0 ? roundMoney(meta) : 0,
                  prazo: _normDate(g.prazo) || '', descricao: String(g.descricao ?? ''), cor: safeColor(g.cor, GOAL_COLORS[0]), aportes };
     });
 }
@@ -3313,6 +3318,7 @@ function validateTx(f) {
     if (!Number.isFinite(f.valor) || f.valor <= 0) return warn('Valor inválido.');
     if (!_valorOk(f.valor))                        return warn('Valor acima do limite (R$ 100 bilhões).');
     if (f.desc.length > DESC_MAX)                  return warn(`Descrição longa demais (máx. ${DESC_MAX} caracteres).`);
+    if ((f.cat || '').length > CAT_MAX)            return warn(`Nome de categoria longo demais (máx. ${CAT_MAX} caracteres).`);
     if (!isValidISODate(f.data))                   return warn('Selecione uma data válida.');
     if (!TIPOS.includes(f.tipo))                   return warn('Tipo inválido.');
     return true;
@@ -3657,6 +3663,7 @@ function addCatHub(tipo) {
     if (!nome) return toast('⚠️ Digite um nome para a categoria.', '#b45309');
     if (!TIPOS.includes(tipo)) tipo = 'saida';
     const fullName = (_catHubNewIcon || '📦') + ' ' + nome;
+    if (fullName.length > CAT_MAX) return toast(`⚠️ Nome da categoria longo demais (máx. ${CAT_MAX} caracteres).`, '#b45309');
     if ((cats[tipo] || []).some(c => c.toLowerCase() === fullName.toLowerCase()))
         return toast('⚠️ Categoria já existe.', '#b45309');
     ensureCat(tipo, fullName);
@@ -7239,6 +7246,10 @@ function runSelfTests() {
         const dT = todayLocalISO(), sl = sanitizeState({ t: [{ id: 1, desc: 'X'.repeat(5000), valor: 10, data: dT, tipo: 'saida' }, { id: 2, desc: 'ok', valor: 1e30, data: dT, tipo: 'saida' }, { id: 3, desc: 'ok', valor: VALOR_MAX, data: dT, tipo: 'saida' }] });
         eq('limites: valor absurdo quarentena, descrição cortada', [sl.tx.length, sl.report.dropped.length, sl.tx[0].desc.length], [2, 1, DESC_MAX]);
         eq('limites: _valorOk (teto e NaN)', [_valorOk(VALOR_MAX), _valorOk(VALOR_MAX * 10), _valorOk(NaN)], [true, false, false]);
+    }
+    { // Nomes de categoria/cartão limitados (categoria do lançamento e do rol truncam igual, sem órfã)
+        const dT = todayLocalISO(), longa = 'Z'.repeat(300), sn = sanitizeState({ t: [{ id: 1, desc: 'a', valor: 1, data: dT, tipo: 'saida', cat: longa }], c: { saida: [longa], entrada: [], investimento: [] }, k: [{ id: 2, nome: longa, fechamento: 5, vencimento: 10 }] });
+        eq('limites: categoria e cartão truncados de forma consistente', [sn.tx[0].cat.length, sn.cats.saida.every(c => c.length <= CAT_MAX), sn.cats.saida.includes(sn.tx[0].cat), sn.cards[0].nome.length], [CAT_MAX, true, true, CARD_MAX]);
     }
     { // CSV do ano = os 12 meses juntos, em ordem de data, e volta pelo importador
         const ya = filtro().a, listaA = _listaCSV('ano', 0, ya), soma = Array.from({ length: 12 }, (_, k) => txMes(k, ya).length).reduce((x, y) => x + y, 0);
