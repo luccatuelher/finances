@@ -303,11 +303,16 @@
         igual, sem categoria órfã), com maxlength nos campos e aviso nos formulários.
         Limitação: categoria antiga com mais de 60 caracteres perderia o vínculo com o
         orçamento (não esperado; nomes reais são curtos).
+      • ÍCONES PNG (it. 52): o app instalado só tinha ícone SVG, que o iOS e alguns Android
+        ignoram (ícone genérico na tela inicial). Novos icon-192.png, icon-512.png (também
+        maskable, glifo dentro da zona segura) e apple-touch-icon.png (180). Publicar junto
+        com manifest.webmanifest, icon.svg e sw.js.
       Ferramentas de manutenção (use após qualquer mudança, em index.html?preview):
         runSelfTests() · runFuzz() · runSyncFuzz()
     -->
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <meta name="theme-color" content="#0b62f0">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Sans:wght@700;800&display=swap" rel="stylesheet">
     <!-- Versões FIXAS + SRI (integrity): "chart.js" sem versão pegava sempre a mais

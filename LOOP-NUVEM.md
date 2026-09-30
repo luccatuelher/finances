@@ -260,7 +260,7 @@ Se algum teste gravou no preview: remova as chaves com prefixo `preview:` e reca
 
 ## 8. Estado atual e próximos candidatos
 
-**Última iteração concluída: 51** (30/09/2026). Detalhes de cada uma no changelog do `<head>`.
+**Última iteração concluída: 52** (30/09/2026). Detalhes de cada uma no changelog do `<head>`.
 Iterações 40–42 foram feitas após o commit `a50cd5c`.
 
 Resumo das mais recentes:
@@ -282,6 +282,7 @@ Resumo das mais recentes:
 - 49 — layout de desktop em janela estreita/iPad: KPIs anuais (grid inline vencia o @media) e histórico a 375 px (autoteste 95). Varredura de overflow: 4 telas x 375/768/1024 px.
 - 50 — tetos (`VALOR_MAX` R$ 100 bi, `DESC_MAX` 200) e texto longo sem quebrar o layout (autoteste 97). Auditoria nova: usar dados extremos (200 caracteres sem espaço, R$ 99 bi) e medir overflow.
 - 51 — tetos de nome: categoria `CAT_MAX` 60, cartão `CARD_MAX` 40, meta 200 (autoteste 98).
+- 52 — ícones PNG (192/512/maskable/apple-touch 180) gerados do `icon.svg` com Playwright; o PWA agora tem 7 arquivos para publicar juntos (index, manifest, sw, icon.svg, 3 PNG).
 
 Áreas já revisadas: importação (CSV/OFX), exportação, backup/restauração, hero e ritmo,
 orçamento, metas/aportes, cartões/faturas, fixos, categorias, análise mensal e anual,
@@ -291,7 +292,7 @@ quarentena, acessibilidade, contraste, offline, desempenho.
 Próximos candidatos (riscos ainda não revisados):
 - (feito na 44) exportar CSV do ano;
 - (feito na 45) estilos de impressão — falta conferir os gráficos do Chart.js no papel;
-- (feito na 46) PWA — falta ícones PNG 192/512 e apple-touch-icon (iOS não usa SVG);
+- (feito na 46 e 52) PWA completo;
 - (feito na 43) campos numéricos de meta/aporte; sobra o `%` do orçamento por categoria (`btd`, type=number, valores < 100 — baixo risco);
 - (feito na 47) quarentena por conta.
 
