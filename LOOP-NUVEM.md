@@ -9,11 +9,8 @@ deste arquivo.
 
 ## 0. Antes de abrir a sessão (feito por você, uma vez)
 
-1. **Commitar o que está pendente localmente** (iterações 40–42 ainda não estão no git).
-2. **Subir o repositório para o GitHub** — hoje ele não tem remote; a sessão na nuvem só
-   enxerga repositórios hospedados. Ex.: criar um repositório privado e
-   `git remote add origin … && git push -u origin main`.
-3. Abrir a sessão na nuvem apontando para esse repositório e colar o prompt da seção 1.
+(Já feito: o repositório está em `luccatuelher/finances` e tudo está commitado.)
+Abrir a sessão na nuvem apontando para esse repositório e colar o prompt da seção 1.
 
 ---
 
@@ -29,7 +26,8 @@ Em cada iteração: escolha a próxima área ainda não revisada (ou um risco en
 procure bugs/otimizações, corrija de forma ESTRUTURAL (entender a causa, nunca hardcode do
 caso específico), valide sintaxe com node, teste num navegador headless em modo ?preview=1
 e registre o que mudou (changelog no <head> do index.html e seção 8 do LOOP-NUVEM.md).
-Trabalhe num branch próprio, um commit por iteração; não faça push para main.
+Um commit por iteração, direto na main (autorizado pelo dono do repositório): faça push
+para origin main ao fim de cada iteração, com a bateria verde.
 Pare quando eu pedir ou quando não houver mais melhoria relevante a fazer.
 ```
 
@@ -226,7 +224,7 @@ Se algum teste gravou no preview: remova as chaves com prefixo `preview:` e reca
    do comentário (quebraria o HTML).
 2. **Contador do autoteste**: atualize "NN verificações" na linha "AUTOTESTE".
 3. **Seção 8 deste arquivo**: acrescente a iteração e atualize os candidatos.
-4. **Commit** no branch da sessão, um por iteração:
+4. **Commit direto na `main`** (autorização permanente do dono), um por iteração, e `git push origin HEAD:main`:
    ```
    Iteração NN: <resumo curto>
 
@@ -292,5 +290,5 @@ Próximos candidatos (riscos ainda não revisados):
 ## 9. Quando parar
 
 Pare quando o usuário pedir, ou quando as próximas melhorias forem só cosméticas/de gosto.
-Ao parar: bateria completa verde, changelog e seção 8 atualizados, tudo commitado no branch,
+Ao parar: bateria completa verde, changelog e seção 8 atualizados, tudo commitado e enviado para a main,
 e um resumo curto do que mudou (com o que foi verificado e o que ficou pendente).
