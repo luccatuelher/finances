@@ -279,7 +279,7 @@ Se algum teste gravou no preview: remova as chaves com prefixo `preview:` e reca
 
 ## 8. Estado atual e próximos candidatos
 
-**Última iteração concluída: 53** (bateria ampliada: gráficos conferidos com o Chart.js local) (30/09/2026). Detalhes de cada uma no changelog do `<head>`.
+**Última iteração concluída: 54** (caixa de entrada do Claude via repositório privado do GitHub) (30/09/2026). Detalhes de cada uma no changelog do `<head>`.
 Iterações 40–42 foram feitas após o commit `a50cd5c`.
 
 Resumo das mais recentes:
@@ -303,6 +303,7 @@ Resumo das mais recentes:
 - 51 — tetos de nome: categoria `CAT_MAX` 60, cartão `CARD_MAX` 40, meta 200 (autoteste 98).
 - 52 — ícones PNG (192/512/maskable/apple-touch 180) gerados do `icon.svg` com Playwright; o PWA agora tem 7 arquivos para publicar juntos (index, manifest, sw, icon.svg, 3 PNG).
 - 53 — eixo dos gráficos: `fmtEixo` único, pt-BR compacto, sem rótulos repetidos (autoteste 100). Primeira iteração conferida com o Chart.js real.
+- 54 — caixa de entrada do Claude (pedido do dono): operações em `inbox.json` num repositório privado do GitHub, aplicadas pelo app com token fine-grained (`inboxAplicar`, `checkInbox`; ver `CAIXA-DE-ENTRADA.md`). Autoteste 104; `runSyncFuzz` inclui `_testeInbox` (GitHub simulado: gravação concorrente/409, reprocesso, cópia `estado.json`, token inválido).
 
 Áreas já revisadas: importação (CSV/OFX), exportação, backup/restauração, hero e ritmo,
 orçamento, metas/aportes, cartões/faturas, fixos, categorias, análise mensal e anual,

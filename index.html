@@ -56,7 +56,7 @@
       • FIXOS: "Gastos Fixos" (orçamento, popup, sidebar) somava entradas fixas como
         gasto (salário inflava o total); agora só saídas somam e entradas aparecem em verde.
       • AUTOTESTE: abra index.html?preview&selftest (ou runSelfTests() no console) após
-        qualquer mudança — 100 verificações de parsers, datas, fatura, sanitização
+        qualquer mudança — 104 verificações de parsers, datas, fatura, sanitização
         (idempotência) e ida-e-volta pelo Firebase. Não altera dados.
       • METAS: goalProgress() — % truncado (99,6% não mostra "100%" com "Faltam"),
         ritmo necessário por mês até o prazo e aviso de prazo vencido; histórico por data
@@ -313,6 +313,14 @@
         "R$1500.0k" e valores pequenos "R$-0.0094" (ponto decimal). Um único fmtEixo em pt-BR
         compacto ("R$ 6 mil", "R$ 1,5 mi") aumenta as casas até os rótulos ficarem distintos.
         Autoteste +3; conferido com o Chart.js real nas telas Visão Geral, Anual e Mensal.
+      • CAIXA DE ENTRADA DO CLAUDE (it. 54): lançar o que o dono mandava no chat exigia exportar
+        e importar um backup inteiro (a importação substitui tudo). Agora o Claude grava operações
+        (add/update/delete, com "espera" = valores atuais que precisam bater) no inbox.json de um
+        repositório PRIVADO do GitHub; o app lê com um token fine-grained guardado só no aparelho,
+        aplica pela sanitização + sync de 3 vias e marca como processadas (relê e preserva as
+        novas se o arquivo mudou no meio). Idempotente: reprocessar não duplica nem sobrescreve
+        edição do dono. Opcional: cópia dos dados (estado.json) para o Claude conferir duplicados.
+        Ver CAIXA-DE-ENTRADA.md. Autoteste +4; runSyncFuzz cobre o fluxo com GitHub simulado.
       Ferramentas de manutenção (use após qualquer mudança, em index.html?preview):
         runSelfTests() · runFuzz() · runSyncFuzz()
     -->
@@ -1273,6 +1281,7 @@
         <button class="mob-form-save" onclick="mobAdicionar()">Salvar Lançamento</button>
         <div style="text-align:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
             <button style="background:none;border:none;font-family:inherit;font-size:12px;color:var(--accent);font-weight:600;cursor:pointer" onclick="closeMobForm();abrirExtrato()">📄 Importar extrato bancário</button>
+            <button style="background:none;border:none;font-family:inherit;font-size:12px;color:var(--accent);font-weight:600;cursor:pointer;margin-top:8px" onclick="closeMobForm();abrirInbox()">📥 Caixa de entrada do Claude</button>
         </div>
     </div>
 </div>
@@ -1440,6 +1449,9 @@
             <div class="backup-row" style="margin-top:6px">
                 <div class="backup-btn" onclick="exportarCSV()" title="Exporta os lançamentos do mês filtrado em CSV (Excel/Sheets)">⇪ CSV do mês</div>
                 <div class="backup-btn" onclick="exportarCSV('ano')" title="Exporta os lançamentos do ano filtrado em CSV (Excel/Sheets)">⇪ CSV do ano</div>
+            </div>
+            <div class="backup-row" style="margin-top:6px">
+                <div class="backup-btn" onclick="abrirInbox()" title="Lançamentos que o Claude envia por um repositório privado do GitHub">📥 Caixa de entrada do Claude</div>
             </div>
         </div>
     </aside>
@@ -1794,6 +1806,34 @@
 </div>
 
 <!-- POPUP FIXOS -->
+<div class="overlay" id="ovInbox" onclick="closeOverlay('ovInbox', event)">
+    <div class="modal">
+        <div class="modal-title">📥 Caixa de entrada do Claude</div>
+        <div style="font-size:11px;color:var(--text-3);line-height:1.5;margin-bottom:10px">
+            O Claude grava os lançamentos num repositório <b>privado</b> do GitHub e o app aplica aqui sozinho
+            (ao abrir e a cada sincronização). Use um token <i>fine-grained</i> com acesso só a esse repositório
+            (Contents: leitura e escrita). O token fica guardado só neste aparelho.
+        </div>
+        <div class="field">
+            <label>Repositório (dono/nome)</label>
+            <input type="text" id="inboxRepo" placeholder="usuario/finances-inbox" autocomplete="off" spellcheck="false" autocapitalize="off">
+        </div>
+        <div class="field">
+            <label>Token do GitHub</label>
+            <input type="password" id="inboxToken" placeholder="github_pat_…" autocomplete="off" spellcheck="false" autocapitalize="off">
+        </div>
+        <label class="check-row">
+            <input type="checkbox" id="inboxCopia"> Guardar cópia dos meus dados no repositório (o Claude confere duplicados sem pedir backup)
+        </label>
+        <div id="inboxStatus" role="status" style="font-size:11px;color:var(--text-2);margin-top:8px;min-height:15px;line-height:1.4"></div>
+        <div class="modal-footer">
+            <button class="btn-mcancel" onclick="desligarInbox()">Desligar</button>
+            <button class="btn-mcancel" onclick="closeOverlay('ovInbox')">Fechar</button>
+            <button class="btn-confirm" onclick="salvarInbox()">Salvar e verificar</button>
+        </div>
+    </div>
+</div>
+
 <div class="overlay" id="ovFixos" onclick="closeFixos(event)">
     <div class="modal">
         <div class="fixos-popup-head">
@@ -3842,6 +3882,228 @@ function importar(input) {
     r.readAsText(file);
 }
 
+// ── CAIXA DE ENTRADA DO CLAUDE (repositório privado no GitHub) ───────────────
+// O dono manda os gastos para o Claude no chat; o Claude grava operações no arquivo
+// inbox.json de um repositório PRIVADO do GitHub, e o app — no navegador do dono, já logado
+// no Firebase — lê o arquivo com um token fine-grained (só esse repositório), aplica pelo
+// fluxo normal (sanitização → estado → sync de 3 vias) e marca como processadas. O
+// repositório do site é público, por isso a caixa fica em outro. Antes, cada rodada exigia
+// exportar/importar um backup inteiro (a importação substitui tudo o que está no app).
+// Formato: { versao: 1, ops: [ {id, op:'add', tx} | {id, op:'update', txId, espera, muda}
+//            | {id, op:'delete', txId, espera} ], processados: [ {id, resultado, em} ] }
+// Idempotente: "add" com id já existente é ignorado; "update"/"delete" só valem se os campos
+// de `espera` ainda baterem (uma edição do dono feita depois vence). Reprocessar o arquivo
+// (falha ao marcar, dois aparelhos ao mesmo tempo) nunca duplica nem sobrescreve.
+// Detalhes para quem grava as operações: CAIXA-DE-ENTRADA.md.
+const INBOX_ARQ = 'inbox.json', ESTADO_ARQ = 'estado.json';
+const INBOX_CAMPOS = ['desc', 'valor', 'data', 'tipo', 'cat', 'pagamento', 'cartaoId', 'faturaData', 'fixo'];
+const INBOX_MIN_MS  = 2 * 60 * 1000;     // checagens automáticas no máximo a cada 2 min
+const ESTADO_MIN_MS = 10 * 60 * 1000;    // cópia dos dados no máximo a cada 10 min
+// Por conta: outra conta entrando no mesmo navegador não herda o token nem a caixa
+const _inboxKey = uid => 'fin5_inbox_' + uid;
+function inboxCfg() { return _currentUser ? loadJSON(_inboxKey(_currentUser.uid), null) : null; }
+
+// Base64 ↔ UTF-8 (a API de conteúdo do GitHub usa base64; atob/btoa puros quebram emoji/acentos)
+function _b64Utf8(s) {
+    const b = new TextEncoder().encode(s);
+    let bin = '';
+    for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+    return btoa(bin);
+}
+function _utf8B64(b64) {
+    const bin = atob(String(b64 || '').replace(/\s/g, ''));
+    const b = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(b);
+}
+
+// Aplica as operações sobre um estado (sem mutar o original). Devolve o estado novo
+// (sanitizado) e o resultado de cada operação: 'aplicado' ou 'ignorado: motivo'.
+function inboxAplicar(state, ops) {
+    const lista = state.tx.map(t => ({ ...t }));
+    const porId = new Map(lista.map(t => [t.id, t]));
+    const confere = (t, espera) => Object.entries(espera && typeof espera === 'object' ? espera : {}).every(([k, v]) =>
+        k === 'valor' ? Math.abs(roundMoney(+t.valor) - roundMoney(+v)) < 0.005 : t[k] === v);
+    const resultados = [], adicionados = new Map(), removidos = new Set();
+    _asList(ops).forEach(o => {
+        const id = String((o && o.id) || '');
+        if (!id) return;                       // sem id não dá para marcar como processada
+        const res = r => resultados.push({ id, resultado: r });
+        if (o.op === 'add') {
+            const t = o.tx && typeof o.tx === 'object' ? o.tx : null;
+            const tid = t && toId(t.id);
+            if (!tid) return res('ignorado: lançamento sem id');
+            if (porId.has(tid)) return res('ignorado: já existe');
+            const novo = { ...t, id: tid, extId: 'claude:' + id };
+            lista.push(novo); porId.set(tid, novo);
+            adicionados.set(tid, resultados.length);
+            return res('aplicado');
+        }
+        if (o.op === 'update' || o.op === 'delete') {
+            const t = porId.get(toId(o.txId));
+            if (!t) return res(o.op === 'delete' ? 'ignorado: já não existe' : 'ignorado: não existe');
+            if (!confere(t, o.espera)) return res('ignorado: mudou desde então');
+            if (o.op === 'delete') { porId.delete(t.id); removidos.add(t); return res('aplicado'); }
+            const muda = o.muda && typeof o.muda === 'object' ? o.muda : {};
+            const chaves = Object.keys(muda).filter(k => INBOX_CAMPOS.includes(k));
+            if (!chaves.length) return res('ignorado: nada a mudar');
+            chaves.forEach(k => { t[k] = muda[k]; });
+            // mudou data/cartão sem informar a fatura: a sanitização recalcula
+            if ((chaves.includes('data') || chaves.includes('cartaoId')) && !chaves.includes('faturaData')) t.faturaData = null;
+            return res('aplicado');
+        }
+        res('ignorado: operação desconhecida');
+    });
+    const s = sanitizeState({ t: lista.filter(t => !removidos.has(t)), c: state.cats, g: state.goals, k: state.cards, b: state.budget });
+    // Lançamento recusado pela sanitização (sem data/valor) vai para a quarentena, não conta como aplicado
+    const ids = new Set(s.tx.map(t => t.id));
+    adicionados.forEach((i, tid) => { if (!ids.has(tid)) resultados[i].resultado = 'ignorado: inválido (quarentena)'; });
+    return { state: s, resultados };
+}
+
+let _inboxFetch = (...a) => fetch(...a);   // trocado pelo teste (GitHub simulado)
+function _ghErro(status) {
+    return new Error(status === 401 ? 'token inválido ou expirado'
+        : status === 403 ? 'token sem permissão (precisa de Contents: leitura e escrita neste repositório)'
+        : status === 404 ? 'repositório não encontrado (confira dono/nome e o acesso do token)'
+        : 'GitHub respondeu ' + status);
+}
+const _ghHeaders = cfg => ({ Authorization: 'Bearer ' + cfg.token, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' });
+async function _ghReq(cfg, method, arq, body) {
+    const headers = _ghHeaders(cfg);
+    if (body) headers['Content-Type'] = 'application/json';
+    return _comPrazo(_inboxFetch(`https://api.github.com/repos/${cfg.repo}/contents/${arq}`,
+        { method, headers, cache: 'no-store', body: body ? JSON.stringify(body) : undefined }), SYNC_PRAZO_MS, 'GitHub sem resposta');
+}
+// Arquivo inexistente → { sha: null, dados: null }
+async function _ghLer(cfg, arq) {
+    const r = await _ghReq(cfg, 'GET', arq);
+    if (r.status === 404) {
+        // 404 vale para arquivo E repositório: confere o repositório para dar a mensagem certa
+        const rr = await _comPrazo(_inboxFetch(`https://api.github.com/repos/${cfg.repo}`,
+            { headers: _ghHeaders(cfg), cache: 'no-store' }), SYNC_PRAZO_MS, 'GitHub sem resposta');
+        if (!rr.ok) throw _ghErro(rr.status);
+        return { sha: null, dados: null };
+    }
+    if (!r.ok) throw _ghErro(r.status);
+    const j = await r.json();
+    return { sha: j.sha, dados: JSON.parse(_utf8B64(j.content)) };
+}
+// Grava; devolve o sha novo, ou null se o arquivo mudou no meio (sha antigo) — quem chamou relê
+async function _ghGravar(cfg, arq, dados, sha, msg) {
+    const r = await _ghReq(cfg, 'PUT', arq, { message: msg, content: _b64Utf8(JSON.stringify(dados, null, 1)), ...(sha ? { sha } : {}) });
+    if (r.status === 409 || r.status === 422) return null;
+    if (!r.ok) throw _ghErro(r.status);
+    const j = await r.json();
+    return (j && j.content && j.content.sha) || '?';
+}
+
+async function _inboxProcessar(cfg) {
+    let { sha, dados } = await _ghLer(cfg, INBOX_ARQ);
+    let ops = dados && Array.isArray(dados.ops) ? dados.ops : [];
+    let resultados = [];
+    if (ops.length) {
+        pushUndo('Lançamentos do Claude');     // Ctrl+Z desfaz a rodada inteira
+        const r = inboxAplicar(snapshotState(), ops);
+        _quarantine(r.state.report);
+        restoreState(r.state);
+        commitAll(); renderGoals(); renderCartoesMini();
+        const em = new Date().toISOString();
+        resultados = r.resultados.map(x => ({ ...x, em }));
+        // Marca como processadas. Se o Claude gravou no meio (sha mudou), relê e tira só as
+        // que esta rodada tratou — as novas ficam para a próxima.
+        const feitos = new Set(resultados.map(x => x.id));
+        for (let tent = 0; ; tent++) {
+            const novo = { versao: 1, ops: ops.filter(o => !feitos.has(String((o && o.id) || ''))),
+                           processados: [..._asList(dados && dados.processados), ...resultados].slice(-300) };
+            if (await _ghGravar(cfg, INBOX_ARQ, novo, sha, `App: ${resultados.length} operação(ões) processada(s)`)) break;
+            if (tent >= 3) throw new Error('não consegui marcar como processadas (as alterações já estão no app; tento de novo depois)');
+            ({ sha, dados } = await _ghLer(cfg, INBOX_ARQ));
+            ops = dados && Array.isArray(dados.ops) ? dados.ops : [];
+        }
+    }
+    const aplicadas = resultados.filter(x => x.resultado === 'aplicado').length;
+    if (resultados.length)
+        toast(`📥 Claude: ${aplicadas} alteração(ões) aplicada(s)` + (resultados.length > aplicadas ? `, ${resultados.length - aplicadas} ignorada(s)` : '') + '.', '#0b62f0');
+    let copia = false;
+    if (cfg.copia) copia = await _inboxCopiaEstado(cfg);
+    return { processadas: resultados.length, aplicadas, resultados, copia };
+}
+
+// Cópia dos dados (mesmo formato do backup) para o Claude conferir duplicados sem pedir
+// arquivo. Só grava se o estado mudou desde a última cópia, no máximo a cada 10 min.
+async function _inboxCopiaEstado(cfg) {
+    const key = _inboxKey(_currentUser.uid) + '_copia';
+    const h = _stateHash(), ult = loadJSON(key, null);
+    if (ult && (ult.hash === h || Date.now() - ult.em < ESTADO_MIN_MS)) return false;
+    const dados = { t: tx, c: cats, g: goals, k: cards, b: budget, v: SCHEMA_VERSION, exportedAt: new Date().toISOString() };
+    let sha = ult && ult.sha;
+    for (let tent = 0; tent < 3; tent++) {
+        const novo = await _ghGravar(cfg, ESTADO_ARQ, dados, sha, 'App: cópia dos dados');
+        if (novo) { storeJSON(key, { hash: h, em: Date.now(), sha: novo }); return true; }
+        ({ sha } = await _ghLer(cfg, ESTADO_ARQ));     // sha desconhecido/antigo: relê e tenta de novo
+    }
+    throw new Error('não consegui gravar a cópia dos dados');
+}
+
+let _inboxRodando = null, _inboxUltima = 0, _inboxMsg = '';
+function _inboxStatus(msg) { _inboxMsg = msg; const el = $('inboxStatus'); if (el) el.textContent = msg; }
+async function checkInbox({ manual = false } = {}) {
+    const cfg = inboxCfg();
+    if (!cfg || !cfg.repo || !cfg.token || !SYNC_ENABLED || !_currentUser || _conflictOpen || _offline()) return null;
+    if (!manual && Date.now() - _inboxUltima < INBOX_MIN_MS) return null;
+    if (_inboxRodando) return _inboxRodando;
+    _inboxRodando = (async () => {
+        _inboxUltima = Date.now();
+        try {
+            if (_syncing) await _syncing;      // aplica sobre o estado já sincronizado
+            if (_conflictOpen) return null;
+            const r = await _inboxProcessar(cfg);
+            const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            _inboxStatus(`✓ Verificado às ${hora}` + (r.processadas ? ` — ${r.aplicadas} aplicada(s)` : ' — nada novo') + (r.copia ? ' · cópia dos dados atualizada' : ''));
+            if (manual && !r.processadas) toast('✓ Caixa de entrada: nada novo.');
+            return r;
+        } catch (e) {
+            _inboxStatus('❌ ' + e.message);
+            console.warn('Caixa de entrada do Claude:', e);
+            if (manual) toast('❌ Caixa de entrada: ' + e.message, '#dc2626');
+            return { erro: e.message };
+        } finally { _inboxRodando = null; }
+    })();
+    return _inboxRodando;
+}
+
+function abrirInbox() {
+    const cfg = inboxCfg() || {};
+    $('inboxRepo').value = cfg.repo || '';
+    $('inboxToken').value = '';
+    $('inboxToken').placeholder = cfg.token ? 'token salvo neste aparelho (vazio = manter)' : 'github_pat_…';
+    $('inboxCopia').checked = !!cfg.copia;
+    _inboxStatus(_inboxMsg || (cfg.token ? 'Ligada neste aparelho.' : 'Desligada neste aparelho.'));
+    $('ovInbox').classList.add('open');
+}
+async function salvarInbox() {
+    if (!_currentUser) return;
+    const repo = $('inboxRepo').value.trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\.git$/i, '').replace(/\/+$/, '');
+    if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) { _inboxStatus('⚠️ Informe o repositório no formato dono/nome.'); return; }
+    const antes = inboxCfg() || {};
+    const token = $('inboxToken').value.trim() || antes.token || '';
+    if (!token) { _inboxStatus('⚠️ Cole o token do GitHub.'); return; }
+    storeJSON(_inboxKey(_currentUser.uid), { repo, token, copia: $('inboxCopia').checked });
+    $('inboxToken').value = '';
+    $('inboxToken').placeholder = 'token salvo neste aparelho (vazio = manter)';
+    if (!SYNC_ENABLED) { _inboxStatus('Salvo. (No modo de teste a caixa de entrada não é consultada.)'); return; }
+    _inboxStatus('Verificando…');
+    await checkInbox({ manual: true });
+}
+function desligarInbox() {
+    if (!_currentUser || !inboxCfg()) { _inboxStatus('Já está desligada neste aparelho.'); return; }
+    if (!confirm('Desligar a caixa de entrada neste aparelho? O token é apagado daqui.')) return;
+    lsDel(_inboxKey(_currentUser.uid)); lsDel(_inboxKey(_currentUser.uid) + '_copia');
+    $('inboxRepo').value = ''; $('inboxCopia').checked = false; $('inboxToken').placeholder = 'github_pat_…';
+    _inboxStatus('Desligada neste aparelho.');
+}
+
 // ── TABLE ─────────────────────────────────────────────────────────────────────
 // Conteúdo (<td>) do editor inline de um lançamento
 function _inlineEditorHtml(t) {
@@ -5412,7 +5674,8 @@ function bootApp() {
             _claimLocalData(user.uid);
             init();             // selects/listeners ANTES do 1º render (showApp → navTo)
             showApp(user);
-            reconcile({ initial: true });
+            // Caixa de entrada do Claude: só depois da 1ª sync (aplica sobre o estado da nuvem)
+            reconcile({ initial: true }).then(() => checkInbox());
             checkDbRules();
             setupAutoSync();
         } else {
@@ -5988,16 +6251,16 @@ async function checkDbRules(db = fbDb) {
 
 function setupAutoSync() {
     clearInterval(_autoSyncTimer);
-    _autoSyncTimer = setInterval(() => { reconcile({ passive: true }); updateSyncTime(); }, 5 * 60 * 1000);
+    _autoSyncTimer = setInterval(() => { reconcile({ passive: true }); updateSyncTime(); checkInbox(); }, 5 * 60 * 1000);
     _watchRemoteTs();
     if (_syncListenersOn) return;
     _syncListenersOn = true;
     // Volta à aba/reconecta → confere mudanças (com limite de frequência)
-    window.addEventListener('focus',  () => reconcile({ passive: true }));
+    window.addEventListener('focus',  () => { reconcile({ passive: true }); checkInbox(); });
     window.addEventListener('online', () => reconcile());
     window.addEventListener('offline', () => setSyncState('err', 'Offline'));
     document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') reconcile({ passive: true });
+        if (document.visibilityState === 'visible') { reconcile({ passive: true }); checkInbox(); }
         else if (_localDirty()) reconcile();   // saindo da aba: tenta enviar o pendente
     });
 }
@@ -7344,6 +7607,33 @@ function runSelfTests() {
     eq('meta completa', [gp(1000, [600, 400]).pct, gp(1000, [600, 400]).done, gp(1000, [1500]).falta], [100, true, 0]);
     eq('meta prazo vencido', gp(1000, [10], '2000-01-01').ritmo, '⚠️ prazo vencido');
     eq('total de fixos ignora entradas', fixoSaidaTotal([{ tipo: 'entrada', total: 5000 }, { tipo: 'saida', total: 1800 }, { tipo: 'investimento', valor: 100 }]), 1900);
+    {   // caixa de entrada do Claude: operações idempotentes e protegidas por "espera"
+        const base = sanitizeState({ t: [
+            { id: 501, desc: 'Mercado', valor: 50, data: '2026-09-01', tipo: 'saida', cat: '🍔 Alimentação' },
+            { id: 502, desc: 'Uber', valor: 20, data: '2026-09-02', tipo: 'saida', cat: '🚗 Transporte' },
+            { id: 503, desc: 'Café', valor: 9, data: '2026-09-03', tipo: 'saida', cat: '🍔 Alimentação' }] });
+        const ops = [
+            { id: 'a1', op: 'add', tx: { id: 601, desc: 'Farmácia', valor: 33.67, data: '2026-09-26', tipo: 'saida', cat: '💊 Saúde' } },
+            { id: 'a2', op: 'add', tx: { id: 503, desc: 'duplicado', valor: 1, data: '2026-09-01', tipo: 'saida' } },
+            { id: 'u1', op: 'update', txId: 502, espera: { valor: 20 }, muda: { valor: 25.5, desc: 'Uber (corrigido)' } },
+            { id: 'u2', op: 'update', txId: 503, espera: { valor: 10 }, muda: { valor: 1 } },
+            { id: 'd1', op: 'delete', txId: 501, espera: { desc: 'Mercado', valor: 50 } },
+            { id: 'd2', op: 'delete', txId: 999 },
+            { id: 'a3', op: 'add', tx: { id: 602, desc: 'sem data', valor: 5 } },
+            { id: 'x1', op: 'renomear' },
+            { op: 'add', tx: { id: 603, desc: 'operação sem id', valor: 1, data: '2026-09-01' } },
+        ];
+        const r1 = inboxAplicar(base, ops);
+        eq('caixa de entrada: resultado de cada operação', r1.resultados.map(x => x.id + '=' + x.resultado), [
+            'a1=aplicado', 'a2=ignorado: já existe', 'u1=aplicado', 'u2=ignorado: mudou desde então', 'd1=aplicado',
+            'd2=ignorado: já não existe', 'a3=ignorado: inválido (quarentena)', 'x1=ignorado: operação desconhecida']);
+        eq('caixa de entrada: estado final', r1.state.tx.map(t => [t.id, t.desc, t.valor, t.extId || '']).sort((a, b) => a[0] - b[0]),
+           [[502, 'Uber (corrigido)', 25.5, ''], [503, 'Café', 9, ''], [601, 'Farmácia', 33.67, 'claude:a1']]);
+        const r2 = inboxAplicar(r1.state, ops);
+        eq('caixa de entrada: reaplicar não muda nada', [_stateHash(r2.state) === _stateHash(r1.state), r2.resultados.filter(x => x.resultado === 'aplicado').length], [true, 0]);
+        const txt = '🍔 Alimentação — "Pão" ç ã 😀';
+        eq('caixa de entrada: base64 UTF-8 ida e volta', _utf8B64(_b64Utf8(txt)), txt);
+    }
 
     const fails = results.filter(r => !r.ok);
     console.table(results.map(r => ({ teste: r.name, ok: r.ok ? '✓' : '✗', obtido: JSON.stringify(r.got), esperado: JSON.stringify(r.exp) })));
@@ -7513,6 +7803,7 @@ async function _runSyncFuzzImpl(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120) {
             const perdidos = [...criados].filter(id => !apagados.has(id) && !noServidor.has(id));
             if (perdidos.length) problems.push(`seed ${S}: ${perdidos.length} lançamento(s) criado(s) e nunca apagado(s) sumiram (conflito descartou mudança não conflitante)`);
         }
+        problems.push(...await _testeInbox());
     } finally {
         _userRef = savedRef; _currentUser = savedUser; toast = savedToast; window.confirm = savedConfirm;
         $('ovConflict').classList.remove('open'); _conflictOpen = false; _pendingConflictRemote = null;
@@ -7522,6 +7813,74 @@ async function _runSyncFuzzImpl(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120) {
     console[problems.length ? 'warn' : 'info'](`runSyncFuzz: ${seeds.length} cenários, ${stats.merged} merges, ${stats.conflict} conflitos resolvidos, ${problems.length} problema(s)`, problems);
     toast(problems.length ? `❌ Sync fuzz: ${problems.length} problema(s) — veja o console` : `✅ Sync fuzz: ${seeds.length} cenários convergiram (${stats.merged} merges)`, problems.length ? '#dc2626' : '#16a34a');
     return problems;
+}
+
+// Caixa de entrada do Claude contra um GitHub em memória (API de conteúdo com sha): aplica,
+// marca como processadas mesmo com gravação concorrente do Claude (409), não reaplica, grava
+// a cópia dos dados e trata token inválido. Roda dentro do runSyncFuzz (usuário simulado,
+// toast mudo, estado e localStorage restaurados no fim).
+async function _testeInbox() {
+    const problemas = [], p = m => problemas.push('caixa de entrada: ' + m);
+    const arquivos = {};   // arquivo → { sha, content (base64) }
+    let n = 0, concorrente = null, statusForcado = 0;
+    const resp = (st, body) => ({ status: st, ok: st >= 200 && st < 300, json: async () => body });
+    const origFetch = _inboxFetch, cfgKey = _inboxKey(_currentUser.uid);
+    _inboxFetch = async (url, init = {}) => {
+        if (statusForcado) return resp(statusForcado, {});
+        const m = url.match(/\/repos\/dono\/caixa(?:\/contents\/(.+))?$/);
+        if (!m) return resp(404, {});
+        if (!m[1]) return resp(200, {});
+        const arq = m[1];
+        if ((init.method || 'GET') === 'GET') return arquivos[arq] ? resp(200, { sha: arquivos[arq].sha, content: arquivos[arq].content }) : resp(404, {});
+        const body = JSON.parse(init.body);
+        if (arq === INBOX_ARQ && concorrente) { const f = concorrente; concorrente = null; f(); }   // o Claude grava no meio
+        if ((arquivos[arq] ? arquivos[arq].sha : undefined) !== (body.sha || undefined)) return resp(409, {});
+        arquivos[arq] = { sha: 's' + (++n), content: body.content };
+        return resp(200, { content: { sha: arquivos[arq].sha } });
+    };
+    const grava = (arq, obj) => { arquivos[arq] = { sha: 's' + (++n), content: _b64Utf8(JSON.stringify(obj)) }; };
+    const le = arq => arquivos[arq] ? JSON.parse(_utf8B64(arquivos[arq].content)) : null;
+    try {
+        storeJSON(cfgKey, { repo: 'dono/caixa', token: 't', copia: true });
+        lsDel(cfgKey + '_copia');
+        restoreState(sanitizeState({ t: SEED }));
+        const [t1, t2] = tx;
+        const iniciais = [
+            { id: 'op1', op: 'add', tx: { id: 1900000000001, desc: 'Raia ✓', valor: 33.67, data: '2026-09-26', tipo: 'saida', cat: '💊 Saúde' } },
+            { id: 'op2', op: 'update', txId: t1.id, espera: { valor: t1.valor }, muda: { valor: roundMoney(t1.valor + 1) } },
+            { id: 'op3', op: 'delete', txId: t2.id, espera: { valor: t2.valor } },
+        ];
+        grava(INBOX_ARQ, { versao: 1, ops: iniciais, processados: [] });
+        concorrente = () => { const d = le(INBOX_ARQ); d.ops.push({ id: 'op4', op: 'add', tx: { id: 1900000000002, desc: 'Nova', valor: 5, data: '2026-09-27', tipo: 'saida' } }); grava(INBOX_ARQ, d); };
+        const r1 = await _inboxProcessar(inboxCfg()), d1 = le(INBOX_ARQ);
+        if (r1.aplicadas !== 3) p(`1ª rodada aplicou ${r1.aplicadas} de 3`);
+        if (!tx.some(t => t.id === 1900000000001 && t.extId === 'claude:op1')) p('lançamento novo não entrou');
+        if (!tx.some(t => t.id === t1.id && t.valor === roundMoney(t1.valor + 1))) p('correção não entrou');
+        if (tx.some(t => t.id === t2.id)) p('exclusão não aconteceu');
+        if (JSON.stringify(d1.ops.map(o => o.id)) !== '["op4"]') p('marcação errada após gravação concorrente: ' + JSON.stringify(d1.ops.map(o => o.id)));
+        if (d1.processados.length !== 3) p('histórico de processadas errado');
+        const copia = le(ESTADO_ARQ);
+        if (!copia || copia.t.length !== tx.length) p('cópia dos dados não foi gravada');
+        const r2 = await _inboxProcessar(inboxCfg());
+        if (r2.aplicadas !== 1 || !tx.some(t => t.id === 1900000000002)) p('operação gravada no meio não entrou na rodada seguinte');
+        const antes = _stateHash();
+        const r3 = await _inboxProcessar(inboxCfg());
+        if (r3.processadas !== 0 || _stateHash() !== antes) p('rodada sem operações mudou algo');
+        // Reprocessar as mesmas operações (ex.: falha ao marcar) não duplica nem desfaz
+        grava(INBOX_ARQ, { versao: 1, ops: iniciais, processados: [] });
+        const r4 = await _inboxProcessar(inboxCfg());
+        if (r4.aplicadas !== 0 || _stateHash() !== antes) p('reprocessar operações já aplicadas alterou os dados');
+        delete arquivos[INBOX_ARQ];
+        const r5 = await _inboxProcessar(inboxCfg());
+        if (r5.processadas !== 0) p('sem inbox.json deveria ser "nada novo"');
+        try { await _inboxProcessar({ repo: 'outro/repo', token: 't' }); p('repositório inexistente não deu erro'); }
+        catch (e) { if (!/repositório não encontrado/.test(e.message)) p('erro inesperado (repositório): ' + e.message); }
+        statusForcado = 401;
+        try { await _inboxProcessar(inboxCfg()); p('token inválido não deu erro'); }
+        catch (e) { if (!/token inválido/.test(e.message)) p('erro inesperado (token): ' + e.message); }
+    } catch (e) { p('exceção ' + e.message); }
+    finally { _inboxFetch = origFetch; lsDel(cfgKey); lsDel(cfgKey + '_copia'); }
+    return problemas;
 }
 
 // ── BOOT ─────────────────────────────────────────────────────────────────────
