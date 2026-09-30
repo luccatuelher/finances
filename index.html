@@ -270,9 +270,18 @@
         limite de altura, cartões e linhas sem quebrar no meio, cabeçalho de tabela repetido
         a cada página, cores preservadas. Conferido em PDF A4 das 4 telas (o Chart.js não
         carrega no sandbox, então os gráficos não foram vistos no papel).
+      • INSTALAR COMO APP (it. 46): novos manifest.webmanifest, icon.svg e sw.js (publicar os
+        4 arquivos juntos). O navegador oferece "Instalar" (janela própria, ícone) e o app
+        abre sem rede: o service worker usa rede primeiro (sempre a versão nova quando há
+        internet) e a última cópia guardada como reserva; Firebase/Auth nunca passam por ele
+        e o preview não o registra. Testado por http: SW ativo, rede desligada, recarregar
+        abre o app (bootApp presente, 0 erros).
       Ferramentas de manutenção (use após qualquer mudança, em index.html?preview):
         runSelfTests() · runFuzz() · runSyncFuzz()
     -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
+    <meta name="theme-color" content="#0b62f0">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Sans:wght@700;800&display=swap" rel="stylesheet">
     <!-- Versões FIXAS + SRI (integrity): "chart.js" sem versão pegava sempre a mais
          recente — uma major nova quebraria o site sozinha; e o hash impede que um CDN
@@ -7407,6 +7416,11 @@ async function _runSyncFuzzImpl(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120) {
 // ── BOOT ─────────────────────────────────────────────────────────────────────
 // Por último: todas as declarações (const/let) do script já existem aqui.
 bootApp();
+// Instalável como app e abre sem rede (sw.js: rede primeiro, cópia local como reserva).
+// Fora do preview e só em http(s); falha de registro nunca atrapalha o app.
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !PREVIEW_MODE) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
 if (new URLSearchParams(location.search).has('selftest')) setTimeout(runSelfTests, 0);
 </script>
 </body>
