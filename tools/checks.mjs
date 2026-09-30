@@ -20,7 +20,8 @@ const server = createServer(async (req, res) => {
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const page = await browser.newPage();
 const erros = [];
-page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource: net::/.test(m.text())) erros.push(m.text()); // falha de rede (CDN bloqueada no sandbox) não conta });
+// Falha de rede (CDN bloqueada no sandbox) não conta como erro
+page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource: net::/.test(m.text())) erros.push(m.text()); });
 page.on('pageerror', e => erros.push(e.message));
 const url = 'http://localhost:5577/index.html?preview=1';
 
