@@ -56,7 +56,7 @@
       • FIXOS: "Gastos Fixos" (orçamento, popup, sidebar) somava entradas fixas como
         gasto (salário inflava o total); agora só saídas somam e entradas aparecem em verde.
       • AUTOTESTE: abra index.html?preview&selftest (ou runSelfTests() no console) após
-        qualquer mudança — 85 verificações de parsers, datas, fatura, sanitização
+        qualquer mudança — 88 verificações de parsers, datas, fatura, sanitização
         (idempotência) e ida-e-volta pelo Firebase. Não altera dados.
       • METAS: goalProgress() — % truncado (99,6% não mostra "100%" com "Faltam"),
         ritmo necessário por mês até o prazo e aviso de prazo vencido; histórico por data
@@ -230,6 +230,30 @@
         no desktop o Tab percorria ~20 campos invisíveis antes do formulário. Agora fechado =
         visibility:hidden (atrasada até o fim da animação de saída). Foco sempre visível nos
         clicáveis que _a11y() põe no Tab (alguns tinham outline:none).
+      • CONFLITO DE SYNC POR ITEM: com UM item alterado nos dois dispositivos, o diálogo
+        descartava a mescla inteira e a escolha valia para o estado todo — "Manter Local"
+        apagava o que o outro dispositivo mudou em OUTROS itens e "Usar Firebase" o que foi
+        feito aqui. Agora mergeStates(…, prefer) resolve só os itens em conflito pelo lado
+        escolhido e mantém o resto da mescla; o diálogo lista quais itens conflitam ("Manter
+        as minhas" / "Usar as do outro dispositivo"). Sem base de merge, segue a escolha do
+        estado inteiro. runSyncFuzz ganhou o invariante "lançamento criado e nunca apagado não
+        some": com a versão antiga falhou em 5 de 8 cenários; com a nova, 0 de 14.
+      • SYNC FUZZ — EDIÇÕES: segundo invariante: lançamento editado por UM só dispositivo e
+        não apagado termina com a última edição dele (não há como conflitar). A resolução
+        antiga (estado inteiro) falhava em 4 de 8 cenários; a atual passa em 16.
+      • SELETOR DE ÍCONES pelo teclado: escolher/fechar devolve o foco ao botão que abriu
+        (antes o botão focado sumia e o foco caía no <body>); Esc fecha só o seletor (antes
+        não fazia nada ou fechava o modal inteiro); aberto pelo teclado, o foco vai ao ícone
+        atual (aria-pressed marca o selecionado).
+      • OFFLINE: sem conexão o SDK do Firebase não falha — once()/transaction() ficam
+        pendurados; o botão mostrava "Sync…" para sempre e "Sair" com alterações pendentes
+        travava sem resposta. Agora: sem rede → estado "Offline" na hora (evento 'offline'
+        e checagem antes de sincronizar; 'online' retoma) e aviso claro na sync manual;
+        conexão instável → prazo de 20 s vira erro (_comPrazo). Transação que confirme
+        depois do prazo é segura (condicional ao ts).
+      • ESCALA re-medida após acessibilidade/contraste: 6.000 lançamentos (1,1 MB) —
+        renderAll 12,6 ms, salvar+render 25 ms, _a11y no documento inteiro 1 ms, fuzz de
+        1.600 ações com a base grande sem violações.
       Ferramentas de manutenção (use após qualquer mudança, em index.html?preview):
         runSelfTests() · runFuzz() · runSyncFuzz()
     -->
@@ -1860,14 +1884,14 @@
 <div class="overlay" id="ovConflict">
     <div class="modal">
         <div class="modal-title">⚠️ Conflito de Dados</div>
-        <div class="modal-sub">Os dados locais e do Firebase são diferentes. Qual versão manter?</div>
+        <div class="modal-sub" id="conflictSub">Os dados locais e do Firebase são diferentes. Qual versão manter?</div>
         <div class="conflict-box">
             <p id="conflictMsg"></p>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;color:var(--text-2)" id="conflictDetails"></div>
         </div>
         <div class="modal-footer">
-            <button class="btn-mcancel" onclick="resolveConflict('local')">Manter Local</button>
-            <button class="btn-confirm" onclick="resolveConflict('remote')">Usar Firebase</button>
+            <button class="btn-mcancel" id="btnConflictLocal" onclick="resolveConflict('local')">Manter Local</button>
+            <button class="btn-confirm" id="btnConflictRemote" onclick="resolveConflict('remote')">Usar Firebase</button>
         </div>
     </div>
 </div>
@@ -2234,8 +2258,7 @@ document.addEventListener('mousedown', e => {
     });
     document.querySelectorAll('.icon-picker.open').forEach(p => {
         if (!p.contains(e.target) && !e.target.closest('.ch-icon,.ch-add-icon')) {
-            p.classList.remove('open');
-            if (_openPickerId === p.id) _openPickerId = null;
+            if (_openPickerId === p.id) _closeIconPicker(); else p.classList.remove('open');
         }
     });
 });
@@ -2877,6 +2900,7 @@ function _onGlobalKey(e) {
     const inField = el && el.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|file)$/.test(el.type);
     const modal = _topModal();
     if (e.key === 'Escape') {
+        if (_closeIconPicker(true)) { e.preventDefault(); return; }   // seletor aberto fecha primeiro
         if (modal) { const m = MODALS[modal.id]; if (m.close) { e.preventDefault(); m.close(); } return; }
         if (_openInlineId) { e.preventDefault(); closeInlineEdit(); }
         return;
@@ -3555,35 +3579,44 @@ function addCatHub(tipo) {
 
 // ── ICON PICKER ─────────────────────────────────────────────────────────────
 // (fechamento por clique fora: listener global junto da combobox de categorias)
-let _openPickerId = null;
+let _openPickerId = null, _pickerTrigger = null;
+
+// Fechar sempre por aqui. devolverFoco: ao escolher/fechar pelo teclado (e no Esc) o foco
+// volta a quem abriu — antes o botão focado sumia com o seletor e o foco caía no <body>
+function _closeIconPicker(devolverFoco = false) {
+    if (!_openPickerId) return false;
+    const el = $(_openPickerId);
+    if (el) el.classList.remove('open');
+    _openPickerId = null;
+    if (devolverFoco && _pickerTrigger && _pickerTrigger.isConnected) _pickerTrigger.focus();
+    _pickerTrigger = null;
+    return true;
+}
 
 function toggleIconPicker(pickerId) {
-    // Close any other open picker first
-    if (_openPickerId && _openPickerId !== pickerId) {
-        const prev = $(_openPickerId);
-        if (prev) prev.classList.remove('open');
-    }
+    if (_openPickerId === pickerId) { _closeIconPicker(true); return; }
+    _closeIconPicker();
     const el = $(pickerId);
     if (!el) return;
-    if (el.classList.contains('open')) { el.classList.remove('open'); _openPickerId = null; return; }
     const currentIcon = _catHubNewIcon || '📦';
     el.innerHTML = `
         <div class="icon-picker-title">Escolher Ícone</div>
         <div class="icon-picker-grid">
-            ${ICON_LIB.map(ic => `<button class="icon-pick ${ic === currentIcon ? 'sel' : ''}"
+            ${ICON_LIB.map(ic => `<button class="icon-pick ${ic === currentIcon ? 'sel' : ''}" aria-pressed="${ic === currentIcon}"
                 onclick="pickIcon(${jsStr(pickerId)},${jsStr(ic)})">${ic}</button>`).join('')}
         </div>`;
     el.classList.add('open');
     _openPickerId = pickerId;
+    _pickerTrigger = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
+    // Aberto pelo teclado (clique sintético: detail 0) → foco no ícone atual
+    if (window.event && window.event.detail === 0) (el.querySelector('.icon-pick.sel') || el.querySelector('.icon-pick'))?.focus();
 }
 
 function pickIcon(pickerId, icon) {
     _catHubNewIcon = icon;
     const btn = $('catHubIconBtn');
     if (btn) btn.textContent = icon;
-    const el = $(pickerId);
-    if (el) el.classList.remove('open');
-    _openPickerId = null;
+    _closeIconPicker(true);
 }
 
 // ── BACKUP ────────────────────────────────────────────────────────────────────
@@ -5506,24 +5539,39 @@ function _pick3(b, l, r) {
     if (_same(r, b)) return { v: l };
     return { conflict: true };
 }
+// Conflito = o MESMO item mudou dos dois lados. `ctx.prefer`: null → o item fica de fora
+// (só é listado); 'local'/'remote' → resolvido por esse lado (escolha do usuário) sem
+// perder o resto da mescla. `ctx.reg(chave técnica, nome legível)` registra o conflito.
+const _ladoPreferido = (ctx, l, r) => ctx.prefer === 'local' ? l : ctx.prefer === 'remote' ? r : undefined;
 // Coleções com id (lançamentos, metas, cartões); undefined = removido
-function _mergeById(base, local, remote, conflicts, label) {
+function _mergeById(base, local, remote, ctx, label) {
     const B = new Map(base.map(x => [x.id, x])), L = new Map(local.map(x => [x.id, x])), R = new Map(remote.map(x => [x.id, x]));
     const ids = [...local.map(x => x.id), ...remote.map(x => x.id).filter(id => !L.has(id))];
     const out = [];
     for (const id of ids) {
-        const p = _pick3(B.get(id), L.get(id), R.get(id));
-        if (p.conflict) { conflicts.push(`${label} ${id}`); continue; }
+        const l = L.get(id), r = R.get(id), p = _pick3(B.get(id), l, r);
+        if (p.conflict) {
+            const x = l || r || B.get(id), nome = (x && (x.desc || x.nome)) || id;
+            ctx.reg(`${label} ${id}`, `${label} "${nome}"${!l ? ' — removido aqui' : !r ? ' — removido no outro dispositivo' : ''}`);
+            const v = _ladoPreferido(ctx, l, r);
+            if (v !== undefined) out.push(v);
+            continue;
+        }
         if (p.v !== undefined) out.push(p.v);
     }
     return out;
 }
 // Mapas chave → valor (alocações, totais por mês, necessidade/desejo)
-function _mergeKeyed(base = {}, local = {}, remote = {}, conflicts, label) {
+function _mergeKeyed(base = {}, local = {}, remote = {}, ctx, label) {
     const out = {};
     for (const k of new Set([...Object.keys(base), ...Object.keys(local), ...Object.keys(remote)])) {
         const p = _pick3(base[k], local[k], remote[k]);
-        if (p.conflict) { conflicts.push(`${label} ${k}`); continue; }
+        if (p.conflict) {
+            ctx.reg(`${label} ${k}`, `${label} de "${k}"`);
+            const v = _ladoPreferido(ctx, local[k], remote[k]);
+            if (v !== undefined) out[k] = v;
+            continue;
+        }
         if (p.v !== undefined) out[k] = p.v;
     }
     return out;
@@ -5533,23 +5581,26 @@ function _mergeSet(base = [], local = [], remote = []) {
     const inB = new Set(base), inL = new Set(local), inR = new Set(remote);
     return [...new Set([...local, ...remote])].filter(x => inL.has(x) === inB.has(x) ? inR.has(x) : inL.has(x));
 }
-function mergeStates(base, local, remote) {
-    const conflicts = [];
+// prefer = null: mescla e lista os conflitos (itens em conflito ficam de fora).
+// prefer = 'local'/'remote': mesma mescla, com os conflitos resolvidos por esse lado.
+function mergeStates(base, local, remote, prefer = null) {
+    const conflicts = [], nomes = [];
+    const ctx = { prefer, reg: (chave, nome) => { conflicts.push(chave); nomes.push(nome); } };
     const total = _pick3(base.budget.total, local.budget.total, remote.budget.total);
-    if (total.conflict) conflicts.push('orçamento total');
+    if (total.conflict) ctx.reg('orçamento total', 'orçamento total do mês padrão');
     const merged = {
-        tx:    _mergeById(base.tx, local.tx, remote.tx, conflicts, 'lançamento'),
-        goals: _mergeById(base.goals, local.goals, remote.goals, conflicts, 'meta'),
-        cards: _mergeById(base.cards, local.cards, remote.cards, conflicts, 'cartão'),
+        tx:    _mergeById(base.tx, local.tx, remote.tx, ctx, 'lançamento'),
+        goals: _mergeById(base.goals, local.goals, remote.goals, ctx, 'meta'),
+        cards: _mergeById(base.cards, local.cards, remote.cards, ctx, 'cartão'),
         cats:  Object.fromEntries(TIPOS.map(tp => [tp, _mergeSet(base.cats[tp], local.cats[tp], remote.cats[tp])])),
         budget: {
-            total:       total.conflict ? local.budget.total : total.v,
-            allocs:      _mergeKeyed(base.budget.allocs, local.budget.allocs, remote.budget.allocs, conflicts, 'alocação'),
-            monthTotals: _mergeKeyed(base.budget.monthTotals, local.budget.monthTotals, remote.budget.monthTotals, conflicts, 'orçamento do mês'),
-            needsWants:  _mergeKeyed(base.budget.needsWants, local.budget.needsWants, remote.budget.needsWants, conflicts, 'grupo'),
+            total:       total.conflict ? (prefer === 'remote' ? remote.budget.total : local.budget.total) : total.v,
+            allocs:      _mergeKeyed(base.budget.allocs, local.budget.allocs, remote.budget.allocs, ctx, 'alocação'),
+            monthTotals: _mergeKeyed(base.budget.monthTotals, local.budget.monthTotals, remote.budget.monthTotals, ctx, 'orçamento do mês'),
+            needsWants:  _mergeKeyed(base.budget.needsWants, local.budget.needsWants, remote.budget.needsWants, ctx, 'grupo'),
         },
     };
-    return { merged, conflicts };
+    return { merged, conflicts, nomes };
 }
 function _localDirty() { const m = _getSyncMeta(); return SYNC_ENABLED && (!m || m.hash !== _stateHash()); }
 // Versão anterior guardava fb_localTs + fb_lastKnown (cópia completa dos dados)
@@ -5580,8 +5631,24 @@ let _lastRemoteCheck = 0;
 const PASSIVE_SYNC_MIN_MS = 60 * 1000;
 // passive = gatilhos oportunistas (foco, visibilidade, timer): pulam se houve checagem
 // recente e não há nada local pendente — cada checagem baixa a base inteira
+// Sem conexão o SDK do Firebase não falha: once()/transaction() ficam pendurados até a rede
+// voltar — o botão mostrava "Sync…" para sempre e "Sair" com pendências travava em silêncio.
+// Offline declarado → estado "Offline" na hora (o evento 'online' retoma); conexão instável
+// → prazo vira erro. Uma transação que ainda confirme depois é segura (é condicional ao ts).
+const SYNC_PRAZO_MS = 20000;
+function _comPrazo(promessa, ms, msg) {
+    let t;
+    return Promise.race([promessa, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(msg)), ms); })]).finally(() => clearTimeout(t));
+}
+const _offline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
+
 async function reconcile({ initial = false, manual = false, passive = false } = {}) {
     if (!SYNC_ENABLED || !_currentUser || _conflictOpen) return;
+    if (_offline()) {
+        setSyncState('err', 'Offline');
+        if (manual) toast('📴 Sem internet — as alterações ficam salvas neste aparelho e sobem quando a conexão voltar.', '#52525b');
+        return;
+    }
     if (passive && Date.now() - _lastRemoteCheck < PASSIVE_SYNC_MIN_MS && !_localDirty()) return;
     if (_syncing) { _syncQueued = true; return _syncing; }   // uma rodada por vez
     setSyncState('busy', initial ? 'Carregando…' : 'Sync…');
@@ -5608,7 +5675,7 @@ async function reconcile({ initial = false, manual = false, passive = false } = 
 
 async function _reconcileOnce() {
     const meta   = _getSyncMeta();
-    const remote = (await _userRef().once('value')).val();
+    const remote = (await _comPrazo(_userRef().once('value'), SYNC_PRAZO_MS, 'sem resposta do servidor (conexão instável?)')).val();
     _lastRemoteCheck = Date.now();
     const localDirty = !meta || meta.hash !== _stateHash();
     if (!remote) return _pushCAS(null);                      // conta nova: sobe o local
@@ -5625,19 +5692,21 @@ async function _mergeOrConflict(remote, attempt = 0) {
     const base = _getSyncBase();
     if (base && attempt < 3) {
         const rs = sanitizeState(_mapKeys(remote, _fbKeyDec), Number(remote.v) || 2);
-        const { merged, conflicts } = mergeStates(base, snapshotState(), rs);
-        if (!conflicts.length) {
-            restoreState(sanitizeState({ t: merged.tx, c: merged.cats, g: merged.goals, k: merged.cards, b: merged.budget }));
-            persistAll();
-            undoStack = []; _updateUndoBtn();   // snapshots antigos desfariam o que veio do outro dispositivo
-            renderAll(); renderGoals(); renderCartoesMini();
-            const r = await _pushCAS(remote.ts || 0, attempt + 1);
-            if (r === 'pushed') { toast('🔀 Alterações deste e de outro dispositivo foram combinadas.', '#0b62f0'); return 'merged'; }
-            return r;
+        const { merged, conflicts, nomes } = mergeStates(base, snapshotState(), rs);
+        if (conflicts.length) {
+            console.info('Merge automático impossível — mesmos itens alterados nos dois lados:', conflicts);
+            _showConflict(remote, nomes);     // escolha resolve SÓ esses itens (resolveConflict)
+            return 'conflict';
         }
-        console.info('Merge automático impossível — mesmos itens alterados nos dois lados:', conflicts);
+        restoreState(sanitizeState({ t: merged.tx, c: merged.cats, g: merged.goals, k: merged.cards, b: merged.budget }));
+        persistAll();
+        undoStack = []; _updateUndoBtn();   // snapshots antigos desfariam o que veio do outro dispositivo
+        renderAll(); renderGoals(); renderCartoesMini();
+        const r = await _pushCAS(remote.ts || 0, attempt + 1);
+        if (r === 'pushed') { toast('🔀 Alterações deste e de outro dispositivo foram combinadas.', '#0b62f0'); return 'merged'; }
+        return r;
     }
-    _showConflict(remote);
+    _showConflict(remote);                    // sem base de merge: só dá para escolher um lado inteiro
     return 'conflict';
 }
 
@@ -5646,12 +5715,12 @@ async function _mergeOrConflict(remote, attempt = 0) {
 async function _pushCAS(expectedTs, attempt = 0) {
     const hash = _stateHash(), payload = _buildPayload(), baseSnap = snapshotState();
     _pushingTs = payload.ts;
-    const res = await _userRef().transaction(cur => {
+    const res = await _comPrazo(_userRef().transaction(cur => {
         // cur === null pode ser só cache vazio: devolve o payload e o servidor
         // re-executa com o valor real se ele não bater
         if (cur !== null && (cur.ts || 0) !== expectedTs) return;   // aborta
         return payload;
-    }, undefined, false);
+    }, undefined, false), SYNC_PRAZO_MS, 'gravação sem confirmação do servidor (conexão instável?)');
     if (!res.committed) {
         const remote = res.snapshot.val();
         if (remote) return _mergeOrConflict(remote, attempt);
@@ -5683,15 +5752,28 @@ function schedulePush() { if (SYNC_ENABLED && _currentUser) _syncSoon(); }
 function syncNow() { return reconcile({ manual: true }); }
 
 // ── CONFLICT RESOLUTION ───────────────────────────────────────────────────────
-function _showConflict(remote) {
+// nomes (há base de merge): só esses itens mudaram dos DOIS lados — a escolha vale para eles
+// e todo o resto (mudanças em itens diferentes, dos dois dispositivos) é mantido. Antes a
+// escolha era sempre do estado inteiro: "Manter Local" apagava o que o outro dispositivo
+// tinha mudado em OUTROS itens, e "Usar Firebase" o que foi feito aqui.
+function _showConflict(remote, nomes = null) {
     _conflictOpen = true;
     _pendingConflictRemote = remote;
     const rDate = remote.ts ? new Date(remote.ts).toLocaleString('pt-BR') : '—';
-    $('conflictMsg').textContent =
-        'Você tem mudanças locais e o Firebase foi atualizado em outro dispositivo.';
-    $('conflictDetails').innerHTML = `
-        <div><strong>💾 Local</strong><br>${tx.length} transações<br><span style="color:var(--text-3)">alterações não enviadas</span></div>
-        <div><strong>🔥 Firebase</strong><br>${_asList(remote.t).length} transações<br><span style="color:var(--text-3)">${escHtml(rDate)}</span></div>`;
+    const porItem = Array.isArray(nomes) && nomes.length > 0;
+    if (porItem) {
+        const n = nomes.length, lista = nomes.slice(0, 6).map(x => `<li>${escHtml(x)}</li>`).join('') + (n > 6 ? `<li>… e mais ${n - 6}</li>` : '');
+        $('conflictMsg').textContent = `${n === 1 ? 'Este item foi alterado' : `Estes ${n} itens foram alterados`} aqui e em outro dispositivo (${rDate}). As demais mudanças dos dois lados serão mantidas.`;
+        $('conflictDetails').innerHTML = `<ul style="grid-column:1/-1;margin:4px 0 0 16px;line-height:1.6">${lista}</ul>`;
+    } else {
+        $('conflictMsg').textContent = 'Você tem mudanças locais e o Firebase foi atualizado em outro dispositivo.';
+        $('conflictDetails').innerHTML = `
+            <div><strong>💾 Local</strong><br>${tx.length} transações<br><span style="color:var(--text-3)">alterações não enviadas</span></div>
+            <div><strong>🔥 Firebase</strong><br>${_asList(remote.t).length} transações<br><span style="color:var(--text-3)">${escHtml(rDate)}</span></div>`;
+    }
+    $('conflictSub').textContent = porItem ? 'Qual versão desses itens manter?' : 'Os dados locais e do Firebase são diferentes. Qual versão manter?';
+    $('btnConflictLocal').textContent  = porItem ? 'Manter as minhas' : 'Manter Local';
+    $('btnConflictRemote').textContent = porItem ? 'Usar as do outro dispositivo' : 'Usar Firebase';
     $('ovConflict').classList.add('open');
 }
 
@@ -5702,7 +5784,18 @@ async function resolveConflict(choice) {
     _conflictOpen = false;
     if (!remote) return;
     try {
-        if (choice === 'remote') {
+        const base = _getSyncBase();
+        if (base) {
+            // Resolve só os itens em conflito pelo lado escolhido; o resto da mescla fica
+            pushUndo('Resolver conflito de sincronização');
+            const rs = sanitizeState(_mapKeys(remote, _fbKeyDec), Number(remote.v) || 2);
+            const { merged } = mergeStates(base, snapshotState(), rs, choice === 'remote' ? 'remote' : 'local');
+            restoreState(sanitizeState({ t: merged.tx, c: merged.cats, g: merged.goals, k: merged.cards, b: merged.budget }));
+            persistAll();
+            renderAll(); renderGoals(); renderCartoesMini();
+            if (await _pushCAS(remote.ts || 0) === 'conflict') return;   // outro dispositivo gravou de novo
+            toast(choice === 'remote' ? '✓ Usadas as versões do outro dispositivo; o resto foi combinado.' : '✓ Mantidas as suas versões; o resto foi combinado.', '#0b62f0');
+        } else if (choice === 'remote') {
             pushUndo('Aplicar dados do Firebase');       // dá para voltar ao local com Ctrl+Z
             _applyRemote(remote, { keepUndo: true });
             toast('🔥 Dados do Firebase aplicados.', '#f97316');
@@ -5759,6 +5852,7 @@ function setupAutoSync() {
     // Volta à aba/reconecta → confere mudanças (com limite de frequência)
     window.addEventListener('focus',  () => reconcile({ passive: true }));
     window.addEventListener('online', () => reconcile());
+    window.addEventListener('offline', () => setSyncState('err', 'Offline'));
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') reconcile({ passive: true });
         else if (_localDirty()) reconcile();   // saindo da aba: tenta enviar o pendente
@@ -7055,6 +7149,11 @@ function runSelfTests() {
     eq('merge: mesmo item alterado nos dois = conflito', mc.conflicts, ['lançamento 1']);
     eq('merge: edição remota + remoção local sem conflito', mc.merged.tx.map(t => t.desc), ['dois editado']);
     eq('merge: remover x editar = conflito', mergeStates(mBase, mkS([T(1, 'um'), T(3, 'três')]), mkS([T(1, 'um'), T(2, 'dois mudou'), T(3, 'três')])).conflicts.length, 1);
+    // Resolver conflito: a escolha vale só para o item em conflito; o resto da mescla fica
+    const cL = mkS([T(1, 'local'), T(2, 'dois')]), cR = mkS([T(1, 'remoto'), T(2, 'dois editado'), T(3, 'três')]);
+    eq('merge: conflito resolvido pelo local mantém o resto', mergeStates(mBase, cL, cR, 'local').merged.tx.map(t => t.desc).sort(), ['dois editado', 'local']);
+    eq('merge: conflito resolvido pelo remoto mantém o resto', mergeStates(mBase, cL, cR, 'remote').merged.tx.map(t => t.desc).sort(), ['dois editado', 'remoto']);
+    eq('merge: conflito com nome legível', mc.nomes, ['lançamento "local"']);
     const gp = (meta, vals, prazo = '') => goalProgress({ meta, prazo, aportes: vals.map(valor => ({ valor, data: '2026-01-01' })) });
     eq('meta 99,6% não vira 100%', [gp(1000, [996]).pct, gp(1000, [996]).done], [99, false]);
     eq('meta completa', [gp(1000, [600, 400]).pct, gp(1000, [600, 400]).done, gp(1000, [1500]).falta], [100, true, 0]);
@@ -7190,6 +7289,12 @@ async function _runSyncFuzzImpl(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120) {
             const pick = a => a[Math.floor(rnd() * a.length)], ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
             server.data = null;
             const A = { n: 'A', state: sanitizeState({ t: SEED }) }, B = { n: 'B', state: sanitizeState({}) };
+            // Lançamento criado nunca está em conflito (id único): só pode sumir se alguém o
+            // apagou — nenhuma escolha no diálogo de conflito pode descartá-lo
+            const criados = new Set(), apagados = new Set();
+            // Edição feita por UM só dispositivo (o outro nunca tocou no item) não tem como
+            // conflitar: se ninguém apagou o item, o valor final tem de ser a última edição dele
+            const editores = new Map();   // id → Map(dispositivo → último valor)
             const sync = async d => {
                 use(d);
                 const r = await _reconcileOnce();
@@ -7198,9 +7303,10 @@ async function _runSyncFuzzImpl(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120) {
                 keep(d);
             };
             const ops = [
-                d => { tx = tx.concat(makeTx({ desc: d.n + ri(1, 99), valor: ri(1, 500), data: `2026-${pad2(ri(1, 12))}-${pad2(ri(1, 28))}`, tipo: pick(TIPOS), cat: '', fixo: false, pagamento: undefined, cartaoId: null })); },
-                () => { if (tx.length) { const t = pick(tx); tx = tx.map(x => x.id === t.id ? makeTx({ ...x, valor: ri(1, 900) }, x) : x); } },
-                () => { if (tx.length) { const t = pick(tx); tx = tx.filter(x => x.id !== t.id); } },
+                d => { const t = makeTx({ desc: d.n + ri(1, 99), valor: ri(1, 500), data: `2026-${pad2(ri(1, 12))}-${pad2(ri(1, 28))}`, tipo: pick(TIPOS), cat: '', fixo: false, pagamento: undefined, cartaoId: null }); tx = tx.concat(t); criados.add(t.id); },
+                d => { if (tx.length) { const t = pick(tx), v = ri(1, 900); tx = tx.map(x => x.id === t.id ? makeTx({ ...x, valor: v }, x) : x);
+                                        if (!editores.has(t.id)) editores.set(t.id, new Map()); editores.get(t.id).set(d.n, v); } },
+                () => { if (tx.length) { const t = pick(tx); tx = tx.filter(x => x.id !== t.id); apagados.add(t.id); } },
                 d => { ensureCat(pick(TIPOS), 'Cat' + d.n + ri(1, 5)); },
                 () => { if (cats.saida.length) { budget.allocs[pick(cats.saida)] = ri(1, 40); } },
             ];
@@ -7215,6 +7321,12 @@ async function _runSyncFuzzImpl(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120) {
             for (let k = 0; k < 4; k++) { await sync(A); await sync(B); }
             const hS = server.data ? _stateHash(sanitizeState(_mapKeys(server.data, _fbKeyDec))) : null;
             if (!(_stateHash(A.state) === _stateHash(B.state) && _stateHash(B.state) === hS)) problems.push(`seed ${S}: dispositivos/servidor NÃO convergiram`);
+            const noServidor = new Set(server.data ? sanitizeState(_mapKeys(server.data, _fbKeyDec)).tx.map(t => t.id) : []);
+            const finais = new Map(server.data ? sanitizeState(_mapKeys(server.data, _fbKeyDec)).tx.map(t => [t.id, t.valor]) : []);
+            const edicoesPerdidas = [...editores].filter(([id, porDisp]) => !apagados.has(id) && porDisp.size === 1 && finais.get(id) !== [...porDisp.values()][0]);
+            if (edicoesPerdidas.length) problems.push(`seed ${S}: ${edicoesPerdidas.length} edição(ões) feita(s) por um só dispositivo não prevaleceram`);
+            const perdidos = [...criados].filter(id => !apagados.has(id) && !noServidor.has(id));
+            if (perdidos.length) problems.push(`seed ${S}: ${perdidos.length} lançamento(s) criado(s) e nunca apagado(s) sumiram (conflito descartou mudança não conflitante)`);
         }
     } finally {
         _userRef = savedRef; _currentUser = savedUser; toast = savedToast; window.confirm = savedConfirm;
