@@ -56,7 +56,7 @@
       • FIXOS: "Gastos Fixos" (orçamento, popup, sidebar) somava entradas fixas como
         gasto (salário inflava o total); agora só saídas somam e entradas aparecem em verde.
       • AUTOTESTE: abra index.html?preview&selftest (ou runSelfTests() no console) após
-        qualquer mudança — 88 verificações de parsers, datas, fatura, sanitização
+        qualquer mudança — 89 verificações de parsers, datas, fatura, sanitização
         (idempotência) e ida-e-volta pelo Firebase. Não altera dados.
       • METAS: goalProgress() — % truncado (99,6% não mostra "100%" com "Faltam"),
         ritmo necessário por mês até o prazo e aviso de prazo vencido; histórico por data
@@ -254,6 +254,11 @@
       • ESCALA re-medida após acessibilidade/contraste: 6.000 lançamentos (1,1 MB) —
         renderAll 12,6 ms, salvar+render 25 ms, _a11y no documento inteiro 1 ms, fuzz de
         1.600 ações com a base grande sem violações.
+      • VALOR DA META E DO APORTE (it. 43): eram <input type="number">, que lê "." como
+        decimal: digitar 1.500 (milhar BR) salvava R$ 1,50 sem aviso. Agora são texto com
+        inputmode decimal e passam por parseValor (1.500 → 1500; 1.500,50 → 1500,5), como
+        os demais formulários; ao editar, o valor volta formatado com vírgula. Autoteste
+        cobre os dois campos; bateria completa verde.
       Ferramentas de manutenção (use após qualquer mudança, em index.html?preview):
         runSelfTests() · runFuzz() · runSyncFuzz()
     -->
@@ -1804,7 +1809,7 @@
         <div class="g2">
             <div class="field">
                 <label>Valor alvo (R$)</label>
-                <input type="number" id="goalMeta" placeholder="10000" min="1">
+                <input type="text" id="goalMeta" placeholder="10.000,00" inputmode="decimal">
             </div>
             <div class="field">
                 <label>Prazo</label>
@@ -1836,7 +1841,7 @@
         <div class="g2">
             <div class="field">
                 <label>Valor (R$)</label>
-                <input type="number" id="aporteValor" placeholder="500" min="0.01" step="0.01">
+                <input type="text" id="aporteValor" placeholder="500,00" inputmode="decimal">
             </div>
             <div class="field">
                 <label>Data</label>
@@ -4629,7 +4634,7 @@ function editarGoal(id) {
     $('goalModalTitle').textContent = 'Editar Meta';
     $('goalEditId').value  = id;
     $('goalNome').value    = g.nome;
-    $('goalMeta').value    = g.meta;
+    $('goalMeta').value    = fmtValorInput(g.meta);
     $('goalDesc').value    = g.descricao || '';
     $('goalPrazo').value   = g.prazo || '';
     selectedGoalColor = g.cor;
@@ -4703,7 +4708,7 @@ function editAporte(goalId, aporteIdx) {
     $('aporteGoalNome').textContent = g.nome;
     $('aporteModalTitle').textContent = 'Editar Aporte';
     $('aporteConfirmBtn').textContent = 'Salvar';
-    $('aporteValor').value    = a.valor;
+    $('aporteValor').value    = fmtValorInput(a.valor);
     $('aporteNota').value     = a.nota || '';
     $('aporteData').value     = a.data;
     $('ovAporte').classList.add('open');
@@ -6996,6 +7001,8 @@ function runSelfTests() {
     eq('parseValor moeda', parseValor('R$ 10,50'), 10.5);
     eq('parseValor parênteses', parseValor('(12,00)'), -12);
     eq('parseValor sinal no fim', parseValor('50,00-'), -50);
+    // Meta/aporte são texto (inputmode decimal): num <input type=number> "1.500" virava 1,5 (R$ 1,50 em vez de 1.500)
+    eq('meta e aporte aceitam milhar/vírgula BR', ['goalMeta', 'aporteValor'].map(id => { const el = $(id); const v0 = el.value; el.value = '1.500,50'; const n = numInput(el); el.value = v0; return [el.type, n]; }), [['text', 1500.5], ['text', 1500.5]]);
     nan('parseValor lixo', parseValor('abc'));
     nan('parseValor malformado', parseValor('1.2.3'));
     eq('roundMoney float', roundMoney(0.1 + 0.2), 0.3);

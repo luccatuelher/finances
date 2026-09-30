@@ -173,7 +173,7 @@ console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · 
 if (falhas) { console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros }, null, 2)); process.exit(1); }
 ```
 
-Estado de partida esperado (fim da iteração 42, reconfirmado na sessão de nuvem): **autoteste 88/88**, `runSyncFuzz` → `[]`,
+Estado de partida esperado (fim da iteração 42, reconfirmado na sessão de nuvem): **autoteste 89/89**, `runSyncFuzz` → `[]`,
 `runFuzz` → `[]`, nenhum erro no console. Se não bater, investigue o ambiente antes de
 mudar código.
 
@@ -259,7 +259,7 @@ Se algum teste gravou no preview: remova as chaves com prefixo `preview:` e reca
 
 ## 8. Estado atual e próximos candidatos
 
-**Última iteração concluída: 42** (29/09/2026). Detalhes de cada uma no changelog do `<head>`.
+**Última iteração concluída: 43** (30/09/2026). Detalhes de cada uma no changelog do `<head>`.
 Iterações 40–42 foram feitas após o commit `a50cd5c`.
 
 Resumo das mais recentes:
@@ -272,6 +272,7 @@ Resumo das mais recentes:
 - 40 — conflito de sync resolvido por item (antes descartava mudanças não conflitantes).
 - 41 — invariante de edições no fuzz de sync; seletor de ícones pelo teclado.
 - 42 — estado "Offline" e prazo nas chamadas ao Firebase; desempenho re-medido (ok).
+- 43 — valor da meta/aporte era `type=number`: "1.500" salvava R$ 1,50; agora texto + `parseValor` (autoteste 89).
 
 Áreas já revisadas: importação (CSV/OFX), exportação, backup/restauração, hero e ritmo,
 orçamento, metas/aportes, cartões/faturas, fixos, categorias, análise mensal e anual,
@@ -282,7 +283,7 @@ Próximos candidatos (riscos ainda não revisados):
 - exportar CSV do **ano** (hoje só do mês filtrado);
 - estilos de **impressão** (`@media print`);
 - instalação como app (PWA: manifest, ícone, funcionamento offline do próprio arquivo);
-- campos numéricos `type="number"` com vírgula decimal em teclados pt-BR (meta, aporte);
+- (feito na 43) campos numéricos de meta/aporte; sobra o `%` do orçamento por categoria (`btd`, type=number, valores < 100 — baixo risco);
 - a chave da quarentena é compartilhada entre contas no mesmo navegador (menor).
 
 ---
