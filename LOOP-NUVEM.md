@@ -121,12 +121,12 @@ while((m=re.exec(s))){ try{ new Function(m[1]); console.log('SYNTAX OK') } catch
 
 ### 5.2 Iteração 0 — preparar o navegador headless
 
-Crie `tools/checks.mjs` (modelo abaixo, **não testado neste ambiente** — ajuste se
-precisar), instale o Playwright e confirme que o estado de partida passa:
+`tools/checks.mjs` já existe (testado na nuvem: Playwright global + Chromium em
+`/opt/pw-browsers`; ignora falhas de rede das CDNs, que o sandbox bloqueia). Rode e confirme
+que o estado de partida passa (o modelo abaixo é o original, só de referência):
 
 ```bash
-npm i -D playwright && npx playwright install chromium   # se a rede permitir
-node tools/checks.mjs
+node tools/checks.mjs   # ~1 min; CHROMIUM_PATH=... se o Chromium estiver em outro lugar
 ```
 
 Modelo de `tools/checks.mjs`:
@@ -173,7 +173,7 @@ console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · 
 if (falhas) { console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros }, null, 2)); process.exit(1); }
 ```
 
-Estado de partida esperado (fim da iteração 42): **autoteste 88/88**, `runSyncFuzz` → `[]`,
+Estado de partida esperado (fim da iteração 42, reconfirmado na sessão de nuvem): **autoteste 88/88**, `runSyncFuzz` → `[]`,
 `runFuzz` → `[]`, nenhum erro no console. Se não bater, investigue o ambiente antes de
 mudar código.
 
