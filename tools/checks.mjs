@@ -60,8 +60,25 @@ if (chartjs) {
     if (v !== 'metas' && (!total || vazios.length)) graficos.push(`${v}: ${total} canvas, vazios: ${vazios.join(',') || '(nenhum canvas)'}`);
   }
 }
+
+// Fusos e viradas: "hoje" e o autoteste sob relógio simulado (fronteira de dia, mês, ano bissexto, UTC+14, UTC-11)
+const fusos = [
+  ['America/Sao_Paulo', '2026-01-31T23:59:30-03:00', '2026-01-31'], ['America/Sao_Paulo', '2026-03-01T00:00:30-03:00', '2026-03-01'],
+  ['Pacific/Kiritimati', '2026-02-28T23:59:00+14:00', '2026-02-28'], ['Pacific/Pago_Pago', '2026-12-31T23:30:00-11:00', '2026-12-31'],
+  ['UTC', '2028-02-29T00:00:10Z', '2028-02-29'],
+];
+const fusoFalhas = [];
+for (const [tz, quando, esperado] of fusos) {
+  const ctx = await browser.newContext({ timezoneId: tz }); const pg = await ctx.newPage();
+  const errs = []; pg.on('pageerror', e => errs.push(e.message));
+  await pg.clock.install({ time: new Date(quando) });
+  await pg.goto(url); await pg.waitForFunction(() => typeof runSelfTests === 'function');
+  const f = await pg.evaluate(async () => { const st = await runSelfTests(); return { hoje: todayLocalISO(), campo: (document.getElementById('data') || {}).value, fails: st.fails }; });
+  if (f.hoje !== esperado || f.campo !== esperado || f.fails.length || errs.length) fusoFalhas.push({ tz, quando, esperado, ...f, errs });
+  await ctx.close();
+}
 await browser.close(); server.close();
 
-const falhas = r.self.fails.length + r.sync.length + (r.fuzz || []).length + erros.length + graficos.length;
-console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · sync ${r.sync.length} problema(s) · fuzz ${(r.fuzz || []).length} violação(ões) · console ${erros.length} erro(s) · gráficos ${chartjs ? (graficos.length ? graficos.length + ' problema(s)' : 'ok') : 'não verificados (sem tools/.cache/chart.umd.min.js)'}`);
-if (falhas) { console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros, graficos }, null, 2)); process.exit(1); }
+const falhas = r.self.fails.length + r.sync.length + (r.fuzz || []).length + erros.length + graficos.length + fusoFalhas.length;
+console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · sync ${r.sync.length} problema(s) · fuzz ${(r.fuzz || []).length} violação(ões) · console ${erros.length} erro(s) · fusos ${fusoFalhas.length ? fusoFalhas.length + ' problema(s)' : fusos.length + ' ok'} · gráficos ${chartjs ? (graficos.length ? graficos.length + ' problema(s)' : 'ok') : 'não verificados (sem tools/.cache/chart.umd.min.js)'}`);
+if (falhas) { console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros, graficos, fusoFalhas }, null, 2)); process.exit(1); }

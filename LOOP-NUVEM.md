@@ -183,6 +183,8 @@ mkdir -p tools/.cache && (cd tools/.cache && npm pack chart.js@4.5.1 && tar xzf 
   && cp package/dist/chart.umd.min.js .)
 ```
 
+A bateria também roda o autoteste sob 5 combinações de fuso/relógio (virada de dia, mês e ano, 29/02, UTC+14 e UTC−11).
+
 Com isso `tools/checks.mjs` serve o Chart.js real e exige canvases pintados nas telas
 Visão Geral, Anual e Mensal (mês dos dados de exemplo). O Firebase continua não carregando.
 
