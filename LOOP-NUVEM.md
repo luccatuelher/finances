@@ -173,7 +173,7 @@ console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · 
 if (falhas) { console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros }, null, 2)); process.exit(1); }
 ```
 
-Estado de partida esperado (fim da iteração 42, reconfirmado na sessão de nuvem): **autoteste 92/92**, `runSyncFuzz` → `[]`,
+Estado de partida esperado (fim da iteração 42, reconfirmado na sessão de nuvem): **autoteste 93/93**, `runSyncFuzz` → `[]`,
 `runFuzz` → `[]`, nenhum erro no console. Se não bater, investigue o ambiente antes de
 mudar código.
 
@@ -259,7 +259,7 @@ Se algum teste gravou no preview: remova as chaves com prefixo `preview:` e reca
 
 ## 8. Estado atual e próximos candidatos
 
-**Última iteração concluída: 46** (30/09/2026). Detalhes de cada uma no changelog do `<head>`.
+**Última iteração concluída: 47** (30/09/2026). Detalhes de cada uma no changelog do `<head>`.
 Iterações 40–42 foram feitas após o commit `a50cd5c`.
 
 Resumo das mais recentes:
@@ -276,6 +276,7 @@ Resumo das mais recentes:
 - 44 — botão "CSV do ano" (`_listaCSV`/`_csvDe` compartilhados com o CSV do mês; autoteste 91).
 - 45 — estilos de impressão (`@media print`): só a tela atual, sem painel/botões; gráficos não verificados no papel (CDN bloqueada no sandbox) (autoteste 92).
 - 46 — PWA: `manifest.webmanifest`, `icon.svg`, `sw.js` (rede primeiro, cópia local offline); testado offline por http. Ao publicar, os 4 arquivos precisam ir juntos.
+- 47 — quarentena acompanha o dono ao trocar de conta (`_trocarQuarentena`; autoteste 93).
 
 Áreas já revisadas: importação (CSV/OFX), exportação, backup/restauração, hero e ritmo,
 orçamento, metas/aportes, cartões/faturas, fixos, categorias, análise mensal e anual,
@@ -287,7 +288,7 @@ Próximos candidatos (riscos ainda não revisados):
 - (feito na 45) estilos de impressão — falta conferir os gráficos do Chart.js no papel;
 - (feito na 46) PWA — falta ícones PNG 192/512 e apple-touch-icon (iOS não usa SVG);
 - (feito na 43) campos numéricos de meta/aporte; sobra o `%` do orçamento por categoria (`btd`, type=number, valores < 100 — baixo risco);
-- a chave da quarentena é compartilhada entre contas no mesmo navegador (menor).
+- (feito na 47) quarentena por conta.
 
 ---
 

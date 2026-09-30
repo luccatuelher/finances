@@ -56,7 +56,7 @@
       • FIXOS: "Gastos Fixos" (orçamento, popup, sidebar) somava entradas fixas como
         gasto (salário inflava o total); agora só saídas somam e entradas aparecem em verde.
       • AUTOTESTE: abra index.html?preview&selftest (ou runSelfTests() no console) após
-        qualquer mudança — 92 verificações de parsers, datas, fatura, sanitização
+        qualquer mudança — 93 verificações de parsers, datas, fatura, sanitização
         (idempotência) e ida-e-volta pelo Firebase. Não altera dados.
       • METAS: goalProgress() — % truncado (99,6% não mostra "100%" com "Faltam"),
         ritmo necessário por mês até o prazo e aviso de prazo vencido; histórico por data
@@ -276,6 +276,11 @@
         internet) e a última cópia guardada como reserva; Firebase/Auth nunca passam por ele
         e o preview não o registra. Testado por http: SW ativo, rede desligada, recarregar
         abre o app (bootApp presente, 0 erros).
+      • QUARENTENA POR CONTA (it. 47): registros inválidos da conta A continuavam no navegador
+        ao entrar com a conta B: apareciam na seção Backup e iam no backup exportado da B.
+        Agora a quarentena acompanha o dono dos dados (_trocarQuarentena): guardada à parte
+        ao trocar de conta e devolvida quando o dono volta. Reproduzido pela UI (B via 1
+        registro da A → agora 0; A recupera o seu); autoteste +1.
       Ferramentas de manutenção (use após qualquer mudança, em index.html?preview):
         runSelfTests() · runFuzz() · runSyncFuzz()
     -->
@@ -5365,6 +5370,18 @@ function bootApp() {
 // fechado offline) ficam guardados à parte e voltam quando ele entrar de novo — a sync de
 // 3 vias os mescla com a nuvem. Antes eram sobrescritos pela conta nova e se perdiam.
 const _pendKey = uid => 'fin5_pendente_' + uid;
+// A quarentena (registros inválidos) também é do dono dos dados: ficava no navegador e a
+// conta nova a via na seção Backup e a levava no backup exportado. Agora acompanha o dono:
+// guardada à parte ao sair e devolvida quando ele voltar.
+const _quarKey = uid => 'fin5_quarentena_' + uid;
+function _trocarQuarentena(saindo, entrando) {
+    const q = loadJSON('fin5_quarantine', []);
+    if (q.length) storeJSON(_quarKey(saindo), q);
+    const volta = loadJSON(_quarKey(entrando), []);
+    if (volta.length) storeJSON('fin5_quarantine', volta); else lsDel('fin5_quarantine');
+    lsDel(_quarKey(entrando));
+    renderQuarentena();
+}
 function _claimLocalData(uid) {
     const owner = loadJSON('fin5_owner', null);
     const h = _stateHash(), vazio = h === _stateHash(sanitizeState({}));
@@ -5373,6 +5390,7 @@ function _claimLocalData(uid) {
         const meta = loadJSON(_syncKey(owner), null);
         if ((!meta || meta.hash !== h) && !vazio)
             storeJSON(_pendKey(owner), { t: tx, c: cats, g: goals, k: cards, b: budget });
+        _trocarQuarentena(owner, uid);
     }
     const pend = loadJSON(_pendKey(uid), null);
     // Pendentes desta conta voltam se o que está no navegador é de outra conta ou está vazio
@@ -7168,6 +7186,16 @@ function runSelfTests() {
        [[-12.5, '=cmd', '🍔 Alimentação'], [5000, 'Salário', '💰 Salário']]);
     // Impressão: regra @media print esconde o painel lateral (senão o formulário e o backup saem no papel)
     eq('estilos de impressão escondem o painel lateral', [...document.styleSheets].some(ss => { try { return [...ss.cssRules].some(r => r.type === CSSRule.MEDIA_RULE && r.conditionText === 'print' && [...r.cssRules].some(x => (x.selectorText || '').includes('.sidebar') && x.style.display === 'none')); } catch { return false; } }), true);
+    { // Quarentena acompanha o dono dos dados (não vaza para outra conta no mesmo navegador)
+        const K = ['fin5_quarantine', _quarKey('QA'), _quarKey('QB')], salvo = K.map(k => lsGet(k));
+        try {
+            storeJSON('fin5_quarantine', [{ id: 1, desc: 'da conta A' }]);
+            _trocarQuarentena('QA', 'QB');
+            const naB = loadJSON('fin5_quarantine', []).length;
+            _trocarQuarentena('QB', 'QA');
+            eq('quarentena: some para a conta nova e volta ao dono', [naB, (loadJSON('fin5_quarantine', [])[0] || {}).desc], [0, 'da conta A']);
+        } finally { K.forEach((k, i) => salvo[i] == null ? lsDel(k) : lsSet(k, salvo[i])); renderQuarentena(); }
+    }
     { // CSV do ano = os 12 meses juntos, em ordem de data, e volta pelo importador
         const ya = filtro().a, listaA = _listaCSV('ano', 0, ya), soma = Array.from({ length: 12 }, (_, k) => txMes(k, ya).length).reduce((x, y) => x + y, 0);
         eq('CSV do ano: todos os meses, em ordem', [listaA.length === soma, listaA.every((t, i) => !i || listaA[i - 1].data <= t.data), listaA.every(t => t.data.startsWith(String(ya)))], [true, true, true]);
