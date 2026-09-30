@@ -56,7 +56,7 @@
       • FIXOS: "Gastos Fixos" (orçamento, popup, sidebar) somava entradas fixas como
         gasto (salário inflava o total); agora só saídas somam e entradas aparecem em verde.
       • AUTOTESTE: abra index.html?preview&selftest (ou runSelfTests() no console) após
-        qualquer mudança — 91 verificações de parsers, datas, fatura, sanitização
+        qualquer mudança — 92 verificações de parsers, datas, fatura, sanitização
         (idempotência) e ida-e-volta pelo Firebase. Não altera dados.
       • METAS: goalProgress() — % truncado (99,6% não mostra "100%" com "Faltam"),
         ritmo necessário por mês até o prazo e aviso de prazo vencido; histórico por data
@@ -264,6 +264,12 @@
         formatação, proteção contra fórmulas e volta pelo importador; a lista sai de helper
         único (_listaCSV/_csvDe) usado também pelo CSV do mês. Autoteste +2; conferido
         baixando pela UI (mês vazio, ano com 8 lançamentos).
+      • IMPRESSÃO (it. 45): não havia @media print — Ctrl+P imprimia o app inteiro (formulário,
+        backup, botões, barra do topo) e listas rolantes saíam cortadas na altura da tela.
+        Agora sai só a tela atual: painéis/botões/modais ocultos, uma coluna, listas sem
+        limite de altura, cartões e linhas sem quebrar no meio, cabeçalho de tabela repetido
+        a cada página, cores preservadas. Conferido em PDF A4 das 4 telas (o Chart.js não
+        carrega no sandbox, então os gráficos não foram vistos no papel).
       Ferramentas de manutenção (use após qualquer mudança, em index.html?preview):
         runSelfTests() · runFuzz() · runSyncFuzz()
     -->
@@ -1077,6 +1083,34 @@
         /* redundantes em telas menores: o mês já mostra/atravessa o ano; extrato também está na lateral */
         @media (max-width: 1100px) { #yearNavBar, .topbar-right > .sync-btn[onclick^="abrirExtrato"] { display: none !important; } }
         @media (max-width: 820px)  { .btn-undo .tb-lbl, .sync-time { display: none; } .btn-undo { padding: 5px 9px; } }
+
+        /* IMPRESSÃO: só o conteúdo da tela atual (antes saía o app inteiro: formulário, backup,
+           botões, barra do topo, e listas rolantes cortadas na altura da tela) */
+        @media print {
+            @page { margin: 12mm; }
+            html, body { background: #fff !important; min-height: 0 !important; height: auto !important; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; font-size: 12px; }
+            .sidebar, .sidebar-toggle, .nav-pills, .btn-undo, .sync-btn, .user-chip, .month-nav-btn,
+            .mob-month-bar, .mob-bottom-nav, .mob-form-sheet, .mob-edit-sheet, .overlay, .toast, #toast,
+            .tabs, .search-row, .group-toggle, #offlineBanner { display: none !important; }
+            .topbar { position: static; height: auto; padding: 0 0 8px; margin-bottom: 8px; border-bottom: 1px solid #999; background: none; }
+            .app, body.sidebar-collapsed #view-dashboard.app { display: block; min-height: 0; }
+            .view { min-height: 0; }
+            .main, .view-inner { padding: 0; overflow: visible; }
+            .kpis, .annual-kpis { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)) !important; }
+            .kpi { min-width: 0; padding: 10px; }
+            /* listas com rolagem própria mostram tudo */
+            .dist-list, .split-list, .fatura-card-body { max-height: none !important; overflow: visible !important; }
+            /* cartões inteiros numa página, sem sombra/animação */
+            .kpi, .chart-box, .hero-card, .patrimonio-card, .history-box, .fatura-card { break-inside: avoid; box-shadow: none !important; transform: none !important; animation: none !important; }
+            .history-box { break-inside: auto; }
+            table { width: 100%; }
+            thead { display: table-header-group; }
+            tr { break-inside: avoid; }
+            th { position: static !important; }
+            canvas { max-width: 100% !important; height: auto !important; }
+            a { color: inherit; text-decoration: none; }
+        }
     </style>
 </head>
 <body>
@@ -7123,6 +7157,8 @@ function runSelfTests() {
     eq('CSV "Tipo de pagamento" não vira sinal', (_extParseCSV('Data;Descrição;Valor;Tipo de pagamento\n01/09/2026;Loja;-50;Crédito\n') || []).map(r => r.valor), [-50]);
     eq('CSV do próprio app volta com sinal, texto e categoria', (_extParseCSV('data;tipo;descricao;categoria;pagamento;cartao;fixo;valor\n2026-09-01;saida;"\'=cmd";"🍔 Alimentação";debito;"";;12,50\n2026-09-02;entrada;"Salário";"💰 Salário";;"";sim;5000,00\n') || []).map(r => [r.valor, r.desc, r.catHint]),
        [[-12.5, '=cmd', '🍔 Alimentação'], [5000, 'Salário', '💰 Salário']]);
+    // Impressão: regra @media print esconde o painel lateral (senão o formulário e o backup saem no papel)
+    eq('estilos de impressão escondem o painel lateral', [...document.styleSheets].some(ss => { try { return [...ss.cssRules].some(r => r.type === CSSRule.MEDIA_RULE && r.conditionText === 'print' && [...r.cssRules].some(x => (x.selectorText || '').includes('.sidebar') && x.style.display === 'none')); } catch { return false; } }), true);
     { // CSV do ano = os 12 meses juntos, em ordem de data, e volta pelo importador
         const ya = filtro().a, listaA = _listaCSV('ano', 0, ya), soma = Array.from({ length: 12 }, (_, k) => txMes(k, ya).length).reduce((x, y) => x + y, 0);
         eq('CSV do ano: todos os meses, em ordem', [listaA.length === soma, listaA.every((t, i) => !i || listaA[i - 1].data <= t.data), listaA.every(t => t.data.startsWith(String(ya)))], [true, true, true]);
