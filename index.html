@@ -56,7 +56,7 @@
       • FIXOS: "Gastos Fixos" (orçamento, popup, sidebar) somava entradas fixas como
         gasto (salário inflava o total); agora só saídas somam e entradas aparecem em verde.
       • AUTOTESTE: abra index.html?preview&selftest (ou runSelfTests() no console) após
-        qualquer mudança — 94 verificações de parsers, datas, fatura, sanitização
+        qualquer mudança — 95 verificações de parsers, datas, fatura, sanitização
         (idempotência) e ida-e-volta pelo Firebase. Não altera dados.
       • METAS: goalProgress() — % truncado (99,6% não mostra "100%" com "Faltam"),
         ritmo necessário por mês até o prazo e aviso de prazo vencido; histórico por data
@@ -285,6 +285,12 @@
         overflow:hidden; a tabela anual tem 596 px numa tela de 345 e as colunas "Saldo do
         mês" e "Saldo do ano" ficavam cortadas, sem como rolar. Agora rola na horizontal
         dentro da caixa (medido em 375 px: conteúdo 596 > caixa 345, antes inalcançável).
+      • JANELA ESTREITA / IPAD (it. 49): layout de desktop em 768 px (iPad moderno se anuncia
+        como Mac) e 375 px: os 5 KPIs da visão anual ficavam com colunas fixas num style
+        inline, que vencia o @media, e o último saía da tela (815 > 768). Colunas na CSS.
+        No histórico de lançamentos, a coluna de ações era cortada em 375 px (380 > 347):
+        a caixa rola só nessa largura, sem desligar o cabeçalho fixo das telas largas.
+        Varredura de 4 telas x 375/768/1024 px sem sobras.
       Ferramentas de manutenção (use após qualquer mudança, em index.html?preview):
         runSelfTests() · runFuzz() · runSyncFuzz()
     -->
@@ -641,7 +647,7 @@
         .view-subtitle { font-size: 13px; color: var(--text-3); margin-top: 2px; }
 
         /* ANNUAL VIEW */
-        .annual-kpis { display: grid; gap: 12px; margin-bottom: 14px; }
+        .annual-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }   /* colunas na CSS (não inline) para o @media conseguir empilhar */
         .annual-charts-row { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 20px; }
         .chart-wrap-tall { height: 240px; position: relative; }
         .chart-empty-tall { height: 240px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-3); font-size: 12px; gap: 6px; }
@@ -779,6 +785,10 @@
         canvas { contain: strict; }
 
         /* RESPONSIVE */
+
+        /* janela estreita com layout de desktop: o histórico (380 px) não cabe em 347 e a coluna de ações era cortada.
+           Só aqui a caixa rola: em telas largas o overflow no ancestral desligaria o cabeçalho fixo (sticky) */
+        @media (max-width: 520px) { .history-box { overflow-x: auto; overflow-y: hidden; } }
 
         @media (max-width: 1100px) {
             .app { grid-template-columns: 1fr; }
@@ -1549,7 +1559,7 @@
             </div>
         </div>
         <!-- ★ UPDATED: 4-column grid, 2 rows, with Saldo Anual + Saldo Até Agora -->
-        <div class="annual-kpis" style="grid-template-columns:repeat(5,1fr)">
+        <div class="annual-kpis">
             <div class="kpi al-green">  <div class="kpi-label">Entradas</div>  <div class="kpi-val green"  id="aKpiEnt">—</div></div>
             <div class="kpi al-red">    <div class="kpi-label">Despesas</div>  <div class="kpi-val red"    id="aKpiGas">—</div></div>
             <div class="kpi al-purple"> <div class="kpi-label">Investido</div> <div class="kpi-val purple" id="aKpiInv">—</div></div>
@@ -7207,6 +7217,8 @@ function runSelfTests() {
         const ox = getComputedStyle(bx).overflowX; bx.remove();
         eq('caixa de tabela rola na horizontal', ox, 'auto');
     }
+    // Colunas dos KPIs anuais na CSS: um style inline vencia o @media e o 5º cartão saía da tela (iPad, janela estreita)
+    eq('KPIs anuais sem grid inline', $('view-anual').querySelector('.annual-kpis').style.gridTemplateColumns, '');
     { // CSV do ano = os 12 meses juntos, em ordem de data, e volta pelo importador
         const ya = filtro().a, listaA = _listaCSV('ano', 0, ya), soma = Array.from({ length: 12 }, (_, k) => txMes(k, ya).length).reduce((x, y) => x + y, 0);
         eq('CSV do ano: todos os meses, em ordem', [listaA.length === soma, listaA.every((t, i) => !i || listaA[i - 1].data <= t.data), listaA.every(t => t.data.startsWith(String(ya)))], [true, true, true]);
