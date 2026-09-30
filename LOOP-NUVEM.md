@@ -309,12 +309,22 @@ orçamento, metas/aportes, cartões/faturas, fixos, categorias, análise mensal 
 distribuição, tabela de débito, sync/merge/conflitos, login/logout/troca de conta,
 quarentena, acessibilidade, contraste, offline, desempenho.
 
-Próximos candidatos (riscos ainda não revisados):
-- (feito na 44) exportar CSV do ano;
-- (feito na 45) estilos de impressão — gráficos do Chart.js no papel conferidos na 53 (ok);
-- (feito na 46 e 52) PWA completo;
-- (feito na 43) campos numéricos de meta/aporte; sobra o `%` do orçamento por categoria (`btd`, type=number, valores < 100 — baixo risco);
-- (feito na 47) quarentena por conta.
+Auditadas depois da 53 **sem achados** (não repetir sem motivo): fusos e virada de dia/mês/ano
+(6 fusos, 29/02; agora na bateria); encaixe dos 11 modais em 375×667; acessibilidade do botão
+novo; fuzz de interface no layout de celular (agora na bateria); arredondamento valor↔% do
+orçamento; XSS em todas as telas com clique nos handlers (agora na bateria); importador CSV/OFX
+com 8.000 entradas hostis aleatórias (sem exceção); escala com 30.000 lançamentos
+(sanitizar 49 ms, renderAll 57 ms, merge 210 ms — linear).
+
+Candidatos restantes (a lista anterior foi toda concluída nas iterações 43–53):
+- o `%` do orçamento por categoria (`btd`) é `type="number"` (valores < 100, baixo risco);
+- o pill "abaixo do ritmo" do hero anual encosta no gráfico (cosmético);
+- **sync real com o Firebase**: só é testado por simulação em memória (`runSyncFuzz`); a SDK e o
+  banco não carregam no sandbox. Qualquer defeito novo aqui virá do uso real (relatos do dono);
+- achados vindos do uso: peça ao dono exemplos concretos (tela, dados, o que esperava).
+
+Estado: as auditorias sistemáticas (seção acima) já não encontram defeitos. Sem relato novo do
+uso real, as próximas iterações tendem a ser só cosméticas — ver seção 9.
 
 ---
 
