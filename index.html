@@ -56,7 +56,7 @@
       • FIXOS: "Gastos Fixos" (orçamento, popup, sidebar) somava entradas fixas como
         gasto (salário inflava o total); agora só saídas somam e entradas aparecem em verde.
       • AUTOTESTE: abra index.html?preview&selftest (ou runSelfTests() no console) após
-        qualquer mudança — 98 verificações de parsers, datas, fatura, sanitização
+        qualquer mudança — 100 verificações de parsers, datas, fatura, sanitização
         (idempotência) e ida-e-volta pelo Firebase. Não altera dados.
       • METAS: goalProgress() — % truncado (99,6% não mostra "100%" com "Faltam"),
         ritmo necessário por mês até o prazo e aviso de prazo vencido; histórico por data
@@ -307,6 +307,12 @@
         ignoram (ícone genérico na tela inicial). Novos icon-192.png, icon-512.png (também
         maskable, glifo dentro da zona segura) e apple-touch-icon.png (180). Publicar junto
         com manifest.webmanifest, icon.svg e sw.js.
+      • EIXO DOS GRÁFICOS (it. 53, primeira com o Chart.js real na bateria): dois formatadores de
+        eixo duplicados usavam 1 casa fixa: faixa curta (R$ 3.000–3.150) repetia rótulos
+        ("R$3.1k, R$3.1k, R$3.0k, R$3.0k"), negativos saíam sem formato, milhões viravam
+        "R$1500.0k" e valores pequenos "R$-0.0094" (ponto decimal). Um único fmtEixo em pt-BR
+        compacto ("R$ 6 mil", "R$ 1,5 mi") aumenta as casas até os rótulos ficarem distintos.
+        Autoteste +3; conferido com o Chart.js real nas telas Visão Geral, Anual e Mensal.
       Ferramentas de manutenção (use após qualquer mudança, em index.html?preview):
         runSelfTests() · runFuzz() · runSyncFuzz()
     -->
@@ -2622,9 +2628,20 @@ const CHART_COMMON_OPTS = {
     responsive: true, maintainAspectRatio: false,
     plugins: { legend: { position: 'bottom', labels: { boxWidth: 8, font: { size: 10, family: 'Inter' }, padding: 8, color: '#52525b' } } }
 };
+// Rótulo do eixo Y em pt-BR compacto ("3,2 mil", "1,5 mi"). Aumenta as casas até os rótulos do
+// eixo ficarem distintos: com 1 casa fixa, uma faixa curta (R$ 3.000–3.150) mostrava
+// "R$3.1k, R$3.1k, R$3.0k, R$3.0k"; negativos ficavam sem formato ("-1500") e valores
+// pequenos saíam com ponto decimal ("R$-0.0094").
+function fmtEixo(v, _i, ticks) {
+    const vals = (ticks || []).map(t => t.value).filter(Number.isFinite);
+    const mk = d => new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: d });
+    let f = mk(0);
+    for (let d = 0; d <= 3; d++) { f = mk(d); if (new Set(vals.map(x => f.format(x))).size === vals.length) break; }
+    return 'R$ ' + f.format(v);
+}
 const AXIS_OPTS = {
     x: { grid: { display: false }, ticks: { font: { size: 10, family: 'Inter' } } },
-    y: { grid: { color: '#f4f4f5' }, ticks: { font: { size: 9 }, callback: v => 'R$' + (v >= 1000 ? (v/1000).toFixed(1)+'k' : v) } }
+    y: { grid: { color: '#f4f4f5' }, ticks: { font: { size: 9 }, callback: fmtEixo } }
 };
 
 // Dados de exemplo — carregados apenas no modo preview (conta real começa vazia)
@@ -6874,7 +6891,7 @@ function renderPatrimonio() {
             plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => fmt(c.parsed.y) } } },
             scales: {
                 x: { grid: { display: false }, ticks: { font: { size: 9, family: 'Inter' }, color: '#687079', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } },
-                y: { grid: { color: '#f1f2f5' }, ticks: { font: { size: 9 }, color: '#687079', callback: v => 'R$' + (Math.abs(v) >= 1000 ? (v / 1000).toFixed(1) + 'k' : v) } }
+                y: { grid: { color: '#f1f2f5' }, ticks: { font: { size: 9 }, color: '#687079', callback: fmtEixo } }
             }
         }
     });
@@ -7255,6 +7272,12 @@ function runSelfTests() {
     { // Nomes de categoria/cartão limitados (categoria do lançamento e do rol truncam igual, sem órfã)
         const dT = todayLocalISO(), longa = 'Z'.repeat(300), sn = sanitizeState({ t: [{ id: 1, desc: 'a', valor: 1, data: dT, tipo: 'saida', cat: longa }], c: { saida: [longa], entrada: [], investimento: [] }, k: [{ id: 2, nome: longa, fechamento: 5, vencimento: 10 }] });
         eq('limites: categoria e cartão truncados de forma consistente', [sn.tx[0].cat.length, sn.cats.saida.every(c => c.length <= CAT_MAX), sn.cats.saida.includes(sn.tx[0].cat), sn.cards[0].nome.length], [CAT_MAX, true, true, CARD_MAX]);
+    }
+    { // Eixo dos gráficos: pt-BR compacto, sem rótulos repetidos, com negativos
+        const tk = vs => vs.map(value => ({ value })), rot = vs => vs.map((v, i, arr) => fmtEixo(v, i, tk(arr)));
+        const curto = rot([3000, 3050, 3100, 3150, 3200]), neg = rot([-2000, -1000, 0, 1000]), grande = rot([0, 5e8, 1e9, 1.5e9]);
+        eq('eixo: faixa curta sem rótulos repetidos', new Set(curto).size, curto.length);
+        eq('eixo: negativo e pt-BR', [neg[0].startsWith('R$ -') || neg[0].startsWith('R$ −'), /^R\$ [\d.,\s\u00a0]+/.test(grande[3]), !/\d\.\d/.test(curto.join(''))], [true, true, true]);
     }
     { // CSV do ano = os 12 meses juntos, em ordem de data, e volta pelo importador
         const ya = filtro().a, listaA = _listaCSV('ano', 0, ya), soma = Array.from({ length: 12 }, (_, k) => txMes(k, ya).length).reduce((x, y) => x + y, 0);

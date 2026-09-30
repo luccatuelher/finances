@@ -186,7 +186,7 @@ mkdir -p tools/.cache && (cd tools/.cache && npm pack chart.js@4.5.1 && tar xzf 
 Com isso `tools/checks.mjs` serve o Chart.js real e exige canvases pintados nas telas
 Visão Geral, Anual e Mensal (mês dos dados de exemplo). O Firebase continua não carregando.
 
-Estado de partida esperado (fim da iteração 42, reconfirmado na sessão de nuvem): **autoteste 98/98**, `runSyncFuzz` → `[]`,
+Estado de partida esperado (fim da iteração 42, reconfirmado na sessão de nuvem): **autoteste 100/100**, `runSyncFuzz` → `[]`,
 `runFuzz` → `[]`, nenhum erro no console. Se não bater, investigue o ambiente antes de
 mudar código.
 
@@ -272,7 +272,7 @@ Se algum teste gravou no preview: remova as chaves com prefixo `preview:` e reca
 
 ## 8. Estado atual e próximos candidatos
 
-**Última iteração concluída: 52** (bateria ampliada: gráficos conferidos com o Chart.js local) (30/09/2026). Detalhes de cada uma no changelog do `<head>`.
+**Última iteração concluída: 53** (bateria ampliada: gráficos conferidos com o Chart.js local) (30/09/2026). Detalhes de cada uma no changelog do `<head>`.
 Iterações 40–42 foram feitas após o commit `a50cd5c`.
 
 Resumo das mais recentes:
@@ -295,6 +295,7 @@ Resumo das mais recentes:
 - 50 — tetos (`VALOR_MAX` R$ 100 bi, `DESC_MAX` 200) e texto longo sem quebrar o layout (autoteste 97). Auditoria nova: usar dados extremos (200 caracteres sem espaço, R$ 99 bi) e medir overflow.
 - 51 — tetos de nome: categoria `CAT_MAX` 60, cartão `CARD_MAX` 40, meta 200 (autoteste 98).
 - 52 — ícones PNG (192/512/maskable/apple-touch 180) gerados do `icon.svg` com Playwright; o PWA agora tem 7 arquivos para publicar juntos (index, manifest, sw, icon.svg, 3 PNG).
+- 53 — eixo dos gráficos: `fmtEixo` único, pt-BR compacto, sem rótulos repetidos (autoteste 100). Primeira iteração conferida com o Chart.js real.
 
 Áreas já revisadas: importação (CSV/OFX), exportação, backup/restauração, hero e ritmo,
 orçamento, metas/aportes, cartões/faturas, fixos, categorias, análise mensal e anual,
@@ -303,7 +304,7 @@ quarentena, acessibilidade, contraste, offline, desempenho.
 
 Próximos candidatos (riscos ainda não revisados):
 - (feito na 44) exportar CSV do ano;
-- (feito na 45) estilos de impressão — falta conferir os gráficos do Chart.js no papel;
+- (feito na 45) estilos de impressão — gráficos do Chart.js no papel conferidos na 53 (ok);
 - (feito na 46 e 52) PWA completo;
 - (feito na 43) campos numéricos de meta/aporte; sobra o `%` do orçamento por categoria (`btd`, type=number, valores < 100 — baixo risco);
 - (feito na 47) quarentena por conta.
