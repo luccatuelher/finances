@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git pull:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(node -e:*)",
+      "Bash(node tools/checks.mjs:*)",
+      "Bash(npm pack:*)",
+      "Edit(index.html)",
+      "Edit(LOOP-NUVEM.md)",
+      "Edit(CLAUDE.md)",
+      "Write(CAIXA-DE-ENTRADA.md)"
+    ]
+  }
+}
