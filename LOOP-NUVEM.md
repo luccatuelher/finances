@@ -186,6 +186,10 @@ mkdir -p tools/.cache && (cd tools/.cache && npm pack chart.js@4.5.1 && tar xzf 
 A bateria também roda autoteste + fuzz de interface com user-agent de iPhone (layout de celular,
 formulários `mob-*`) e o autoteste sob 5 combinações de fuso/relógio (virada de dia, mês e ano, 29/02, UTC+14 e UTC−11).
 
+Há ainda uma checagem de segurança: nomes/descrições hostis (HTML, aspas, `</script>`) em todas as
+telas, clicando em tudo que os carrega no handler; nada pode executar nem injetar elementos.
+A bateria completa leva ~1–2 min; rode-a em segundo plano e não faça espera ativa (laço sem sleep).
+
 Com isso `tools/checks.mjs` serve o Chart.js real e exige canvases pintados nas telas
 Visão Geral, Anual e Mensal (mês dos dados de exemplo). O Firebase continua não carregando.
 

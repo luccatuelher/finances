@@ -88,8 +88,30 @@ await mpg.goto(url); await mpg.waitForFunction(() => typeof runSelfTests === 'fu
 const mob = await mpg.evaluate(async () => ({ mobile: IS_MOBILE, self: (await runSelfTests()).fails, fuzz: await runFuzz() }));
 const mobilFalhas = (mob.mobile ? 0 : 1) + mob.self.length + (mob.fuzz || []).length + merros.length;
 await mctx.close();
-await browser.close(); server.close();
+// Segurança: nomes/descrições hostis (HTML, aspas, </script>) em todas as telas + clique em tudo que os carrega no handler
+const xctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+const xpg = await xctx.newPage(); const xerros = [];
+xpg.on('pageerror', e => xerros.push(e.message)); xpg.on('dialog', d => d.dismiss());
+if (chartjs) await xpg.route('**/chart.umd.min.js', r => r.fulfill({ status: 200, contentType: 'text/javascript', body: chartjs }));
+await xpg.goto(url); await xpg.waitForFunction(() => typeof runSelfTests === 'function');
+const xss = await xpg.evaluate(async () => {
+  const P = ['"><img src=x onerror=window.__xss=1>', "'-window.__xss=1-'", '</script><img src=x onerror=window.__xss=1>', '<svg onload=window.__xss=1>', '`${window.__xss=1}`', '"onmouseover="window.__xss=1'];
+  const d = todayLocalISO(), cat = '🍔 ' + P[0].slice(0, 50), cat2 = '📦 ' + P[1];
+  const t = P.map((x, i) => ({ id: 100 + i, desc: x, valor: 10 + i, data: d, tipo: ['saida', 'entrada', 'investimento'][i % 3], cat: i % 2 ? cat2 : cat, fixo: i === 2, pagamento: i % 3 === 0 ? 'credito' : (i % 3 === 1 ? null : 'debito'), cartaoId: i % 3 === 0 ? 900 : null }));
+  restoreState(sanitizeState({ t, c: { saida: [cat, cat2], entrada: [cat2], investimento: [cat] }, g: [{ id: 800, nome: P[3], descricao: P[0], meta: 100, cor: '"><x', aportes: [{ valor: 5, data: d, nota: P[1] }] }], k: [{ id: 900, nome: P[2], fechamento: 5, vencimento: 10, cor: 'red;background:url(javascript:1)' }], b: { total: 1000, allocs: { [cat]: 30, [cat2]: 10 } } }));
+  renderAll(); renderGoals(); renderCartoesMini();
+  let cliques = 0;
+  for (const v of ['dashboard', 'anual', 'mensal', 'metas']) {
+    navTo(v, [...document.querySelectorAll('.nav-pill')].find(b => (b.getAttribute('onclick') || '').includes("'" + v + "'")) || null); await new Promise(r => setTimeout(r, 250));
+    for (const e of [...document.querySelectorAll('[onclick], [onchange]')].filter(e => /xss|img|svg|script/i.test((e.getAttribute('onclick') || '') + (e.getAttribute('onchange') || '')))) { try { e.click(); cliques++; } catch {} }
+    await new Promise(r => setTimeout(r, 150));
+  }
+  const injetados = [...document.querySelectorAll('img[src="x"], svg[onload], [onerror], [onmouseover], [onload]')].length;
+  return { executou: window.__xss || null, injetados, cliques };
+});
+await xctx.close();
+const xssFalhas = (xss.executou ? 1 : 0) + xss.injetados + xerros.length + (xss.cliques ? 0 : 1);
 
-const falhas = r.self.fails.length + r.sync.length + (r.fuzz || []).length + erros.length + graficos.length + fusoFalhas.length + mobilFalhas;
-console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · sync ${r.sync.length} problema(s) · fuzz ${(r.fuzz || []).length} violação(ões) · console ${erros.length} erro(s) · celular ${mobilFalhas ? mobilFalhas + ' problema(s)' : 'ok'} · fusos ${fusoFalhas.length ? fusoFalhas.length + ' problema(s)' : fusos.length + ' ok'} · gráficos ${chartjs ? (graficos.length ? graficos.length + ' problema(s)' : 'ok') : 'não verificados (sem tools/.cache/chart.umd.min.js)'}`);
-if (falhas) { console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros, graficos, fusoFalhas, mobil: { ...mob, merros } }, null, 2)); process.exit(1); }
+const falhas = r.self.fails.length + r.sync.length + (r.fuzz || []).length + erros.length + graficos.length + fusoFalhas.length + mobilFalhas + xssFalhas;
+console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · sync ${r.sync.length} problema(s) · fuzz ${(r.fuzz || []).length} violação(ões) · console ${erros.length} erro(s) · segurança ${xssFalhas ? xssFalhas + ' problema(s)' : 'ok (' + xss.cliques + ' cliques)'} · celular ${mobilFalhas ? mobilFalhas + ' problema(s)' : 'ok'} · fusos ${fusoFalhas.length ? fusoFalhas.length + ' problema(s)' : fusos.length + ' ok'} · gráficos ${chartjs ? (graficos.length ? graficos.length + ' problema(s)' : 'ok') : 'não verificados (sem tools/.cache/chart.umd.min.js)'}`);
+if (falhas) { console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros, graficos, fusoFalhas, mobil: { ...mob, merros }, xss, xerros }, null, 2)); process.exit(1); }
