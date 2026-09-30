@@ -77,8 +77,19 @@ for (const [tz, quando, esperado] of fusos) {
   if (f.hoje !== esperado || f.campo !== esperado || f.fails.length || errs.length) fusoFalhas.push({ tz, quando, esperado, ...f, errs });
   await ctx.close();
 }
+// Celular: o modo body.mobile vem do user-agent (não da largura) e usa outras telas/formulários
+const mctx = await browser.newContext({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true,
+  userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148' });
+const mpg = await mctx.newPage(); const merros = [];
+mpg.on('pageerror', e => merros.push(e.message));
+mpg.on('console', m => { if (m.type() === 'error' && !/Failed to load resource: net::/.test(m.text())) merros.push(m.text()); });
+if (chartjs) await mpg.route('**/chart.umd.min.js', r => r.fulfill({ status: 200, contentType: 'text/javascript', body: chartjs }));
+await mpg.goto(url); await mpg.waitForFunction(() => typeof runSelfTests === 'function');
+const mob = await mpg.evaluate(async () => ({ mobile: IS_MOBILE, self: (await runSelfTests()).fails, fuzz: await runFuzz() }));
+const mobilFalhas = (mob.mobile ? 0 : 1) + mob.self.length + (mob.fuzz || []).length + merros.length;
+await mctx.close();
 await browser.close(); server.close();
 
-const falhas = r.self.fails.length + r.sync.length + (r.fuzz || []).length + erros.length + graficos.length + fusoFalhas.length;
-console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · sync ${r.sync.length} problema(s) · fuzz ${(r.fuzz || []).length} violação(ões) · console ${erros.length} erro(s) · fusos ${fusoFalhas.length ? fusoFalhas.length + ' problema(s)' : fusos.length + ' ok'} · gráficos ${chartjs ? (graficos.length ? graficos.length + ' problema(s)' : 'ok') : 'não verificados (sem tools/.cache/chart.umd.min.js)'}`);
-if (falhas) { console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros, graficos, fusoFalhas }, null, 2)); process.exit(1); }
+const falhas = r.self.fails.length + r.sync.length + (r.fuzz || []).length + erros.length + graficos.length + fusoFalhas.length + mobilFalhas;
+console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · sync ${r.sync.length} problema(s) · fuzz ${(r.fuzz || []).length} violação(ões) · console ${erros.length} erro(s) · celular ${mobilFalhas ? mobilFalhas + ' problema(s)' : 'ok'} · fusos ${fusoFalhas.length ? fusoFalhas.length + ' problema(s)' : fusos.length + ' ok'} · gráficos ${chartjs ? (graficos.length ? graficos.length + ' problema(s)' : 'ok') : 'não verificados (sem tools/.cache/chart.umd.min.js)'}`);
+if (falhas) { console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros, graficos, fusoFalhas, mobil: { ...mob, merros } }, null, 2)); process.exit(1); }
