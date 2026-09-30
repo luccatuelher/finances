@@ -56,7 +56,7 @@
       • FIXOS: "Gastos Fixos" (orçamento, popup, sidebar) somava entradas fixas como
         gasto (salário inflava o total); agora só saídas somam e entradas aparecem em verde.
       • AUTOTESTE: abra index.html?preview&selftest (ou runSelfTests() no console) após
-        qualquer mudança — 95 verificações de parsers, datas, fatura, sanitização
+        qualquer mudança — 97 verificações de parsers, datas, fatura, sanitização
         (idempotência) e ida-e-volta pelo Firebase. Não altera dados.
       • METAS: goalProgress() — % truncado (99,6% não mostra "100%" com "Faltam"),
         ritmo necessário por mês até o prazo e aviso de prazo vencido; histórico por data
@@ -291,6 +291,13 @@
         No histórico de lançamentos, a coluna de ações era cortada em 375 px (380 > 347):
         a caixa rola só nessa largura, sem desligar o cabeçalho fixo das telas largas.
         Varredura de 4 telas x 375/768/1024 px sem sobras.
+      • LIMITES E TEXTO LONGO (it. 50): não havia teto algum. Valor de R$ 1e30 entrava (acima de
+        ~R$ 90 tri o double perde os centavos e as somas erram) e descrição de 5.000 caracteres
+        também. Agora valor > R$ 100 bi vai para a quarentena (visível) ou é recusado no
+        formulário (lançamento, meta, aporte) e descrição é limitada a 200 (maxlength + corte
+        na sanitização). Além disso, 200 caracteres sem espaço esticavam a tabela para 2.627 px;
+        colunas de grid com minmax(0,1fr) e overflow-wrap:anywhere em td, KPIs, gráficos e lista
+        de detalhe. Varredura das 4 telas com dados extremos (1280/768 px) sem sobras.
       Ferramentas de manutenção (use após qualquer mudança, em index.html?preview):
         runSelfTests() · runFuzz() · runSyncFuzz()
     -->
@@ -372,7 +379,7 @@
         .main { padding: 24px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; }
 
         /* KPIs */
-        .kpis { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
+        .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
         .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; transition: box-shadow .2s, transform .2s; }
         .kpi:hover { box-shadow: 0 4px 16px rgba(0,0,0,.06); transform: translateY(-1px); }
         .kpi.al-green { border-left: 3px solid var(--success); }
@@ -381,7 +388,7 @@
         .kpi.al-dark { border-left: 3px solid var(--accent); }
         .kpi.al-amber { border-left: 3px solid #f59e0b; }
         .kpi-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .6px; color: var(--text-3); margin-bottom: 6px; }
-        .kpi-val { font-size: 20px; font-weight: 700; line-height: 1; letter-spacing: -.5px; }
+        .kpi-val { overflow-wrap: anywhere; font-size: 20px; font-weight: 700; line-height: 1; letter-spacing: -.5px; }
         .kpi-val.green { color: var(--success); }
         .kpi-val.red { color: var(--danger); }
         .kpi-val.purple { color: var(--invest); }
@@ -392,7 +399,8 @@
         .savings-fill { height: 5px; border-radius: 3px; background: linear-gradient(90deg, var(--success), #22c55e); transition: width .6s cubic-bezier(.4,0,.2,1); }
 
         /* CHARTS */
-        .charts { display: grid; grid-template-columns: 1fr 1fr 1.5fr; gap: 12px; }
+        .charts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr); gap: 12px; }
+        .chart-box { min-width: 0; overflow-wrap: anywhere; }
         .chart-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; transition: box-shadow .2s, transform .2s; }
         .chart-box:hover { box-shadow: 0 4px 16px rgba(0,0,0,.06); transform: translateY(-1px); }
         .chart-box-label { font-size: 11px; font-weight: 600; color: var(--text-2); margin-bottom: 12px; text-transform: uppercase; letter-spacing: .5px; }
@@ -571,7 +579,8 @@
         th.sortable:hover { color: var(--text-2); }
         th .si { margin-left: 3px; opacity: .4; }
         th.sort-asc .si, th.sort-desc .si { opacity: 1; color: var(--accent); }
-        td { padding: 10px 14px; border-bottom: 1px solid var(--border-light); vertical-align: middle; }
+        /* texto longo sem espaço (200 caracteres) esticava a tabela inteira para 2.600 px: quebra em qualquer ponto */
+        td { padding: 10px 14px; border-bottom: 1px solid var(--border-light); vertical-align: middle; overflow-wrap: anywhere; }
         tr:last-child td { border-bottom: none; }
         tr:hover td { background: var(--bg); }
         .btn-row { display: flex; gap: 2px; justify-content: flex-end; }
@@ -679,8 +688,9 @@
         .split-list { max-height: 300px; overflow-y: auto; }
         .split-item { display: flex; justify-content: space-between; align-items: center; padding: 9px 22px; border-bottom: 1px solid var(--border-light); border-radius: 6px; margin: 0 -6px; transition: background .12s; }
         .split-item:hover { background: var(--bg); }
-        .split-item-desc { font-weight: 500; font-size: 13px; }
-        .split-item-meta { font-size: 11px; color: var(--text-3); margin-top: 1px; }
+        .split-item > :first-child { min-width: 0; }
+        .split-item-desc { font-weight: 500; font-size: 13px; overflow-wrap: anywhere; }
+        .split-item-meta { font-size: 11px; color: var(--text-3); margin-top: 1px; overflow-wrap: anywhere; }
         .split-item-val { font-weight: 600; color: var(--danger); font-size: 13px; white-space: nowrap; margin-left: 12px; }
         .split-empty { padding: 28px; text-align: center; color: var(--text-3); font-size: 12px; }
         .mensal-charts-row { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; margin-bottom: 20px; }
@@ -1203,7 +1213,7 @@
         </div>
         <div class="field">
             <label>Descrição</label>
-            <input type="text" id="mob-desc" placeholder="Ex: Supermercado">
+            <input type="text" id="mob-desc" maxlength="200" placeholder="Ex: Supermercado">
         </div>
         <div class="g2">
             <div class="field">
@@ -1260,7 +1270,7 @@
         <input type="hidden" id="mob-edit-id">
         <div class="mob-edit-full field">
             <label>Descrição</label>
-            <input type="text" id="mob-edit-desc" placeholder="Descrição">
+            <input type="text" id="mob-edit-desc" maxlength="200" placeholder="Descrição">
         </div>
         <div class="mob-edit-grid">
             <div class="field">
@@ -1341,7 +1351,7 @@
             <input type="hidden" id="editId">
             <div class="field">
                 <label>Descrição</label>
-                <input type="text" id="desc" placeholder="Ex: Supermercado">
+                <input type="text" id="desc" maxlength="200" placeholder="Ex: Supermercado">
             </div>
             <div class="g2">
                 <div class="field">
@@ -1874,7 +1884,7 @@
         <input type="hidden" id="goalEditId">
         <div class="field">
             <label>Nome da meta</label>
-            <input type="text" id="goalNome" placeholder="Ex: Fundo de emergência">
+            <input type="text" id="goalNome" maxlength="200" placeholder="Ex: Fundo de emergência">
         </div>
         <div class="g2">
             <div class="field">
@@ -2660,6 +2670,10 @@ function _sanCats(c) {
     });
     return out;
 }
+// Limites plausíveis: acima de ~R$ 90 trilhões o double perde os centavos e as somas ficam
+// erradas; um "0" a mais digitado sem querer ou um extrato corrompido não pode entrar mudo.
+const VALOR_MAX = 1e11, DESC_MAX = 200;
+const _valorOk = v => Number.isFinite(v) && Math.abs(v) <= VALOR_MAX;
 function _sanTx(list, cardList, fromVersion, report) {
     const seen = new Set();
     const cardById = new Map(cardList.map(c => [c.id, c]));
@@ -2668,7 +2682,7 @@ function _sanTx(list, cardList, fromVersion, report) {
         if (!t || typeof t !== 'object') return;
         const data  = _normDate(t.data);
         const valor = parseValor(t.valor);
-        if (!data || !Number.isFinite(valor)) { report.dropped.push(t); return; }
+        if (!data || !_valorOk(valor)) { report.dropped.push(t); return; }
         const tipo = TIPOS.includes(t.tipo) ? t.tipo : 'saida';
         // Crédito vale para saídas e para estornos (entrada no cartão)
         const pagamento = t.pagamento === 'credito' ? 'credito' : (tipo === 'saida' ? 'debito' : null);
@@ -2684,7 +2698,7 @@ function _sanTx(list, cardList, fromVersion, report) {
         let id = toId(t.id);
         if (!id || seen.has(id)) id = newId();
         seen.add(id);
-        const o = { id, desc: String(t.desc ?? '').trim(), valor: roundMoney(Math.abs(valor)), data, tipo,
+        const o = { id, desc: String(t.desc ?? '').trim().slice(0, DESC_MAX), valor: roundMoney(Math.abs(valor)), data, tipo,
                     cat: typeof t.cat === 'string' ? t.cat.trim() : '', fixo: !!t.fixo, pagamento, cartaoId, faturaData };
         // Série de fixos: identidade estável da recorrência (antes era só a descrição)
         if (o.fixo) o.serie = (typeof t.serie === 'string' && t.serie) ? t.serie : `L:${tipo}:${o.desc}`;
@@ -2703,10 +2717,10 @@ function _sanGoals(list, report) {
         const aportes = [];
         _asList(g.aportes).forEach(a => {
             const v = parseValor(a && a.valor), d = _normDate(a && a.data);
-            if (Number.isFinite(v) && v > 0 && d) aportes.push({ valor: roundMoney(v), data: d, nota: String(a.nota ?? '') });
+            if (_valorOk(v) && v > 0 && d) aportes.push({ valor: roundMoney(v), data: d, nota: String(a.nota ?? '') });
             else report.dropped.push({ aporteDe: g.nome, ...a });
         });
-        return { id, nome: String(g.nome ?? '').trim() || 'Meta', meta: Number.isFinite(meta) && meta > 0 ? roundMoney(meta) : 0,
+        return { id, nome: String(g.nome ?? '').trim() || 'Meta', meta: _valorOk(meta) && meta > 0 ? roundMoney(meta) : 0,
                  prazo: _normDate(g.prazo) || '', descricao: String(g.descricao ?? ''), cor: safeColor(g.cor, GOAL_COLORS[0]), aportes };
     });
 }
@@ -3297,6 +3311,8 @@ function validateTx(f) {
     const warn = msg => { toast('⚠️ ' + msg, '#b45309'); return false; };
     if (!f.desc)                                   return warn('Digite uma descrição.');
     if (!Number.isFinite(f.valor) || f.valor <= 0) return warn('Valor inválido.');
+    if (!_valorOk(f.valor))                        return warn('Valor acima do limite (R$ 100 bilhões).');
+    if (f.desc.length > DESC_MAX)                  return warn(`Descrição longa demais (máx. ${DESC_MAX} caracteres).`);
     if (!isValidISODate(f.data))                   return warn('Selecione uma data válida.');
     if (!TIPOS.includes(f.tipo))                   return warn('Tipo inválido.');
     return true;
@@ -3808,7 +3824,7 @@ function _inlineEditorHtml(t) {
     const selStyle = 'padding:2px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px;font-family:inherit';
     return `<td colspan="5">
         <div class="ie-inner">
-            <div class="ie-field"><label>Descrição</label><input id="ie-desc-${t.id}" value="${escHtml(t.desc)}" type="text"></div>
+            <div class="ie-field"><label>Descrição</label><input id="ie-desc-${t.id}" value="${escHtml(t.desc)}" type="text" maxlength="200"></div>
             <div class="ie-field"><label>Valor (R$)</label><input id="ie-valor-${t.id}" value="${fmtValorInput(t.valor)}" type="text" inputmode="decimal"></div>
             <div class="ie-field"><label>Data</label><input id="ie-data-${t.id}" value="${t.data}" type="date"></div>
             <div class="ie-field"><label>Tipo</label><select id="ie-tipo-${t.id}" onchange="ieUpdateCats(${t.id})">${tipoOpts}</select></div>
@@ -4731,7 +4747,7 @@ function salvarGoal() {
     const descricao = $('goalDesc').value.trim();
     const editId  = $('goalEditId').value;
     if (!nome)           return toast('⚠️ Digite um nome.', '#b45309');
-    if (!(meta > 0)) return toast('⚠️ Valor alvo inválido.', '#b45309');
+    if (!(meta > 0) || !_valorOk(meta)) return toast('⚠️ Valor alvo inválido.', '#b45309');
     const idx = editId ? goals.findIndex(g => g.id === toId(editId)) : -1;
     if (editId && idx < 0) return toast('⚠️ Meta não encontrada.', '#b45309');
     pushUndo(idx >= 0 ? `Edição da meta "${nome}"` : `Nova meta "${nome}"`);
@@ -4813,7 +4829,7 @@ function confirmarAporte() {
     const valor = numInput($('aporteValor'));
     const data  = $('aporteData').value;
     const nota  = $('aporteNota').value.trim();
-    if (!(valor > 0)) return toast('⚠️ Valor inválido.', '#b45309');
+    if (!(valor > 0) || !_valorOk(valor)) return toast('⚠️ Valor inválido.', '#b45309');
     if (!isValidISODate(data)) return toast('⚠️ Selecione uma data.', '#b45309');
     const goal = goals.find(g => g.id === id);
     if (!goal) { closeAporte(); return toast('⚠️ Meta não encontrada (removida em outro dispositivo?).', '#b45309'); }
@@ -7219,6 +7235,11 @@ function runSelfTests() {
     }
     // Colunas dos KPIs anuais na CSS: um style inline vencia o @media e o 5º cartão saía da tela (iPad, janela estreita)
     eq('KPIs anuais sem grid inline', $('view-anual').querySelector('.annual-kpis').style.gridTemplateColumns, '');
+    { // Limites: valor absurdo vai para a quarentena (visível) e descrição gigante é cortada
+        const dT = todayLocalISO(), sl = sanitizeState({ t: [{ id: 1, desc: 'X'.repeat(5000), valor: 10, data: dT, tipo: 'saida' }, { id: 2, desc: 'ok', valor: 1e30, data: dT, tipo: 'saida' }, { id: 3, desc: 'ok', valor: VALOR_MAX, data: dT, tipo: 'saida' }] });
+        eq('limites: valor absurdo quarentena, descrição cortada', [sl.tx.length, sl.report.dropped.length, sl.tx[0].desc.length], [2, 1, DESC_MAX]);
+        eq('limites: _valorOk (teto e NaN)', [_valorOk(VALOR_MAX), _valorOk(VALOR_MAX * 10), _valorOk(NaN)], [true, false, false]);
+    }
     { // CSV do ano = os 12 meses juntos, em ordem de data, e volta pelo importador
         const ya = filtro().a, listaA = _listaCSV('ano', 0, ya), soma = Array.from({ length: 12 }, (_, k) => txMes(k, ya).length).reduce((x, y) => x + y, 0);
         eq('CSV do ano: todos os meses, em ordem', [listaA.length === soma, listaA.every((t, i) => !i || listaA[i - 1].data <= t.data), listaA.every(t => t.data.startsWith(String(ya)))], [true, true, true]);

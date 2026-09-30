@@ -96,7 +96,8 @@ O mapa completo está nos cabeçalhos `// ── NOME ──` do script (`grep -
    - sync: o que acontece com a mudança no outro dispositivo, conflito, offline;
    - segurança: texto do usuário em HTML (`escHtml`, `jsStr`), CSV (fórmulas), cores (`safeColor`);
    - acessibilidade e contraste; celular (375 px) e desktop;
-   - código executado no carregamento do script (ordem de declaração / TDZ).
+   - código executado no carregamento do script (ordem de declaração / TDZ);
+   - dados extremos: texto longo sem espaço, valores enormes, listas vazias/gigantes (medir overflow).
 4. **Reproduzir** o problema no navegador headless (ou por medição).
 5. **Corrigir pela causa**; reaproveite os conceitos da seção 2.
 6. **Validar sintaxe** (seção 5.1).
@@ -173,7 +174,7 @@ console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · 
 if (falhas) { console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros }, null, 2)); process.exit(1); }
 ```
 
-Estado de partida esperado (fim da iteração 42, reconfirmado na sessão de nuvem): **autoteste 95/95**, `runSyncFuzz` → `[]`,
+Estado de partida esperado (fim da iteração 42, reconfirmado na sessão de nuvem): **autoteste 97/97**, `runSyncFuzz` → `[]`,
 `runFuzz` → `[]`, nenhum erro no console. Se não bater, investigue o ambiente antes de
 mudar código.
 
@@ -259,7 +260,7 @@ Se algum teste gravou no preview: remova as chaves com prefixo `preview:` e reca
 
 ## 8. Estado atual e próximos candidatos
 
-**Última iteração concluída: 49** (30/09/2026). Detalhes de cada uma no changelog do `<head>`.
+**Última iteração concluída: 50** (30/09/2026). Detalhes de cada uma no changelog do `<head>`.
 Iterações 40–42 foram feitas após o commit `a50cd5c`.
 
 Resumo das mais recentes:
@@ -279,6 +280,7 @@ Resumo das mais recentes:
 - 47 — quarentena acompanha o dono ao trocar de conta (`_trocarQuarentena`; autoteste 93).
 - 48 — tabelas largas rolam dentro da caixa no celular (`.data-table-box`; autoteste 94). Teste de celular: user-agent de iPhone (o modo `body.mobile` vem do UA, não da largura).
 - 49 — layout de desktop em janela estreita/iPad: KPIs anuais (grid inline vencia o @media) e histórico a 375 px (autoteste 95). Varredura de overflow: 4 telas x 375/768/1024 px.
+- 50 — tetos (`VALOR_MAX` R$ 100 bi, `DESC_MAX` 200) e texto longo sem quebrar o layout (autoteste 97). Auditoria nova: usar dados extremos (200 caracteres sem espaço, R$ 99 bi) e medir overflow.
 
 Áreas já revisadas: importação (CSV/OFX), exportação, backup/restauração, hero e ritmo,
 orçamento, metas/aportes, cartões/faturas, fixos, categorias, análise mensal e anual,
