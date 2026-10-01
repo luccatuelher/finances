@@ -56,7 +56,7 @@
       • FIXOS: "Gastos Fixos" (orçamento, popup, sidebar) somava entradas fixas como
         gasto (salário inflava o total); agora só saídas somam e entradas aparecem em verde.
       • AUTOTESTE: abra index.html?preview&selftest (ou runSelfTests() no console) após
-        qualquer mudança — 113 verificações de parsers, datas, fatura, sanitização
+        qualquer mudança — 149 verificações de parsers, datas, fatura, sanitização
         (idempotência) e ida-e-volta pelo Firebase. Não altera dados.
       • METAS: goalProgress() — % truncado (99,6% não mostra "100%" com "Faltam"),
         ritmo necessário por mês até o prazo e aviso de prazo vencido; histórico por data
@@ -367,6 +367,15 @@
         cada parcela (regra do dono: o valor recebido não é receita e o principal não é gasto), ou a parcela
         inteira; juros pela tabela Price/rateio; painel com falta pagar, pago, juros e próxima parcela. Autoteste 143;
         fuzz e sync fuzz cobrem parcelas, juros, empréstimos e categorias fora do mês.
+      • ORÇAMENTO POR PERÍODO E CAIXA DE ENTRADA COMPLETA (it. 58, pedido do dono): o planejamento
+        por categoria valia para todos os meses, então montar o orçamento de outubro mudava setembro
+        e os anteriores. Agora budget.allocsDe['AAAA-MM'] guarda planejamentos que valem daquele mês
+        em diante (sanitização, merge por categoria, renomeação, desfazer); a roda edita o que vale
+        no mês aberto e há "Novo planejamento a partir de <mês>" / "Apagar este planejamento". A
+        caixa de entrada passou a aceitar `orcamento` (total a partir de um mês congelando os
+        anteriores, totais por mês, planejamento em reais ou %, grupos, valor fixo), `emprestimo`
+        (add com lançamento dos juros, update, delete) e `parcela`/`serie` no update (ligar parcelas
+        e fixos que já existem). Autoteste +4 (149); fuzz cobre os planejamentos.
       Ferramentas de manutenção (use após qualquer mudança, em index.html?preview):
         runSelfTests() · runFuzz() · runSyncFuzz()
     -->
@@ -1290,6 +1299,9 @@
         .orc-hint { font-size: 11.5px; color: var(--text-3); font-weight: 500; text-transform: none; letter-spacing: 0; }
         .orc-total { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 10px; }
         .orc-total label { font-size: 11px; font-weight: 600; color: var(--text-2); }
+        .orc-versao { flex: 1 0 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 11.5px; color: var(--text-3); }
+        .orc-versao b { color: var(--text-2); font-weight: 600; }
+        .orc-versao:empty { display: none; }
         .orc-total input { width: 130px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 15px; font-weight: 700; font-family: inherit; color: var(--text); background: var(--surface); outline: none; }
         .orc-total input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
         .orc-badge { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
@@ -2105,6 +2117,7 @@
                     <span id="budgetTypeBadge"></span>
                     <button class="orc-mini" onclick="openAplicarMeses()">📅 Aplicar a meses</button>
                     <button class="orc-mini warn" id="btnResetMonthBudget" onclick="resetMonthBudget()" style="display:none">↩ Usar padrão</button>
+                    <div class="orc-versao" id="orcVersao"></div>
                 </div>
                 <div class="orc-chips" id="orcChips"></div>
                 <div class="orc-ring-wrap" id="orcRingWrap">
@@ -3333,6 +3346,15 @@ function _sanBudget(b) {
             .sort((x, y) => x.de.localeCompare(y.de) || String(x.ate || '').localeCompare(String(y.ate || '')));
         if (faixas.length) out.off[k] = faixas;
     });
+    // Planejamentos por período: allocsDe['AAAA-MM'] = { cat: % } vale daquele mês em diante (até o
+    // próximo); os meses antes do primeiro usam `allocs`
+    out.allocsDe = {};
+    Object.entries(b.allocsDe || {}).forEach(([k, v]) => {
+        if (!ym(k) || !v || typeof v !== 'object') return;
+        const m = {};
+        Object.entries(v).forEach(([c, pv]) => { const n = nonNeg(pv); if (n) m[c] = Math.min(100, n); });
+        out.allocsDe[k] = m;
+    });
     return out;
 }
 // raw usa as chaves curtas do payload/backup: t=tx, c=cats, g=goals, k=cards, b=budget, l=loans
@@ -4314,8 +4336,7 @@ function removerFixo(i) {
 // planejado no nome antigo e a categoria renomeada aparecia com R$ 0.
 function _moveBudgetKeys(oldName, newName) {
     if (_allBudgetCats().includes(oldName)) return;
-    ['allocs', 'needsWants', 'locks', 'off'].forEach(k => {
-        const o = budget[k];
+    ['allocs', 'needsWants', 'locks', 'off'].map(k => budget[k]).concat(Object.values(budget.allocsDe || {})).forEach(o => {
         if (!o || o[oldName] === undefined) return;
         if (newName && o[newName] === undefined) o[newName] = o[oldName];
         delete o[oldName];
@@ -4604,7 +4625,8 @@ function importar(input) {
 // (falha ao marcar, dois aparelhos ao mesmo tempo) nunca duplica nem sobrescreve.
 // Detalhes para quem grava as operações: CAIXA-DE-ENTRADA.md.
 const INBOX_ARQ = 'inbox.json', ESTADO_ARQ = 'estado.json';
-const INBOX_CAMPOS = ['desc', 'valor', 'data', 'tipo', 'cat', 'pagamento', 'cartaoId', 'faturaData', 'fixo', 'juros'];
+// `parcela` ({ serie, k, n }) liga lançamentos soltos numa série; `serie` é a recorrência de um fixo
+const INBOX_CAMPOS = ['desc', 'valor', 'data', 'tipo', 'cat', 'pagamento', 'cartaoId', 'faturaData', 'fixo', 'juros', 'parcela', 'serie'];
 const INBOX_MIN_MS  = 2 * 60 * 1000;     // checagens automáticas no máximo a cada 2 min
 const ESTADO_MIN_MS = 10 * 60 * 1000;    // cópia dos dados no máximo a cada 10 min
 // Por conta: outra conta entrando no mesmo navegador não herda o token nem a caixa
@@ -4625,13 +4647,64 @@ function _utf8B64(b64) {
     return new TextDecoder().decode(b);
 }
 
+// Orçamento pela caixa de entrada (mexe numa cópia de budget). Ordem: total, meses, planejamento, grupos, fixos.
+// total.de = novo total padrão a partir do mês: os meses anteriores (desde o 1º lançamento) ficam com o
+// total que tinham e os totais próprios de meses ≥ de saem. planejamento.de = planejamento que vale
+// daquele mês em diante (substitui; categorias fora da lista ficam com 0), em "reais" ou "pct".
+function _inboxOrcamento(b, o, txs) {
+    const ymOk = v => typeof v === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
+    const num = v => { const n = parseValor(v); return Number.isFinite(n) && n >= 0 && _valorOk(n) ? roundMoney(n) : null; };
+    const totalDo = ym => b.monthTotals[ym] != null ? b.monthTotals[ym] : b.total;
+    let mexeu = false;
+    if (o.total && typeof o.total === 'object') {
+        const v = num(o.total.valor), de = o.total.de;
+        if (v == null || (de != null && !ymOk(de))) return 'ignorado: total inválido';
+        if (de) {
+            const primeiro = txs.reduce((m, t) => (!m || t.data < m ? t.data : m), '').slice(0, 7);
+            for (let ym = primeiro; ym && ym < de; ym = _ymMais(ym, 1)) if (b.monthTotals[ym] == null && b.total > 0) b.monthTotals[ym] = b.total;
+            Object.keys(b.monthTotals).forEach(ym => { if (ym >= de) delete b.monthTotals[ym]; });
+        }
+        b.total = v; mexeu = true;
+    }
+    if (o.meses && typeof o.meses === 'object') {
+        for (const [ym, v] of Object.entries(o.meses)) {
+            if (!ymOk(ym)) return 'ignorado: mês inválido';
+            if (v === null) delete b.monthTotals[ym];
+            else { const n = num(v); if (n == null) return 'ignorado: total do mês inválido'; b.monthTotals[ym] = n; }
+            mexeu = true;
+        }
+    }
+    if (o.planejamento && typeof o.planejamento === 'object') {
+        const pl = o.planejamento, de = pl.de, emReais = pl.reais && typeof pl.reais === 'object';
+        const vals = emReais ? pl.reais : pl.pct;
+        if (!vals || typeof vals !== 'object' || (de != null && !ymOk(de))) return 'ignorado: planejamento inválido';
+        const T = de ? totalDo(de) : b.total;
+        if (emReais && !(T > 0)) return 'ignorado: total do mês é zero';
+        const mapa = {};
+        for (const [cat, v] of Object.entries(vals)) {
+            const n = num(v);
+            if (n == null) return 'ignorado: valor do planejamento inválido';
+            const pct = emReais ? +(n / T * 100).toFixed(6) : n;
+            if (pct > 0) mapa[String(cat)] = Math.min(100, pct);
+        }
+        if (de) b.allocsDe[de] = mapa; else b.allocs = mapa;
+        mexeu = true;
+    }
+    if (o.grupos && typeof o.grupos === 'object') Object.entries(o.grupos).forEach(([c, g]) => { if (g === 'needs' || g === 'wants') { b.needsWants[c] = g; mexeu = true; } });
+    if (o.fixos && typeof o.fixos === 'object') Object.entries(o.fixos).forEach(([c, v]) => { if (v) b.locks[c] = true; else delete b.locks[c]; mexeu = true; });
+    return mexeu ? 'aplicado' : 'ignorado: nada a mudar';
+}
+
 // Aplica as operações sobre um estado (sem mutar o original). Devolve o estado novo
 // (sanitizado) e o resultado de cada operação: 'aplicado' ou 'ignorado: motivo'.
+// Operações: add/update/delete (lançamentos), orcamento, emprestimo (acao add/update/delete).
 function inboxAplicar(state, ops) {
     const lista = state.tx.map(t => ({ ...t }));
     const porId = new Map(lista.map(t => [t.id, t]));
     const confere = (t, espera) => Object.entries(espera && typeof espera === 'object' ? espera : {}).every(([k, v]) =>
-        k === 'valor' ? Math.abs(roundMoney(+t.valor) - roundMoney(+v)) < 0.005 : t[k] === v);
+        k === 'valor' ? Math.abs(roundMoney(+t.valor) - roundMoney(+v)) < 0.005 : JSON.stringify(t[k] ?? null) === JSON.stringify(v ?? null));
+    const budgetN = _sanBudget(JSON.parse(JSON.stringify(state.budget || {})));
+    let loansN = _asList(state.loans).map(l => ({ ...l }));
     const resultados = [], adicionados = new Map(), removidos = new Set();
     _asList(ops).forEach(o => {
         const id = String((o && o.id) || '');
@@ -4655,14 +4728,39 @@ function inboxAplicar(state, ops) {
             const muda = o.muda && typeof o.muda === 'object' ? o.muda : {};
             const chaves = Object.keys(muda).filter(k => INBOX_CAMPOS.includes(k));
             if (!chaves.length) return res('ignorado: nada a mudar');
-            chaves.forEach(k => { t[k] = muda[k]; });
+            chaves.forEach(k => { if (muda[k] === null && (k === 'parcela' || k === 'juros')) delete t[k]; else t[k] = muda[k]; });
             // mudou data/cartão sem informar a fatura: a sanitização recalcula
             if ((chaves.includes('data') || chaves.includes('cartaoId')) && !chaves.includes('faturaData')) t.faturaData = null;
             return res('aplicado');
         }
+        if (o.op === 'orcamento') return res(_inboxOrcamento(budgetN, o, lista.filter(t => !removidos.has(t))));
+        if (o.op === 'emprestimo') {
+            if (o.acao === 'add') {
+                const l = o.loan && typeof o.loan === 'object' ? o.loan : null, lid = l && toId(l.id);
+                if (!lid) return res('ignorado: empréstimo sem id');
+                if (loansN.some(x => x.id === lid)) return res('ignorado: já existe');
+                const n0 = _sanLoans([{ ...l, id: lid }])[0];
+                if (!(n0.valor > 0) || !(n0.n >= 2) || !(n0.parcela > 0) || !n0.primeira) return res('ignorado: contrato inválido');
+                loansN = loansN.concat(n0);
+                const modo = o.lancar === 'parcela' ? 'parcela' : o.lancar === 'nada' ? null : 'juros';
+                if (modo) loanTx(n0, modo).forEach(t => { const nt = { ...t, extId: 'claude:' + id }; lista.push(nt); porId.set(nt.id, nt); });
+                return res('aplicado');
+            }
+            const l = loansN.find(x => x.id === toId(o.loanId));
+            if (!l) return res(o.acao === 'delete' ? 'ignorado: já não existe' : 'ignorado: não existe');
+            if (o.acao === 'delete') { loansN = loansN.filter(x => x !== l); return res('aplicado'); }
+            if (o.acao === 'update') {
+                const muda = o.muda && typeof o.muda === 'object' ? o.muda : {};
+                const ok = ['nome', 'nota'].filter(k => typeof muda[k] === 'string');
+                if (!ok.length) return res('ignorado: nada a mudar');
+                ok.forEach(k => { l[k] = muda[k]; });
+                return res('aplicado');
+            }
+            return res('ignorado: ação desconhecida');
+        }
         res('ignorado: operação desconhecida');
     });
-    const s = sanitizeState({ t: lista.filter(t => !removidos.has(t)), c: state.cats, g: state.goals, k: state.cards, b: state.budget, l: state.loans });
+    const s = sanitizeState({ t: lista.filter(t => !removidos.has(t)), c: state.cats, g: state.goals, k: state.cards, b: budgetN, l: loansN });
     // Lançamento recusado pela sanitização (sem data/valor) vai para a quarentena, não conta como aplicado
     const ids = new Set(s.tx.map(t => t.id));
     adicionados.forEach((i, tid) => { if (!ids.has(tid)) resultados[i].resultado = 'ignorado: inválido (quarentena)'; });
@@ -5369,7 +5467,8 @@ function atualizar() {
 // (investir não é "gastar"). Compartilhado por dashboard, hero e orçamento.
 // ym ('AAAA-MM'): investimentos fora do orçamento naquele mês não entram na conta
 function investAllocPct(ym = null) {
-    return (cats.investimento || []).filter(c => !ym || !_catOff(c, ym)).reduce((s, c) => s + (budget.allocs[c] || 0), 0);
+    const al = allocsDoMes(ym);
+    return (cats.investimento || []).filter(c => !ym || !_catOff(c, ym)).reduce((s, c) => s + (al[c] || 0), 0);
 }
 function spendBudgetOf(totalBudget, ym = null) {
     return totalBudget * (Math.max(0, 100 - investAllocPct(ym)) / 100);
@@ -6118,6 +6217,50 @@ const _ymMais = (ym, n) => addMonthsISO(ym + '-01', n).slice(0, 7);
 function _catOff(nome, ym) {
     return ((budget.off || {})[nome] || []).some(r => r.de <= ym && (!r.ate || ym <= r.ate));
 }
+
+// ── PLANEJAMENTO POR PERÍODO ("daqui pra frente") ────────────────────────────
+// budget.allocsDe['AAAA-MM'] = { cat: % }: o planejamento que vale daquele mês em diante (até o próximo).
+// Os meses antes do primeiro usam budget.allocs. Mexer na roda num mês altera o planejamento que vale
+// nele; "Novo planejamento a partir deste mês" copia o vigente e separa daí em diante.
+function _allocVersao(ym) {
+    let v = null;
+    for (const k of Object.keys(budget.allocsDe || {})) if (k <= ym && (!v || k > v)) v = k;
+    return v;
+}
+// O mapa { cat: % } que vale no mês (o próprio objeto: escrever nele altera aquele planejamento)
+function allocsDoMes(ym) { const v = ym ? _allocVersao(ym) : null; return v ? budget.allocsDe[v] : budget.allocs; }
+function novoPlanejamentoDe(ym) {
+    if (!budget.allocsDe) budget.allocsDe = {};
+    if (budget.allocsDe[ym]) return false;
+    budget.allocsDe[ym] = { ...allocsDoMes(ym) };
+    return true;
+}
+function orcNovoPlanejamento() {
+    const ym = ymKey(_budgetMonth, _budgetYear);
+    if (budget.allocsDe && budget.allocsDe[ym]) return;
+    pushUndo(`Novo planejamento a partir de ${MESES[_budgetMonth]}/${_budgetYear}`);
+    novoPlanejamentoDe(ym);
+    saveBudget(); renderBudget();
+    toast(`✓ Daqui pra frente o planejamento é separado: mexer em ${MESES[_budgetMonth].toLowerCase()} não muda os meses anteriores.`, '#16a34a');
+}
+function orcJuntarPlanejamento() {
+    const ym = ymKey(_budgetMonth, _budgetYear);
+    if (!budget.allocsDe || !budget.allocsDe[ym]) return;
+    if (!confirm(`Apagar o planejamento que começa em ${MESES[_budgetMonth].toLowerCase()}/${_budgetYear}? Esses meses voltam a usar o planejamento anterior.`)) return;
+    pushUndo(`Planejamento de ${MESES[_budgetMonth]}/${_budgetYear} apagado`);
+    delete budget.allocsDe[ym];
+    saveBudget(); renderBudget();
+}
+function _orcRenderVersao() {
+    const el = $('orcVersao'); if (!el) return;
+    const ym = ymKey(_budgetMonth, _budgetYear), v = _allocVersao(ym), ks = Object.keys(budget.allocsDe || {}).sort();
+    const prox = ks.find(k => k > ym), ma = k => `${MES_ABREV[+k.slice(5, 7) - 1]}/${k.slice(0, 4)}`;
+    const ate = prox ? ` até ${ma(_ymMais(prox, -1))}` : ' em diante';
+    const desde = v ? `de ${ma(v)}${ate}` : ks.length ? `até ${ma(_ymMais(ks[0], -1))}` : 'em todos os meses';
+    el.innerHTML = `<span>Planejamento valendo <b>${desde}</b></span>`
+        + (v === ym ? (Object.keys(budget.allocsDe).length ? `<button class="orc-mini" onclick="orcJuntarPlanejamento()" title="Esses meses voltam a usar o planejamento anterior">Apagar este planejamento</button>` : '')
+                    : `<button class="orc-mini" onclick="orcNovoPlanejamento()" title="Copia o planejamento atual; mexer daqui pra frente não muda os meses anteriores">Novo planejamento a partir de ${MESES[_budgetMonth].toLowerCase()}</button>`);
+}
 // As faixas de `nome` sem o período [de..ate] (ate null = para sempre)
 function _offSubtrair(nome, de, ate) {
     const out = [];
@@ -6251,8 +6394,9 @@ function onBudgetTotalChange(final = false) {
 // um total de R$ 7.777 virava 12,86% e voltava como R$ 1.000,12
 function _setAlloc(catName, pct, casas = 2) {
     pct = Number.isFinite(pct) ? Math.max(0, Math.min(100, +pct.toFixed(casas))) : 0;
-    if ((budget.allocs[catName] || 0) !== pct) pushUndo(`Alocação de "${catName}"`, 'orc-alloc:' + catName);
-    if (pct > 0) budget.allocs[catName] = pct; else delete budget.allocs[catName];
+    const al = allocsDoMes(ymKey(_budgetMonth, _budgetYear));   // o planejamento que vale no mês aberto
+    if ((al[catName] || 0) !== pct) pushUndo(`Alocação de "${catName}"`, 'orc-alloc:' + catName);
+    if (pct > 0) al[catName] = pct; else delete al[catName];
     saveBudget();
     renderBudget();
 }
@@ -6311,14 +6455,14 @@ function _orcTipo(nome) { return _isBudgetCatInvest(nome) ? 'investimento' : 'sa
 function _orcModelo(m = _budgetMonth, a = _budgetYear) {
     const T = getBudgetTotal(m, a), lista = txMes(m, a);
     const saidas = lista.filter(t => t.tipo === 'saida'), invs = lista.filter(t => t.tipo === 'investimento');
-    const locks = budget.locks || {}, ym = ymKey(m, a), cs = [], fora = [];
+    const locks = budget.locks || {}, ym = ymKey(m, a), cs = [], fora = [], al = allocsDoMes(ym);
     _allBudgetCats().forEach(nome => {
         const off = _catOff(nome, ym), spent = _getSpentForBudgetCat(nome, saidas, invs);
         if (off) fora.push(nome);
         if (off && !spent) return;   // fora do orçamento neste mês (com gasto ela continua à vista, "sem plano")
         // `locked` vale para as contas da roda: categoria fora do mês não recebe nem cede dinheiro.
         // `fixa` é o valor fixo escolhido pelo dono (é o que a tela mostra)
-        cs.push({ nome, grupo: _budgetGroup(nome), vc: off ? 0 : Math.round(T * (budget.allocs[nome] || 0)),
+        cs.push({ nome, grupo: _budgetGroup(nome), vc: off ? 0 : Math.round(T * (al[nome] || 0)),
             spent, locked: off || !!locks[nome], fixa: !!locks[nome], off });
     });
     return { m, a, T, Tc: Math.round(T * 100), cats: cs, fora, saidas, invs };
@@ -6401,12 +6545,13 @@ function _orc503020(mod) {
         if (quer > tem) _orcDar(proprias, quer - tem); else _orcTirar(proprias, tem - quer);
     });
 }
-// Grava o modelo em budget.allocs (% com 6 casas: ida e volta exata em centavos)
+// Grava o modelo no planejamento que vale no mês (% com 6 casas: ida e volta exata em centavos)
 function _orcGravar(mod) {
+    const al = allocsDoMes(ymKey(mod.m, mod.a));
     mod.cats.forEach(c => {
         if (c.off) return;   // fora do mês: o planejado dela (que vale para os outros meses) não se mexe
         const p = mod.T > 0 ? Math.min(100, +(c.vc / mod.T).toFixed(6)) : 0;
-        if (p > 0) budget.allocs[c.nome] = p; else delete budget.allocs[c.nome];
+        if (p > 0) al[c.nome] = p; else delete al[c.nome];
     });
 }
 // Aplica uma mudança: desfazer agrupado por gesto, grava e mostra "de onde veio"
@@ -6745,7 +6890,7 @@ function _orcRenderEntradas() {
 // ── BUDGET RENDERING ─────────────────────────────────────────────────────────
 function _orcRenderTudo(mod) {
     _orcRenderHero(mod); _orcRenderRoda(mod); _orcRenderCentro(mod); _orcRenderChips(mod);
-    _orcRenderMov(mod); _orcRenderSel(mod); _orcRenderGuia(mod); _orcRenderFalta(mod); _orcRenderLista(mod);
+    _orcRenderMov(mod); _orcRenderSel(mod); _orcRenderGuia(mod); _orcRenderFalta(mod); _orcRenderLista(mod); _orcRenderVersao();
 }
 function renderBudget() {
     if (currentView === 'dashboard') renderBudgetRemaining();
@@ -7312,6 +7457,23 @@ function _pick3(b, l, r) {
 // (só é listado); 'local'/'remote' → resolvido por esse lado (escolha do usuário) sem
 // perder o resto da mescla. `ctx.reg(chave técnica, nome legível)` registra o conflito.
 const _ladoPreferido = (ctx, l, r) => ctx.prefer === 'local' ? l : ctx.prefer === 'remote' ? r : undefined;
+// Planejamentos por período: mesmo mês dos dois lados → mescla por categoria; criado/apagado de um lado só → vale esse lado
+function _mergeVersoes(base = {}, local = {}, remote = {}, ctx) {
+    const out = {};
+    for (const k of new Set([...Object.keys(base), ...Object.keys(local), ...Object.keys(remote)])) {
+        const b = base[k], l = local[k], r = remote[k];
+        if (l && r) { out[k] = _mergeKeyed(b || {}, l, r, ctx, 'alocação ' + k); continue; }
+        const p = _pick3(b, l, r);
+        if (p.conflict) {
+            ctx.reg(`planejamento ${k}`, `planejamento de ${k}`);
+            const v = _ladoPreferido(ctx, l, r);
+            if (v !== undefined) out[k] = v;
+            continue;
+        }
+        if (p.v !== undefined) out[k] = p.v;
+    }
+    return out;
+}
 // Coleções com id (lançamentos, metas, cartões); undefined = removido
 function _mergeById(base, local, remote, ctx, label) {
     const B = new Map(base.map(x => [x.id, x])), L = new Map(local.map(x => [x.id, x])), R = new Map(remote.map(x => [x.id, x]));
@@ -7366,6 +7528,7 @@ function mergeStates(base, local, remote, prefer = null) {
         budget: {
             total:       total.conflict ? (prefer === 'remote' ? remote.budget.total : local.budget.total) : total.v,
             allocs:      _mergeKeyed(base.budget.allocs, local.budget.allocs, remote.budget.allocs, ctx, 'alocação'),
+            allocsDe:    _mergeVersoes(base.budget.allocsDe, local.budget.allocsDe, remote.budget.allocsDe, ctx),
             monthTotals: _mergeKeyed(base.budget.monthTotals, local.budget.monthTotals, remote.budget.monthTotals, ctx, 'orçamento do mês'),
             needsWants:  _mergeKeyed(base.budget.needsWants, local.budget.needsWants, remote.budget.needsWants, ctx, 'grupo'),
             locks:       _mergeKeyed(base.budget.locks, local.budget.locks, remote.budget.locks, ctx, 'valor fixo'),
@@ -9138,7 +9301,7 @@ function runSelfTests() {
     eq('sanitize: migra fatura v2', s1.tx[0].faturaData, '2026-02-05');
     eq('sanitize: série de fixo', s1.tx[0].serie, 'L:saida:A');
     eq('sanitize: categoria usada existe', s1.cats.entrada.includes('Nova'), true);
-    eq('sanitize: orçamento completo', Object.keys(s1.budget).sort(), ['allocs', 'locks', 'monthTotals', 'needsWants', 'off', 'total']);
+    eq('sanitize: orçamento completo', Object.keys(s1.budget).sort(), ['allocs', 'allocsDe', 'locks', 'monthTotals', 'needsWants', 'off', 'total']);
     eq('sanitize: cor segura', s1.cards[0].cor, '#6d28d9');
     const asRaw = s => ({ t: s.tx, c: s.cats, g: s.goals, k: s.cards, b: s.budget, l: s.loans });
     const s2 = sanitizeState(asRaw(s1));
@@ -9202,6 +9365,38 @@ function runSelfTests() {
         eq('caixa de entrada: reaplicar não muda nada', [_stateHash(r2.state) === _stateHash(r1.state), r2.resultados.filter(x => x.resultado === 'aplicado').length], [true, 0]);
         const txt = '🍔 Alimentação — "Pão" ç ã 😀';
         eq('caixa de entrada: base64 UTF-8 ida e volta', _utf8B64(_b64Utf8(txt)), txt);
+        // Orçamento, empréstimo e ligação de parcelas pela caixa
+        const b0 = sanitizeState({ t: [{ id: 701, desc: 'Mercado', valor: 50, data: '2026-08-10', tipo: 'saida', cat: 'C' },
+            { id: 702, desc: 'Loja - Parcela 1/2', valor: 30, data: '2026-09-10', tipo: 'saida', cat: 'C' },
+            { id: 703, desc: 'Loja - Parcela 2/2', valor: 30, data: '2026-10-10', tipo: 'saida', cat: 'C' }],
+            b: { total: 4000, allocs: { C: 10 }, monthTotals: { '2026-11': 5000 } } });
+        const r3 = inboxAplicar(b0, [
+            { id: 'o1', op: 'orcamento', total: { valor: 6000, de: '2026-10' }, planejamento: { de: '2026-10', reais: { C: 1500, D: 600 } }, grupos: { D: 'needs' }, fixos: { D: true } },
+            { id: 'e1', op: 'emprestimo', acao: 'add', loan: { id: 801, nome: 'Giro', valor: 1000, taxa: 0, n: 4, parcela: 300, primeira: '2026-10-15' }, lancar: 'juros' },
+            { id: 'e2', op: 'emprestimo', acao: 'add', loan: { id: 801, nome: 'Giro', valor: 1000, n: 4, parcela: 300, primeira: '2026-10-15' } },
+            { id: 'p1', op: 'update', txId: 702, espera: { parcela: null }, muda: { parcela: { serie: 'P9', k: 1, n: 2 } } },
+            { id: 'p2', op: 'update', txId: 703, muda: { parcela: { serie: 'P9', k: 2, n: 2 } } },
+            { id: 'o2', op: 'orcamento', planejamento: { de: '2026-13', pct: {} } }]);
+        const bb = r3.state.budget;
+        eq('caixa de entrada: orçamento a partir de um mês (passado congelado)', [bb.total, bb.monthTotals['2026-08'], bb.monthTotals['2026-09'], bb.monthTotals['2026-11'], bb.allocs.C, bb.allocsDe['2026-10'], bb.needsWants.D, bb.locks.D],
+           [6000, 4000, 4000, undefined, 10, { C: 25, D: 10 }, 'needs', true]);
+        eq('caixa de entrada: empréstimo e parcelas ligadas', [r3.resultados.map(x => x.resultado), r3.state.loans.length, r3.state.tx.filter(t => t.parcela && t.parcela.serie === 'E801').length,
+            r3.state.tx.filter(t => t.parcela && t.parcela.serie === 'P9').map(t => t.parcela.k)],
+           [['aplicado', 'aplicado', 'ignorado: já existe', 'aplicado', 'aplicado', 'ignorado: planejamento inválido'], 1, 4, [1, 2]]);
+    }
+    // Planejamento por período: cada mês usa o último planejamento que começou até ele
+    {
+        const bk = budget;
+        try {
+            budget = _sanBudget({ total: 1000, allocs: { I: 10 }, allocsDe: { '2026-10': { I: 30 }, '2027-02': { I: 5 } } });
+            const c0 = cats; cats = { ...cats, investimento: ['I'] };
+            eq('planejamento por período: vigente em cada mês', [_allocVersao('2026-09'), _allocVersao('2026-12'), _allocVersao('2027-03'), allocsDoMes('2026-09').I, allocsDoMes('2026-11').I, spendBudgetOf(1000, '2026-11'), spendBudgetOf(1000, '2026-01')],
+               [null, '2026-10', '2027-02', 10, 30, 700, 900]);
+            cats = c0;
+        } finally { budget = bk; }
+        const ctx = { prefer: null, reg: () => {} };
+        eq('planejamento por período: mescla', _mergeVersoes({ '2026-10': { A: 1, B: 2 } }, { '2026-10': { A: 5, B: 2 } }, { '2026-10': { A: 1, B: 9 }, '2027-01': { A: 3 } }, ctx),
+           { '2026-10': { A: 5, B: 9 }, '2027-01': { A: 3 } });
     }
 
     // Roda do orçamento: regras de redistribuição (centavos), sobre modelos falsos — não toca nos dados
@@ -9386,6 +9581,7 @@ async function _runFuzzImpl(seeds = [11, 23, 97, 1234], steps = 400) {
                 fixo() { renderPopupFixos(); if (!_fixosPopup.length) return; const r = rnd(); if (r < 0.4) { abrirEditFixo(0); $('editFixoVal').value = String(ri(1, 500)); $('editFixoFuturo').checked = rnd() < 0.5; confirmarEdicaoFixo(); } else if (r < 0.7) renovarFixo(0); else removerFixo(0); },
                 goal() { abrirNovaGoal(); $('goalNome').value = 'G'; $('goalMeta').value = String(ri(100, 5000)); salvarGoal(); const g = pick(goals); abrirAporte(g.id); $('aporteValor').value = String(ri(1, 300)); $('aporteData').value = date(); confirmarAporte(); },
                 card() { $('cartaoEditId').value = String(cards[0].id); $('cartaoNome').value = 'Fuzz'; $('cartaoFech').value = String(ri(1, 31)); $('cartaoVenc').value = String(ri(1, 31)); salvarCartao(); if ($('ovRecalcFatura').classList.contains('open')) doRecalcFaturas(pick(['all', 'future', 'none'])); },
+                planejamento() { _budgetMonth = ri(0, 11); _budgetYear = 2026; if (rnd() < 0.6) orcNovoPlanejamento(); else orcJuntarPlanejamento(); if (cats.saida.length) updateBudgetCatPct(encodeURIComponent(pick(cats.saida)), String(ri(0, 40))); },
                 budget() { _budgetMonth = ri(0, 11); _budgetYear = 2026; $('budgetTotal').value = String(ri(0, 9000)); onBudgetTotalChange(true); if (cats.saida.length) updateBudgetCatPct(encodeURIComponent(pick(cats.saida)), String(ri(0, 60))); },
                 // Caminho mobile (formulários do celular) — usados também no desktop, onde o DOM existe
                 mobAdd() { openMobForm(); $('mob-tipo').value = pick(TIPOS); mobOnTipoChange(); $('mob-desc').value = pick(['Pão', "D'Ávila"]); $('mob-valor').value = pick(['12,5', '0', '3.000']); $('mob-data').value = pick([date(), '']); $('mob-fixo').checked = rnd() < 0.2; mobAdicionar(); closeRep(); closeMobForm(); },

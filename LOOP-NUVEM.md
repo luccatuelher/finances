@@ -279,7 +279,7 @@ Se algum teste gravou no preview: remova as chaves com prefixo `preview:` e reca
 
 ## 8. Estado atual e próximos candidatos
 
-**Última iteração concluída: 57** (orçamento sem reajuste ao digitar na tabela, parcelas automáticas, juros embutidos e empréstimos) (01/10/2026). Detalhes de cada uma no changelog do `<head>`.
+**Última iteração concluída: 58** (orçamento por período e caixa de entrada com orçamento, empréstimos e parcelas) (01/10/2026). Detalhes de cada uma no changelog do `<head>`.
 Iterações 40–42 foram feitas após o commit `a50cd5c`.
 
 Resumo das mais recentes:
@@ -307,6 +307,7 @@ Resumo das mais recentes:
 - 55 — Orçamento refeito (pedido do dono, estudo em artifact "Roda do Orçamento"): abas Orçamento/Metas, cartão azul, roda SVG editável (`_orcMudaCat`/`_orcMudaGrupo`/`_orc503020` em centavos, allocs continuam em %), tabela com planejado editável, valor fixo `budget.locks` (sanitização/merge/renomeação), entradas recolhidas. Mensal com cartão azul. `_moveBudgetKeys` só olha categorias orçáveis. Autoteste 111. O computador é a tela principal do dono: conferir 1440/1280/1024 px além do celular.
 - 56 — Mensal refeito como revisão do mês (Visão Geral = dia a dia): comparação com a média dos 3 meses anteriores com ≥ 5 lançamentos (`_mesResumo(m, a, ateDia)`; mês atual só até hoje), cascata por tipo de gasto (`_mesTipoGasto`: juros > fixos > parcelas > dia a dia), destaques, calendário, maiores gastos, lugares repetidos e "o que mudou" com sparklines. Sem Chart.js (a bateria agora só exige canvas no dashboard e no anual). Autoteste 113.
 - 57 — pedidos do dono em lote (ver o changelog do `<head>`): tabela de categorias sem reajuste + faixa "falta/passou", cadeado por linha, donut com alça nas duas pontas (`_orcMudaBorda`), excluir categoria por escopo (`budget.off`, `_catOff`), metas fixas no fim, caixinhas por categoria, patrimônio na Anual, hero plota a folga, **parcelas automáticas** (`gerarParcelas`, `tx.parcela`), **juros embutidos** (`tx.juros`) e **empréstimos** (estado `loans`, chave `l`: `_sanLoans`, `loanCronograma`, `renderLoans`). Autoteste 143. Estado novo = passar por TODOS os pontos de persistência (sanitizeState, snapshot, export/import, inbox, pendentes, hash, base do merge, `mergeStates`, payload): ver `grep -n "loans"`.
+- 58 — orçamento por período (`budget.allocsDe`, `allocsDoMes(ym)`, `_allocVersao`, `_mergeVersoes`; a roda grava no planejamento vigente do mês aberto) e caixa de entrada com `orcamento`, `emprestimo` e `parcela`/`serie` no update (`_inboxOrcamento`; ver CAIXA-DE-ENTRADA.md). Autoteste 149.
 
 Áreas já revisadas: importação (CSV/OFX), exportação, backup/restauração, hero e ritmo,
 orçamento, metas/aportes, cartões/faturas, fixos, categorias, análise mensal e anual,

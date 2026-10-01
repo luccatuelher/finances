@@ -49,9 +49,39 @@ por conta Google) e nunca vai para o Firebase nem para o chat.
   `serie`; o app usa para remover/editar em grupo). Sem `parcela` a entrada continua valendo,
   só que solta.
 - `update`: `espera` = valores atuais que precisam bater (ex.: o valor antigo); `muda` = campos
-  novos. Campos aceitos: desc, valor, data, tipo, cat, pagamento, cartaoId, faturaData, fixo, juros.
+  novos. Campos aceitos: desc, valor, data, tipo, cat, pagamento, cartaoId, faturaData, fixo, juros,
+  parcela (liga lançamentos soltos numa série; `null` desliga), serie (recorrência de um fixo).
+  `espera` compara também objetos (`"parcela": null` = ainda solta).
   Se o dono editou o lançamento depois, `espera` não bate → `ignorado: mudou desde então`.
+- Fixo: `fixo: true` + a mesma `serie` em todos os meses (ex.: `"serie": "S<id>"`); o app replica
+  12 meses quando o dono cria pela tela — pela caixa, mande um `add` por mês.
 - `delete`: remove se `espera` bater; se já não existe → `ignorado: já não existe`.
+- `orcamento` (aplicado nesta ordem; mande só as partes que quer mudar):
+  ```json
+  { "id": "2026-10-02-010", "op": "orcamento",
+    "total": { "valor": 6500, "de": "2026-10" },
+    "meses": { "2026-12": 7000, "2027-01": null },
+    "planejamento": { "de": "2026-10", "reais": { "🛒 Compras": 600, "📦 Reserva": 500 } },
+    "grupos": { "🌟 Ela": "needs" }, "fixos": { "📚 Educação": true } }
+  ```
+  `total.de` = novo total padrão daquele mês em diante: os meses anteriores (desde o 1º lançamento)
+  ficam com o total que tinham e os totais próprios de meses ≥ `de` saem (sem `de`: só muda o padrão).
+  `meses` = total só daquele mês (`null` volta ao padrão). `planejamento` = quanto vai para cada
+  categoria, em `reais` (convertido pelo total do mês `de`) ou `pct`; com `de` vale daquele mês em
+  diante (até o próximo planejamento) e **substitui** o que valia — categoria fora da lista fica com
+  0; sem `de` troca o planejamento base (meses antes do primeiro período). `grupos` = Necessidade
+  (`needs`) ou Desejo (`wants`); `fixos` = trava o valor da categoria na roda (`false` destrava).
+- `emprestimo`:
+  ```json
+  { "id": "2026-10-02-020", "op": "emprestimo", "acao": "add", "lancar": "juros",
+    "loan": { "id": 1800000000900, "nome": "Capital de giro PJ", "valor": 4000, "taxa": 3.5,
+              "n": 12, "parcela": 413.2, "primeira": "2026-10-15", "nota": "" } }
+  ```
+  `lancar`: `juros` (padrão — lança só os juros de cada parcela, regra do dono), `parcela` (a parcela
+  inteira, com os juros embutidos) ou `nada` (só o contrato; ligue lançamentos que já existem com
+  `update` + `parcela: { "serie": "E<id do empréstimo>", "k", "n" }`). `taxa` = % ao mês (0 = juros
+  rateados: parcelas × n − valor). `acao: "update"` com `loanId` e `muda: { nome, nota }`;
+  `acao: "delete"` com `loanId` (os lançamentos ficam).
 - Tudo é idempotente: reprocessar o mesmo arquivo não duplica nem desfaz nada.
 - Não apague `processados`: é o histórico do que o app aplicou (o app guarda os últimos 300).
 - Ao gravar, **acrescente** em `ops` (o app pode estar processando ao mesmo tempo; ele relê e
