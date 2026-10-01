@@ -279,7 +279,7 @@ Se algum teste gravou no preview: remova as chaves com prefixo `preview:` e reca
 
 ## 8. Estado atual e próximos candidatos
 
-**Última iteração concluída: 54** (caixa de entrada do Claude via repositório privado do GitHub) (30/09/2026). Detalhes de cada uma no changelog do `<head>`.
+**Última iteração concluída: 55** (página de Orçamento com roda editável e cartão azul; cartão azul no Mensal) (01/10/2026). Detalhes de cada uma no changelog do `<head>`.
 Iterações 40–42 foram feitas após o commit `a50cd5c`.
 
 Resumo das mais recentes:
@@ -304,6 +304,7 @@ Resumo das mais recentes:
 - 52 — ícones PNG (192/512/maskable/apple-touch 180) gerados do `icon.svg` com Playwright; o PWA agora tem 7 arquivos para publicar juntos (index, manifest, sw, icon.svg, 3 PNG).
 - 53 — eixo dos gráficos: `fmtEixo` único, pt-BR compacto, sem rótulos repetidos (autoteste 100). Primeira iteração conferida com o Chart.js real.
 - 54 — caixa de entrada do Claude (pedido do dono): operações em `inbox.json` num repositório privado do GitHub, aplicadas pelo app com token fine-grained (`inboxAplicar`, `checkInbox`; ver `CAIXA-DE-ENTRADA.md`). Autoteste 104; `runSyncFuzz` inclui `_testeInbox` (GitHub simulado: gravação concorrente/409, reprocesso, cópia `estado.json`, token inválido).
+- 55 — Orçamento refeito (pedido do dono, estudo em artifact "Roda do Orçamento"): abas Orçamento/Metas, cartão azul, roda SVG editável (`_orcMudaCat`/`_orcMudaGrupo`/`_orc503020` em centavos, allocs continuam em %), tabela com planejado editável, valor fixo `budget.locks` (sanitização/merge/renomeação), entradas recolhidas. Mensal com cartão azul. `_moveBudgetKeys` só olha categorias orçáveis. Autoteste 111. O computador é a tela principal do dono: conferir 1440/1280/1024 px além do celular.
 
 Áreas já revisadas: importação (CSV/OFX), exportação, backup/restauração, hero e ritmo,
 orçamento, metas/aportes, cartões/faturas, fixos, categorias, análise mensal e anual,
@@ -318,7 +319,6 @@ com 8.000 entradas hostis aleatórias (sem exceção); escala com 30.000 lançam
 (sanitizar 49 ms, renderAll 57 ms, merge 210 ms — linear).
 
 Candidatos restantes (a lista anterior foi toda concluída nas iterações 43–53):
-- o `%` do orçamento por categoria (`btd`) é `type="number"` (valores < 100, baixo risco);
 - o pill "abaixo do ritmo" do hero anual encosta no gráfico (cosmético);
 - **sync real com o Firebase**: só é testado por simulação em memória (`runSyncFuzz`); a SDK e o
   banco não carregam no sandbox. Qualquer defeito novo aqui virá do uso real (relatos do dono);

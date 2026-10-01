@@ -104,6 +104,12 @@ const xss = await xpg.evaluate(async () => {
   for (const v of ['dashboard', 'anual', 'mensal', 'metas']) {
     navTo(v, [...document.querySelectorAll('.nav-pill')].find(b => (b.getAttribute('onclick') || '').includes("'" + v + "'")) || null); await new Promise(r => setTimeout(r, 250));
     for (const e of [...document.querySelectorAll('[onclick], [onchange]')].filter(e => /xss|img|svg|script/i.test((e.getAttribute('onclick') || '') + (e.getAttribute('onchange') || '')))) { try { e.click(); cliques++; } catch {} }
+    // Orçamento: sem handlers inline (delegação por índice); clica nas linhas, fatias e ações que levam os nomes hostis
+    if (v === 'metas') for (const sel of ['#budgetCatList .orc-row', '#orcSlices path[data-kind]', '#orcSel [data-act]:not([data-act="excluir"])', '#orcEntradasList [data-ent-act="renomear"]'])
+      for (let i = 0, n = document.querySelectorAll(sel).length; i < n; i++) {   // cada clique redesenha: busca de novo
+        const e = document.querySelectorAll(sel)[i]; if (!e) break;
+        try { e.dispatchEvent(new MouseEvent('click', { bubbles: true })); cliques++; } catch {}
+      }
     await new Promise(r => setTimeout(r, 150));
   }
   const injetados = [...document.querySelectorAll('img[src="x"], svg[onload], [onerror], [onmouseover], [onload]')].length;

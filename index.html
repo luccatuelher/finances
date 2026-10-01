@@ -56,7 +56,7 @@
       • FIXOS: "Gastos Fixos" (orçamento, popup, sidebar) somava entradas fixas como
         gasto (salário inflava o total); agora só saídas somam e entradas aparecem em verde.
       • AUTOTESTE: abra index.html?preview&selftest (ou runSelfTests() no console) após
-        qualquer mudança — 104 verificações de parsers, datas, fatura, sanitização
+        qualquer mudança — 111 verificações de parsers, datas, fatura, sanitização
         (idempotência) e ida-e-volta pelo Firebase. Não altera dados.
       • METAS: goalProgress() — % truncado (99,6% não mostra "100%" com "Faltam"),
         ritmo necessário por mês até o prazo e aviso de prazo vencido; histórico por data
@@ -321,6 +321,17 @@
         novas se o arquivo mudou no meio). Idempotente: reprocessar não duplica nem sobrescreve
         edição do dono. Opcional: cópia dos dados (estado.json) para o Claude conferir duplicados.
         Ver CAIXA-DE-ENTRADA.md. Autoteste +4; runSyncFuzz cobre o fluxo com GitHub simulado.
+      • ORÇAMENTO COM RODA E CARTÃO AZUL (it. 55, pedido do dono): a página começava pelas metas,
+        mostrava 5 números em 4 bases, editava cada categoria às cegas em % num painel escondido,
+        a pizza era só leitura (e sumia sem o Chart.js) e os cartões de 124 px cortavam valores.
+        Agora: abas Orçamento | Metas; cartão azul com quanto ainda pode gastar e uma barra por
+        grupo; roda em SVG (anel interno Necessidades/Desejos/Investimentos, externo categorias)
+        com alças arrastáveis, setas do teclado, "de onde veio" e guia 50/30/20; tabela com o
+        planejado editável na linha (Enter/Tab) e "resta/passou"; valor fixo por categoria
+        (budget.locks: sanitização, merge e renomeação); entradas recolhidas; vencimentos com
+        margem. Regras do dono: aumentar tira do mesmo grupo; pode sobrar sem destino. Mensal
+        ganhou o cartão azul (saldo, entrou/saiu, débito/crédito). Renomear um gasto com uma
+        entrada de mesmo nome perdia o planejado (_moveBudgetKeys). Autoteste +7 (111).
       Ferramentas de manutenção (use após qualquer mudança, em index.html?preview):
         runSelfTests() · runFuzz() · runSyncFuzz()
     -->
@@ -1110,34 +1121,177 @@
         .patrimonio-chart { height: 150px; position: relative; margin-top: 8px; }
 
         /* ═══════════════ BUDGET CATEGORY TILES — needs/wants (phase 6) ═══════════════ */
-        .budget-tiles-group { margin: 14px 16px; }
-        .budget-tiles-group-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text-2); margin: 0 0 8px; }
-        .budget-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
-        .budget-tile { position: relative; border: 1px solid var(--border); border-radius: 12px; padding: 10px 11px; cursor: pointer; background: var(--surface); transition: box-shadow .15s, transform .15s, border-color .15s; }
-        .budget-tile:hover { box-shadow: var(--shadow-sm); transform: translateY(-1px); border-color: var(--accent); }
-        .budget-tile-pct { position: absolute; top: 9px; right: 10px; font-size: 11px; font-weight: 800; }
-        .budget-tile-icon { font-size: 18px; line-height: 1; }
-        .budget-tile-name { font-size: 12.5px; font-weight: 600; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); padding-right: 26px; }
-        .budget-tile-spent { font-size: 10.5px; color: var(--text-3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .budget-tile-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; margin-top: 8px; }
-        .budget-tile-fill { height: 4px; border-radius: 2px; transition: width .5s cubic-bezier(.4,0,.2,1); }
-        .budget-tile-detail { grid-column: 1 / -1; flex-direction: column; gap: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin: 2px 0 4px; }
         .btd-row { display: flex; align-items: center; gap: 8px; }
-        .btd-lbl { font-size: 11px; font-weight: 600; color: var(--text-3); white-space: nowrap; }
-        .btd-rename { flex: 1; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; outline: none; color: var(--text); background: var(--surface); }
+        .btd-rename { flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; outline: none; color: var(--text); background: var(--surface); }
         .btd-rename:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-        .btd-save { padding: 6px 13px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
-        .btd-del { padding: 6px 10px; background: #fee2e2; color: var(--danger); border: none; border-radius: 8px; font-size: 13px; cursor: pointer; }
-        .nw-toggle { display: flex; gap: 2px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 2px; flex: 1; }
-        .nw-opt { flex: 1; padding: 5px 8px; border: none; background: none; border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--text-3); cursor: pointer; font-family: inherit; }
-        .nw-opt.active { background: var(--surface); color: var(--accent); box-shadow: var(--shadow-sm); }
-        .btd-value { flex: 1; min-width: 90px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-weight: 600; font-family: inherit; outline: none; color: var(--text); background: var(--surface); text-align: right; }
-        .btd-value:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-        body.mobile .budget-tiles { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+        .btd-save { padding: 6px 13px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; flex-shrink: 0; }
+        .btd-del { padding: 6px 10px; background: #fee2e2; color: var(--danger); border: none; border-radius: 8px; font-size: 13px; cursor: pointer; flex-shrink: 0; }
         .budget-add-cat { display: flex; gap: 6px; align-items: center; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--bg); border-radius: 0 0 var(--radius) var(--radius); }
         .budget-add-type { padding: 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-family: inherit; background: var(--surface); color: var(--text); cursor: pointer; flex-shrink: 0; outline: none; }
         .budget-add-name { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; outline: none; background: var(--surface); color: var(--text); }
         .budget-add-name:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+        /* ═══════════════ MENSAL: CARTÃO AZUL (it. 55) ═══════════════ */
+        .mh-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; min-width: 0; }
+        .mh-item { background: rgba(255,255,255,.14); border-radius: 14px; padding: 10px 14px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .mh-item span { font-size: 11.5px; font-weight: 600; opacity: .88; }
+        .mh-item b { font-size: 18px; font-weight: 800; letter-spacing: -.3px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+        .mh-item small { font-size: 11px; opacity: .82; }
+        .mh-item small:empty { display: none; }
+        body.mobile .mh-item b { font-size: 16px; }
+
+        /* ═══════════════ ORÇAMENTO: CARTÃO AZUL, RODA E TABELA (it. 55) ═══════════════ */
+        .orc-tabs { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 2px; flex-shrink: 0; }
+        .orc-tabs button { border: 0; background: none; padding: 6px 14px; border-radius: 7px; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text-3); cursor: pointer; }
+        .orc-tabs button[aria-selected="true"] { background: var(--accent); color: #fff; }
+        .orc-hero { margin-bottom: 16px; }
+        .orc-hero-nav { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700; margin-bottom: 10px; }
+        .orc-hero-nav button { background: rgba(255,255,255,.18); border: 0; color: #fff; width: 28px; height: 28px; border-radius: 8px; cursor: pointer; font-size: 16px; line-height: 1; font-family: inherit; }
+        .orc-hero-nav button:hover { background: rgba(255,255,255,.3); }
+        .orc-hero-groups { display: grid; gap: 12px; min-width: 0; }
+        .ohg { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 3px 10px; font-size: 13px; }
+        .ohg b { font-weight: 600; }
+        .ohg span { opacity: .92; font-variant-numeric: tabular-nums; }
+        .ohg-bar { flex: 1 0 100%; height: 7px; border-radius: 4px; background: rgba(255,255,255,.22); overflow: hidden; }
+        .ohg-bar i { display: block; height: 100%; background: #fff; border-radius: 4px; }
+        .ohg-bar.over i { background: #ffd18a; }
+
+        .orc-grid { display: grid; gap: 16px; align-items: start; grid-template-columns: minmax(330px, 390px) minmax(0, 1fr); }
+        .orc-grid > *, .orc-col > * { min-width: 0; }
+        .orc-col { display: grid; gap: 16px; }
+        .orc-card-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+        .orc-card-t { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text-2); }
+        .orc-hint { font-size: 11.5px; color: var(--text-3); font-weight: 500; text-transform: none; letter-spacing: 0; }
+        .orc-total { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 10px; }
+        .orc-total label { font-size: 11px; font-weight: 600; color: var(--text-2); }
+        .orc-total input { width: 130px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 15px; font-weight: 700; font-family: inherit; color: var(--text); background: var(--surface); outline: none; }
+        .orc-total input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+        .orc-badge { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+        .orc-badge.padrao { background: #f0fdf4; color: #15803d; }
+        .orc-badge.custom { background: #fff7ed; color: #b45309; }
+        .orc-mini { font-size: 11px; font-weight: 600; padding: 5px 10px; border: 1px solid var(--border); background: var(--surface); border-radius: 7px; cursor: pointer; color: var(--text-2); white-space: nowrap; font-family: inherit; }
+        .orc-mini:hover { background: var(--bg); }
+        .orc-mini.warn { border-color: #fed7aa; background: #fff7ed; color: #b45309; }
+        .orc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+        .orc-chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); background: var(--bg); border-radius: 999px; padding: 4px 9px; font-size: 11.5px; color: var(--text); white-space: nowrap; font-family: inherit; cursor: pointer; }
+        .orc-chip[aria-pressed="true"] { border-color: var(--text-2); background: var(--surface); }
+        span.orc-chip { cursor: default; }
+        .orc-chip b { font-weight: 600; }
+        .orc-chip .n { color: var(--text-2); font-variant-numeric: tabular-nums; }
+        .orc-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; }
+        .orc-ring-wrap { position: relative; width: 100%; max-width: 310px; margin: 6px auto 0; aspect-ratio: 1; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+        .orc-ring-wrap svg { width: 100%; height: 100%; display: block; overflow: visible; }
+        .orc-ring-wrap path { cursor: pointer; transition: opacity .15s; }
+        .orc-handle { cursor: grab; touch-action: none; }
+        .orc-handle:active { cursor: grabbing; }
+        .orc-handle .knob { fill: #fff; stroke-width: 3; filter: drop-shadow(0 1px 2px rgba(0,0,0,.3)); }
+        .orc-handle .grip { fill: var(--text-2); font-size: 10px; font-weight: 700; pointer-events: none; }
+        .orc-ico { font-size: 13px; pointer-events: none; }
+        .orc-center { position: absolute; inset: 31%; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; pointer-events: none; }
+        .orc-center small { font-size: 10.5px; color: var(--text-3); text-transform: uppercase; letter-spacing: .6px; font-weight: 700; }
+        .orc-center b { font-size: 22px; font-weight: 800; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+        .orc-center .free { font-size: 11.5px; line-height: 1.3; color: var(--text-2); max-width: 120px; }
+        .orc-center .free.ok { color: var(--success); }
+        .orc-center .free.over { color: var(--danger); font-weight: 600; }
+        .orc-moved { min-height: 36px; font-size: 12.5px; color: var(--text-2); text-align: center; margin: 6px 0 2px; line-height: 1.4; }
+        .orc-moved b { color: var(--text); font-weight: 600; }
+        .orc-sel { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+        .orc-sel:empty { display: none; }
+        .orc-sel > * { min-width: 0; }
+        .orc-sel-vazio { font-size: 12.5px; color: var(--text-3); text-align: center; }
+        .orc-sel-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .orc-sel-ico { font-size: 22px; width: 36px; height: 36px; border-radius: 10px; background: var(--bg); display: grid; place-items: center; flex: none; }
+        .orc-sel-name { font-weight: 700; font-size: 15px; overflow-wrap: anywhere; }
+        .orc-sel-kind { font-size: 12px; color: var(--text-2); display: flex; align-items: center; gap: 6px; }
+        .orc-lock { margin-left: auto; border: 1px solid var(--border); background: var(--bg); border-radius: 9px; padding: 6px 10px; font-size: 12px; font-weight: 600; color: var(--text-2); white-space: nowrap; cursor: pointer; font-family: inherit; }
+        .orc-lock[aria-pressed="true"] { background: var(--text); color: #fff; border-color: var(--text); }
+        .orc-step { display: flex; align-items: center; gap: 6px; }
+        .orc-step button { width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); font-size: 18px; font-weight: 600; flex: none; cursor: pointer; font-family: inherit; color: var(--text); }
+        .orc-step button:hover { background: var(--border-light); }
+        .orc-step input { flex: 1; min-width: 0; width: 100%; height: 38px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); text-align: center; font-weight: 700; font-size: 16px; font-family: inherit; color: var(--text); font-variant-numeric: tabular-nums; outline: none; }
+        .orc-step input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+        .orc-step .pct { font-size: 12px; color: var(--text-3); width: 54px; text-align: right; flex: none; }
+        .orc-sel-spent { font-size: 13px; color: var(--text-2); }
+        .orc-gsw { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--text-3); }
+        .orc-gsw button { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; color: var(--text-2); display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-family: inherit; }
+        .orc-gsw button[aria-pressed="true"] { border-color: var(--text-2); color: var(--text); background: var(--bg); }
+        .orc-edit summary { font-size: 12px; color: var(--text-3); cursor: pointer; padding: 2px 0; }
+        .orc-edit[open] summary { margin-bottom: 8px; }
+        .orc-guide { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--bg); font-size: 12.5px; color: var(--text-2); }
+        .orc-guide b { color: var(--text); font-weight: 600; white-space: nowrap; }
+        .orc-soft { border: 1px solid var(--border); background: var(--surface); border-radius: 9px; padding: 6px 10px; font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; font-family: inherit; }
+
+        .orc-cats-title { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .orc-thead, .orc-row { display: grid; grid-template-columns: 28px minmax(110px, 1.3fr) 112px 104px minmax(64px, 1fr) 156px; gap: 0 14px; align-items: center; }
+        .orc-thead { font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--text-3); padding: 12px 16px 2px; }
+        .orc-thead span:nth-child(n+3) { text-align: right; }
+        .orc-thead span:nth-child(5) { text-align: left; }
+        #budgetCatList { padding: 0 12px 8px; }
+        .orc-grp-h { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text-2); padding: 14px 4px 6px; border-bottom: 1px solid var(--border); }
+        .orc-grp-h .s { margin-left: auto; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--text-3); font-variant-numeric: tabular-nums; }
+        .orc-row { padding: 6px 4px; border-radius: 10px; border-bottom: 1px solid var(--border-light); cursor: pointer; }
+        .orc-row:hover { background: var(--bg); }
+        .orc-row[aria-current="true"] { background: var(--bg); box-shadow: inset 3px 0 0 var(--accent); }
+        .orc-r-ico { font-size: 18px; text-align: center; }
+        .orc-r-name { font-weight: 600; font-size: 13.5px; min-width: 0; overflow-wrap: anywhere; }
+        .orc-r-plan input { width: 100%; height: 32px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); text-align: right; padding: 0 10px; font-weight: 700; font-size: 14px; font-family: inherit; color: var(--text); font-variant-numeric: tabular-nums; outline: none; }
+        .orc-r-plan input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+        .orc-r-spent { text-align: right; font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+        .orc-r-bar { height: 7px; border-radius: 4px; background: var(--border-light); overflow: hidden; }
+        .orc-r-bar i { display: block; height: 100%; border-radius: 4px; }
+        .orc-r-st { text-align: right; font-size: 11.5px; font-weight: 600; line-height: 1.25; }
+        .orc-r-st .v { font-size: 13.5px; font-weight: 700; margin-right: 5px; font-variant-numeric: tabular-nums; }
+        .orc-r-sub { display: none; }
+        .orc-st-good { color: var(--success); } .orc-st-warn { color: #b45309; } .orc-st-bad { color: var(--danger); } .orc-st-muted { color: var(--text-3); }
+        .orc-fill-good { background: #16a34a; } .orc-fill-warn { background: #d97706; } .orc-fill-bad { background: #dc2626; }
+        .orc-entradas { border-top: 1px solid var(--border); padding: 0 16px; }
+        .orc-entradas summary { cursor: pointer; padding: 12px 0; font-size: 12px; font-weight: 600; color: var(--text-2); }
+        .orc-ent-row { padding: 0 0 8px; }
+        .orc-contas { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+        .orc-contas > * { min-width: 0; }
+        .orc-pad { padding: 4px 16px 12px; }
+
+        /* Notebook: a tabela precisa da largura toda; a roda vai para cima, com o painel ao lado */
+        @media (max-width: 1239px) {
+            body:not(.mobile) .orc-grid { grid-template-columns: minmax(0, 1fr); }
+            body:not(.mobile) .orc-ring-card { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); column-gap: 28px;
+                grid-template-areas: "h h" "total total" "chips chips" "ring sel" "moved guide"; }
+            body:not(.mobile) .orc-ring-card > .orc-card-h { grid-area: h; }
+            body:not(.mobile) .orc-ring-card > .orc-total { grid-area: total; }
+            body:not(.mobile) .orc-ring-card > .orc-chips { grid-area: chips; }
+            body:not(.mobile) .orc-ring-card > .orc-ring-wrap { grid-area: ring; margin: 6px 0 0; }
+            body:not(.mobile) .orc-ring-card > .orc-moved { grid-area: moved; }
+            body:not(.mobile) .orc-ring-card > .orc-sel { grid-area: sel; align-self: center; border-top: 0; margin-top: 0; }
+            body:not(.mobile) .orc-ring-card > .orc-guide { grid-area: guide; align-self: start; margin-top: 6px; }
+        }
+        /* Janela estreita e celular: uma coluna e linhas compactas (o valor se edita no painel da roda) */
+        @media (max-width: 900px) {
+            body:not(.mobile) .orc-ring-card { display: block; }
+            body:not(.mobile) .orc-ring-card > .orc-ring-wrap { margin: 6px auto 0; }
+            body:not(.mobile) .orc-ring-card > .orc-sel { border-top: 1px solid var(--border); margin-top: 8px; }
+            .orc-thead { display: none; }
+            .orc-row { grid-template-columns: 28px minmax(0, 1fr) auto; gap: 2px 10px; padding: 9px 4px; }
+            .orc-r-ico { grid-row: 1 / 3; grid-column: 1; }
+            .orc-r-name { grid-row: 1; grid-column: 2; }
+            .orc-r-sub { display: block; grid-row: 2; grid-column: 2; font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+            .orc-r-st { grid-row: 1 / 3; grid-column: 3; }
+            .orc-r-st .v { display: block; font-size: 15px; margin: 0; }
+            .orc-r-bar { grid-row: 3; grid-column: 2 / 4; height: 5px; margin-top: 3px; }
+            .orc-r-plan, .orc-r-spent { display: none; }
+        }
+        body.mobile .orc-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+        body.mobile .orc-col { gap: 12px; }
+        body.mobile .orc-thead { display: none; }
+        body.mobile .orc-row { grid-template-columns: 28px minmax(0, 1fr) auto; gap: 2px 10px; padding: 9px 4px; }
+        body.mobile .orc-r-ico { grid-row: 1 / 3; grid-column: 1; }
+        body.mobile .orc-r-name { grid-row: 1; grid-column: 2; }
+        body.mobile .orc-r-sub { display: block; grid-row: 2; grid-column: 2; font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+        body.mobile .orc-r-st { grid-row: 1 / 3; grid-column: 3; }
+        body.mobile .orc-r-st .v { display: block; font-size: 15px; margin: 0; }
+        body.mobile .orc-r-bar { grid-row: 3; grid-column: 2 / 4; height: 5px; margin-top: 3px; }
+        body.mobile .orc-r-plan, body.mobile .orc-r-spent { display: none; }
+        body.mobile .orc-contas { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+        body.mobile .orc-hero-groups { gap: 10px; }
     /* Cabeçalho em larguras intermediárias (tablet / janela estreita, sem UA mobile):
            as abas rolam na horizontal em vez de invadir os controles da direita, e rótulos
            secundários somem antes de faltar espaço. */
@@ -1638,11 +1792,19 @@
                 <div class="view-subtitle">Detalhamento crédito, débito e categorias</div>
             </div>
         </div>
-        <div class="kpis" style="margin-bottom:20px">
-            <div class="kpi"><div class="kpi-label">Entradas</div><div class="kpi-val green" id="mKpiEnt">—</div></div>
-            <div class="kpi"><div class="kpi-label">Despesas</div><div class="kpi-val red"   id="mKpiGas">—</div><div class="kpi-sub" id="mKpiGasSub"></div></div>
-            <div class="kpi"><div class="kpi-label">No Débito</div><div class="kpi-val teal" id="mKpiDeb">—</div></div>
-            <div class="kpi"><div class="kpi-label">No Crédito</div><div class="kpi-val blue" id="mKpiCred">—</div></div>
+        <!-- Cartão azul (como na Visão Geral): resultado do mês; débito e crédito como números menores -->
+        <div class="hero-card mensal-hero" style="margin-bottom:20px">
+            <div class="hero-left">
+                <div class="hero-label" id="mHeroLabel">Saldo do mês</div>
+                <div class="hero-num" id="mKpiSaldo">—</div>
+                <div class="hero-sub" id="mHeroSub"></div>
+            </div>
+            <div class="mh-grid">
+                <div class="mh-item"><span>Entrou</span><b id="mKpiEnt">—</b></div>
+                <div class="mh-item"><span>Saiu</span><b id="mKpiGas">—</b><small id="mKpiGasSub"></small></div>
+                <div class="mh-item"><span>No débito</span><b id="mKpiDeb">—</b></div>
+                <div class="mh-item"><span>No crédito</span><b id="mKpiCred">—</b></div>
+            </div>
         </div>
         <div class="split-grid">
             <div class="split-box">
@@ -1687,22 +1849,121 @@
 <!-- ORÇAMENTO + METAS -->
 <div id="view-metas" class="view">
     <div class="view-inner">
-        <!-- HEADER -->
+        <!-- HEADER: abas Orçamento | Metas (as metas saíram do topo) -->
         <div class="view-header">
             <div>
                 <div class="view-title">Orçamento</div>
-                <div class="view-subtitle">Planejamento mensal e metas de poupança</div>
+                <div class="view-subtitle">Planeje o mês na roda e acompanhe quanto resta</div>
             </div>
-            <div style="display:flex;gap:8px;align-items:center">
-                <button class="nav-pill" onclick="budgetPrevMonth()" style="padding:4px 10px">◀</button>
-                <span id="budgetMonthLabel" style="font-size:13px;font-weight:600;min-width:110px;text-align:center"></span>
-                <button class="nav-pill" onclick="budgetNextMonth()" style="padding:4px 10px">▶</button>
+            <div class="orc-tabs" role="tablist" aria-label="Seções do orçamento">
+                <button role="tab" id="orcTabBud" aria-selected="true" aria-controls="orcPanBud" onclick="orcTab('bud')">Orçamento</button>
+                <button role="tab" id="orcTabMeta" aria-selected="false" aria-controls="orcPanMeta" onclick="orcTab('metas')">Metas</button>
             </div>
         </div>
 
-        <!-- ═══ GOALS SECTION (top) ═══ -->
-        <div style="margin-bottom:28px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <!-- Cartão azul: quanto ainda pode gastar no mês do orçamento + barra por grupo -->
+        <div class="hero-card orc-hero" id="orcHero">
+            <div class="hero-left">
+                <div class="orc-hero-nav">
+                    <button onclick="budgetPrevMonth()" aria-label="Mês anterior">‹</button>
+                    <span id="budgetMonthLabel"></span>
+                    <button onclick="budgetNextMonth()" aria-label="Próximo mês">›</button>
+                </div>
+                <div class="hero-label" id="orcHeroLabel"></div>
+                <div class="hero-num" id="orcHeroNum">—</div>
+                <div class="hero-sub" id="orcHeroSub"></div>
+            </div>
+            <div class="orc-hero-groups" id="orcHeroGroups"></div>
+        </div>
+
+        <div id="orcPanBud" role="tabpanel" aria-labelledby="orcTabBud" class="orc-grid">
+            <!-- Roda: anel interno = grupos, externo = categorias; alças arrastáveis -->
+            <div class="chart-box orc-ring-card" id="orcRingCard" tabindex="0" aria-label="Distribuição do mês. Setas ajustam a fatia selecionada em R$ 10 (Shift: R$ 50)">
+                <div class="orc-card-h"><span class="orc-card-t">Distribuição do mês</span><span class="orc-hint">arraste as alças · setas ajustam</span></div>
+                <div class="orc-total">
+                    <label for="budgetTotal">Total do mês</label>
+                    <input type="text" id="budgetTotal" inputmode="decimal" placeholder="R$ 5.000" oninput="onBudgetTotalChange()" onchange="onBudgetTotalChange(true)">
+                    <span id="budgetTypeBadge"></span>
+                    <button class="orc-mini" onclick="openAplicarMeses()">📅 Aplicar a meses</button>
+                    <button class="orc-mini warn" id="btnResetMonthBudget" onclick="resetMonthBudget()" style="display:none">↩ Usar padrão</button>
+                </div>
+                <div class="orc-chips" id="orcChips"></div>
+                <div class="orc-ring-wrap" id="orcRingWrap">
+                    <svg id="orcRing" viewBox="0 0 320 320" role="group" aria-label="Roda do orçamento: anel interno com os grupos, anel externo com as categorias">
+                        <g id="orcSlices"></g>
+                        <g id="orcLabels"></g>
+                        <g id="orcGHandles"></g>
+                        <g class="orc-handle" id="orcCatHandle" style="display:none">
+                            <circle r="20" fill="transparent"></circle>
+                            <circle class="knob" r="10"></circle>
+                            <text class="grip" text-anchor="middle" dy="3.5">⇄</text>
+                        </g>
+                    </svg>
+                    <div class="orc-center" id="orcCenter"></div>
+                </div>
+                <div class="orc-moved" id="orcMoved" aria-live="polite"></div>
+                <div class="orc-sel" id="orcSel"></div>
+                <div class="orc-guide" id="orcGuide"></div>
+            </div>
+
+            <div class="orc-col">
+                <!-- Categorias: tabela no computador (planejado editável), linhas compactas no celular -->
+                <div class="data-table-box orc-cats">
+                    <div class="data-table-title orc-cats-title">
+                        <span>Categorias</span>
+                        <div style="display:flex;align-items:center;gap:8px">
+                            <span class="orc-hint" id="orcListHint"></span>
+                            <button id="btnBudgetSort" class="orc-mini" onclick="toggleBudgetCatSort()" title="Ordenar categorias">↕ Ordem da roda</button>
+                        </div>
+                    </div>
+                    <div class="orc-thead" aria-hidden="true"><span></span><span>Categoria</span><span>Planejado</span><span>Gasto</span><span>Progresso</span><span>Situação</span></div>
+                    <div id="budgetCatList"></div>
+                    <details class="orc-entradas" id="orcEntradas">
+                        <summary id="orcEntradasSum">Categorias de entrada</summary>
+                        <div id="orcEntradasList"></div>
+                    </details>
+                    <div class="budget-add-cat">
+                        <select id="budgetCatType" class="budget-add-type" title="Tipo da categoria">
+                            <option value="saida">📉 Gasto</option>
+                            <option value="entrada">📈 Entrada</option>
+                            <option value="investimento">🟣 Invest.</option>
+                        </select>
+                        <div class="icon-picker-wrap">
+                            <div class="ch-add-icon" id="catHubIconBtn" onclick="toggleIconPicker('catHubPicker')" title="Escolher ícone">📦</div>
+                            <div class="icon-picker" id="catHubPicker"></div>
+                        </div>
+                        <input type="text" id="catHubInput" maxlength="50" class="budget-add-name" placeholder="Nova categoria…"
+                            onkeydown="if(event.key==='Enter')addBudgetCategory()">
+                        <button onclick="addBudgetCategory()" class="btn-save" style="width:auto;margin:0;padding:8px 14px;font-size:13px;flex-shrink:0">＋</button>
+                    </div>
+                </div>
+
+                <!-- Contas do mês: próximos vencimentos (fixos + faturas) e os fixos lançados no mês -->
+                <div class="orc-contas">
+                    <div class="data-table-box" id="vencBox" style="display:none">
+                        <div class="data-table-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                            <span>📅 Próximos vencimentos</span>
+                            <span id="vencTotal" style="font-weight:700;color:var(--danger);white-space:nowrap"></span>
+                        </div>
+                        <div id="vencList" class="orc-pad"></div>
+                    </div>
+                    <div class="data-table-box">
+                        <div class="data-table-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                            <span>📌 Gastos fixos do mês</span>
+                            <div style="display:flex;align-items:center;gap:10px">
+                                <span id="budgetFixosTotal" style="font-weight:700;color:var(--danger);white-space:nowrap"></span>
+                                <button class="link-btn" onclick="abrirPopupFixos()">Gerenciar →</button>
+                            </div>
+                        </div>
+                        <div id="budgetFixosList"><div style="padding:16px;text-align:center;color:var(--text-3);font-size:12px">Nenhum fixo.</div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- METAS (aba ao lado do orçamento) -->
+        <div id="orcPanMeta" role="tabpanel" aria-labelledby="orcTabMeta" hidden>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap">
                 <div>
                     <div style="font-size:16px;font-weight:700">🎯 Metas de Poupança</div>
                     <div style="font-size:12px;color:var(--text-3)">Objetivos de longo prazo</div>
@@ -1710,97 +1971,6 @@
                 <button class="btn-save" style="width:auto;padding:7px 16px;margin:0;font-size:12px" onclick="abrirNovaGoal()">+ Nova Meta</button>
             </div>
             <div class="goals-grid" id="goalsGrid"></div>
-        </div>
-
-        <!-- ═══ BUDGET SECTION ═══ -->
-
-        <!-- Budget Total -->
-        <div style="display:flex;gap:14px;margin-bottom:20px;flex-wrap:wrap;align-items:flex-end">
-            <div class="field" style="margin:0;flex:0 0 220px">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
-                    <label style="font-size:11px;font-weight:600;color:var(--text-2)">Orçamento Total do Mês</label>
-                    <span id="budgetTypeBadge"></span>
-                </div>
-                <input type="text" id="budgetTotal" placeholder="R$ 5.000" oninput="onBudgetTotalChange()" onchange="onBudgetTotalChange(true)"
-                    style="font-size:16px;font-weight:700;padding:10px 12px">
-                <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
-                    <button onclick="openAplicarMeses()" style="font-size:11px;font-weight:600;padding:5px 10px;border:1px solid var(--border);background:var(--surface);border-radius:6px;cursor:pointer;color:var(--text-2);white-space:nowrap">📅 Aplicar a meses</button>
-                    <button id="btnResetMonthBudget" onclick="resetMonthBudget()" style="display:none;font-size:11px;font-weight:600;padding:5px 10px;border:1px solid #fed7aa;background:#fff7ed;border-radius:6px;cursor:pointer;color:#b45309;white-space:nowrap">↩ Usar padrão</button>
-                </div>
-            </div>
-            <div style="flex:1;display:flex;gap:14px;flex-wrap:wrap">
-                <div class="kpi" style="flex:1;min-width:120px">
-                    <div class="kpi-label">Alocado</div>
-                    <div class="kpi-val" id="budgetAllocated" style="font-size:16px">—</div>
-                    <div class="kpi-sub" id="budgetAllocatedPct"></div>
-                </div>
-                <div class="kpi" style="flex:1;min-width:120px">
-                    <div class="kpi-label">Gasto</div>
-                    <div class="kpi-val red" id="budgetSpent" style="font-size:16px">—</div>
-                    <div class="kpi-sub" id="budgetSpentPct"></div>
-                </div>
-                <div class="kpi" style="flex:1;min-width:120px">
-                    <div class="kpi-label">Disponível</div>
-                    <div class="kpi-val" id="budgetRemaining" style="font-size:16px">—</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Alocação do Orçamento -->
-        <div class="chart-box" style="margin-bottom:20px">
-            <div class="chart-box-label">Alocação do Orçamento</div>
-            <div id="wrapBudgetPie"><div class="chart-empty" style="height:200px"><span style="font-size:24px;opacity:.3">📊</span>Defina o orçamento</div></div>
-        </div>
-
-        <!-- Categorias — cria, edita e orça tudo aqui -->
-        <div class="data-table-box" style="margin-bottom:20px">
-            <div class="data-table-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
-                <span>Categorias do Orçamento</span>
-                <div style="display:flex;align-items:center;gap:8px">
-                    <button id="btnBudgetSort" onclick="toggleBudgetCatSort()"
-                        style="font-size:11px;font-weight:600;padding:4px 10px;border:1px solid var(--border);background:var(--surface);border-radius:6px;cursor:pointer;color:var(--text-2);white-space:nowrap">
-                        ↓ % Alocado
-                    </button>
-                    <span style="font-size:11px;color:var(--text-3)">Clique para editar</span>
-                </div>
-            </div>
-            <div id="budgetCatList" style="padding:4px 0"></div>
-            <div class="budget-add-cat">
-                <select id="budgetCatType" class="budget-add-type" title="Tipo da categoria">
-                    <option value="saida">📉 Gasto</option>
-                    <option value="entrada">📈 Entrada</option>
-                    <option value="investimento">🟣 Invest.</option>
-                </select>
-                <div class="icon-picker-wrap">
-                    <div class="ch-add-icon" id="catHubIconBtn" onclick="toggleIconPicker('catHubPicker')" title="Escolher ícone">📦</div>
-                    <div class="icon-picker" id="catHubPicker"></div>
-                </div>
-                <input type="text" id="catHubInput" maxlength="50" class="budget-add-name" placeholder="Nova categoria…"
-                    onkeydown="if(event.key==='Enter')addBudgetCategory()">
-                <button onclick="addBudgetCategory()" class="btn-save" style="width:auto;margin:0;padding:8px 14px;font-size:13px;flex-shrink:0">＋</button>
-            </div>
-        </div>
-
-        <!-- Gastos Fixos + Próximos Vencimentos, lado a lado -->
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-bottom:20px">
-            <div class="data-table-box">
-                <div class="data-table-title" style="display:flex;justify-content:space-between;align-items:center">
-                    <span>📌 Gastos Fixos do Mês</span>
-                    <div style="display:flex;align-items:center;gap:10px">
-                        <span id="budgetFixosTotal" style="font-weight:700;color:var(--danger)"></span>
-                        <button class="link-btn" onclick="abrirPopupFixos()">Gerenciar →</button>
-                    </div>
-                </div>
-                <div id="budgetFixosList"><div style="padding:16px;text-align:center;color:var(--text-3);font-size:12px">Nenhum fixo.</div></div>
-            </div>
-
-            <div class="data-table-box" id="vencBox" style="display:none">
-                <div class="data-table-title" style="display:flex;justify-content:space-between;align-items:center">
-                    <span>📅 Próximos Vencimentos · 30 dias</span>
-                    <span id="vencTotal" style="font-weight:700;color:var(--danger)"></span>
-                </div>
-                <div id="vencList" style="padding:4px 0"></div>
-            </div>
         </div>
     </div>
 </div>
@@ -2794,11 +2964,12 @@ function _sanGoals(list, report) {
 function _sanBudget(b) {
     b = b && typeof b === 'object' ? b : {};
     const nonNeg = v => { const n = parseValor(v); return Number.isFinite(n) && n >= 0 ? n : null; };
-    const out = { total: nonNeg(b.total) || 0, allocs: {}, monthTotals: {}, needsWants: {} };
+    const out = { total: nonNeg(b.total) || 0, allocs: {}, monthTotals: {}, needsWants: {}, locks: {} };
     _asList(b.categorias).forEach(c => { if (c && c.nome && c.pct) out.allocs[c.nome] = c.pct; });  // formato antigo
     Object.entries(b.allocs || {}).forEach(([k, v]) => { const p = nonNeg(v); if (p) out.allocs[k] = Math.min(100, p); });
     Object.entries(b.monthTotals || {}).forEach(([k, v]) => { const n = nonNeg(v); if (/^\d{4}-\d{2}$/.test(k) && n !== null) out.monthTotals[k] = n; });
     Object.entries(b.needsWants || {}).forEach(([k, v]) => { if (v === 'needs' || v === 'wants') out.needsWants[k] = v; });
+    Object.entries(b.locks || {}).forEach(([k, v]) => { if (v === true) out.locks[k] = true; });   // "valor fixo" na roda
     return out;
 }
 // raw usa as chaves curtas do payload/backup: t=tx, c=cats, g=goals, k=cards, b=budget
@@ -3643,18 +3814,19 @@ function removerFixo(i) {
 // ── CATEGORIAS: identidade = (tipo, nome) ────────────────────────────────────
 // "👨‍👩‍👧 Família" existe em saída E em entrada. Antes, remover/renomear numa lista
 // afetava a outra e movia lançamentos de entrada para categorias de saída.
-function _catInUse(name) { return TIPOS.some(tp => (cats[tp] || []).includes(name)); }
-// Chaves do orçamento (allocs/needsWants) são por nome: só migram quando o nome
-// antigo não existe mais em nenhuma lista.
+// Chaves do orçamento (allocs/needsWants/locks) são por nome: só migram quando o nome
+// antigo não existe mais entre as categorias orçáveis (gasto/investimento). Antes valia
+// qualquer lista: renomear o gasto "🌟 Ela" com uma entrada "🌟 Ela" deixava o valor
+// planejado no nome antigo e a categoria renomeada aparecia com R$ 0.
 function _moveBudgetKeys(oldName, newName) {
-    if (_catInUse(oldName)) return;
-    ['allocs', 'needsWants'].forEach(k => {
+    if (_allBudgetCats().includes(oldName)) return;
+    ['allocs', 'needsWants', 'locks'].forEach(k => {
         const o = budget[k];
         if (!o || o[oldName] === undefined) return;
         if (newName && o[newName] === undefined) o[newName] = o[oldName];
         delete o[oldName];
     });
-    if (_budgetCatExpanded.delete(oldName) && newName) _budgetCatExpanded.add(newName);
+    if (_orcSel && _orcSel.type === 'cat' && _orcSel.id === oldName) _orcSel = newName ? { type: 'cat', id: newName } : null;
 }
 
 function renameCategory(tipo, oldName, newName) {
@@ -4393,7 +4565,7 @@ function renderVencimentos() {
         return `<div style="display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid var(--border-light);font-size:12px">
             <span style="font-weight:600;color:var(--text-2);width:42px;flex-shrink:0">${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}</span>
             <span style="font-size:9px;font-weight:700;letter-spacing:.5px;padding:2px 6px;border-radius:4px;color:white;background:${corLegivel(i.cor)};flex-shrink:0">${i.badge}</span>
-            <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500">${escHtml(i.desc)}</span>
+            <span style="flex:1;min-width:0;overflow-wrap:anywhere;font-weight:500">${escHtml(i.desc)}</span>
             <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;color:${chipColor};background:${chipBg};flex-shrink:0">${chipTxt}</span>
             <span style="font-weight:700;color:var(--danger);flex-shrink:0">${fmt(i.valor)}</span>
         </div>`;
@@ -4833,6 +5005,12 @@ function renderMensal() {
     });
     const saidas = saidasDeb.concat(saidasCred);
 
+    const inv = lista.reduce((s, t) => s + (t.tipo === 'investimento' ? t.valor : 0), 0);
+    const saldo = roundMoney(ent - gas - inv), fase = periodoFase(a, m);
+    $('mHeroLabel').textContent = `${fase === 'futuro' ? 'Saldo previsto' : 'Saldo'} de ${MESES[m]} ${a}`;
+    $('mKpiSaldo').textContent = fmt(saldo);
+    $('mKpiSaldo').classList.toggle('neg', saldo < 0);
+    $('mHeroSub').textContent = `entrou ${fmt(ent)} − saiu ${fmt(gas)}${inv ? ` − investiu ${fmt(inv)}` : ''}`;
     $('mKpiEnt').textContent  = fmt(ent);
     $('mKpiGas').textContent  = fmt(gas);
     $('mKpiCred').textContent = fmt(cred);
@@ -5298,149 +5476,6 @@ function updateBudgetCatPct(safeKey, val) {
     _setAlloc(decodeURIComponent(safeKey), parseValor(val));
 }
 
-// Set an allocation by its R$ amount — converts to % of the month's total budget
-function updateBudgetCatValue(safeKey, val) {
-    const total = getBudgetTotal(_budgetMonth, _budgetYear);
-    if (!total || total <= 0) { toast('⚠️ Defina o Orçamento Total do mês primeiro.', '#b45309'); renderBudget(); return; }
-    const value = parseValor(val);
-    _setAlloc(decodeURIComponent(safeKey), value > 0 ? (value / total) * 100 : 0, 6);
-}
-
-function setBudgetCatGroup(safeKey, group) {
-    const nome = decodeURIComponent(safeKey);
-    if (budget.needsWants[nome] !== group) pushUndo(`"${nome}" como ${group === 'needs' ? 'necessidade' : 'desejo'}`, 'orc-nw:' + nome);
-    budget.needsWants[nome] = group;
-    saveBudget();
-    renderBudget();
-}
-
-// Renomear/remover pelo orçamento usa as mesmas funções do hub de categorias,
-// com o tipo explícito (antes renomeava o nome em TODAS as listas de tipo).
-function renameBudgetCat(safeKey, tipo) {
-    const oldName = decodeURIComponent(safeKey);
-    const inp     = document.getElementById(`bcat-rename-${safeKey}`);
-    if (!inp) return;
-    const newName = inp.value.trim();
-    if (renameCategory(tipo, oldName, newName) && newName !== oldName) toast(`✓ Renomeado para "${newName}"`, '#16a34a');
-}
-
-function deleteBudgetCat(safeKey, tipo) {
-    deleteCategoryFlow(tipo, decodeURIComponent(safeKey));
-}
-
-// ── BUDGET RENDERING ─────────────────────────────────────────────────────────
-function renderBudget() {
-    if (currentView === 'dashboard') renderBudgetRemaining();
-    const m = _budgetMonth, a = _budgetYear;
-    const monthLabel = $('budgetMonthLabel');
-    if (monthLabel) monthLabel.textContent = `${MESES[m]} ${a}`;
-
-    const custom = isMonthCustom(m, a);
-    const totalBudget = getBudgetTotal(m, a);
-
-    // Update total input
-    const totalInput = $('budgetTotal');
-    if (totalInput && document.activeElement !== totalInput) {
-        totalInput.value = totalBudget > 0 ? totalBudget.toLocaleString('pt-BR') : '';
-    }
-
-    // Update badge
-    const badge = $('budgetTypeBadge');
-    if (badge) {
-        badge.textContent = custom ? '⚡ Personalizado' : '✅ Padrão';
-        badge.style.cssText = `font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;${custom ? 'background:#fff7ed;color:#b45309' : 'background:#f0fdf4;color:#15803d'}`;
-    }
-
-    // Show/hide the reset-to-default button
-    const resetBtn = $('btnResetMonthBudget');
-    if (resetBtn) resetBtn.style.display = custom ? '' : 'none';
-    const allCats       = _allBudgetCats();
-    const totalAllocPct = allCats.reduce((s, c) => s + (budget.allocs[c] || 0), 0);
-    const totalAllocVal = totalBudget * (totalAllocPct / 100);
-
-    // Get actual spending
-    const lista       = txMes(m, a).filter(t => t.tipo === 'saida');
-    const investLista = txMes(m, a).filter(t => t.tipo === 'investimento');
-    const totalSpent  = lista.reduce((s, t) => s + t.valor, 0);
-
-    // Separate investment allocations so they don't shrink the spending budget
-    const spendBudget     = spendBudgetOf(totalBudget);
-
-    // KPIs
-    const elAlloc = $('budgetAllocated');
-    const elSpent = $('budgetSpent');
-    const elRemain = $('budgetRemaining');
-    if (elAlloc) { elAlloc.textContent = fmt(totalAllocVal); }
-    // Alocações somando > 100% prometem mais do que o total — a pizza normaliza e escondia isso
-    const elAllocPct = $('budgetAllocatedPct');
-    if (elAllocPct) {
-        const sobre = +totalAllocPct.toFixed(2) > 100;
-        elAllocPct.textContent = `${fmtPct(totalAllocPct)} do total${sobre ? ` · ⚠️ ${fmt(totalAllocVal - totalBudget)} além do total` : ''}`;
-        elAllocPct.style.color = sobre ? 'var(--danger)' : '';
-        elAllocPct.style.fontWeight = sobre ? '600' : '';
-    }
-    if (elSpent) { elSpent.textContent = fmt(totalSpent); }
-    if ($('budgetSpentPct')) $('budgetSpentPct').textContent = spendBudget > 0 ? `${pctDoLimite(totalSpent, spendBudget)}% do orçamento de gastos` : '';
-    if (elRemain) {
-        const rem = roundMoney(spendBudget - totalSpent);
-        elRemain.textContent = fmt(rem);
-        elRemain.className = 'kpi-val ' + (rem < 0 ? 'red' : 'green');
-    }
-
-    // Category list
-    renderBudgetCatList(m, a, lista, investLista, totalBudget);
-
-    // Pie chart
-    renderBudgetPie(totalBudget);
-
-    // Fixos
-    renderBudgetFixos(m, a);
-    renderVencimentos();
-}
-
-
-let _budgetCatSort = 'alloc_desc'; // 'alloc_desc' | 'alloc_asc' | 'used_desc' | 'used_asc' | 'name_asc' | 'name_desc'
-let _budgetCatExpanded = new Set();
-
-const _BUDGET_SORT_CYCLE = ['alloc_desc','alloc_asc','used_desc','used_asc','name_asc','name_desc'];
-const _BUDGET_SORT_LABELS = {
-    alloc_desc: '↓ % Alocado', alloc_asc: '↑ % Alocado',
-    used_desc:  '↓ % Gasto',   used_asc:  '↑ % Gasto',
-    name_asc:   '↑ Nome',      name_desc: '↓ Nome',
-};
-
-function toggleBudgetCatSort() {
-    const idx = _BUDGET_SORT_CYCLE.indexOf(_budgetCatSort);
-    _budgetCatSort = _BUDGET_SORT_CYCLE[(idx + 1) % _BUDGET_SORT_CYCLE.length];
-    const btn = $('btnBudgetSort');
-    if (btn) btn.textContent = _BUDGET_SORT_LABELS[_budgetCatSort];
-    // Usa o mês do ORÇAMENTO (antes usava o filtro do topo e mostrava gastos de outro mês)
-    const m = _budgetMonth, a = _budgetYear;
-    const saidas      = txMes(m, a).filter(t => t.tipo === 'saida');
-    const investLista = txMes(m, a).filter(t => t.tipo === 'investimento');
-    renderBudgetCatList(m, a, saidas, investLista, getBudgetTotal(m, a));
-}
-
-function toggleBudgetCatRow(safeKey) {
-    const catName = decodeURIComponent(safeKey);
-    if (_budgetCatExpanded.has(catName)) _budgetCatExpanded.delete(catName);
-    else _budgetCatExpanded.add(catName);
-    const detail  = document.getElementById(`bcat-detail-${safeKey}`);
-    const chevron = document.getElementById(`bcat-chev-${safeKey}`);
-    if (detail) {
-        const expanded = _budgetCatExpanded.has(catName);
-        detail.style.display = expanded ? 'flex' : 'none';
-        if (chevron) chevron.textContent = expanded ? '⌄' : '›';
-    }
-}
-
-// Create a category (any type) from the budget box's add-row
-function addBudgetCategory() {
-    const sel = $('budgetCatType');
-    addCatHub(sel ? sel.value : 'saida');   // usa catHubInput + ícone escolhido
-    renderBudget();   // refresh the tiles so the new category shows
-}
-
 function _budgetGroup(catName) {
     if (_isBudgetCatInvest(catName)) return 'invest';
     const ov = budget.needsWants && budget.needsWants[catName];
@@ -5451,131 +5486,577 @@ function _budgetGroup(catName) {
     return 'wants';
 }
 
-function renderBudgetCatList(m, a, saidas, investList, totalBudget) {
-    const el = $('budgetCatList');
-    if (!el) return;
-    const allCats = _allBudgetCats();
-    if (!allCats.length) {
-        el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-3);font-size:12px">Nenhuma categoria. Adicione em Orçamento → Categorias.</div>';
-        return;
-    }
-    const enriched = allCats.map(catName => {
-        const pct       = budget.allocs[catName] || 0;
-        const isInvest  = _isBudgetCatInvest(catName);
-        const allocated = totalBudget * (pct / 100);
-        const spent     = _getSpentForBudgetCat(catName, saidas, investList);
-        const pctUsed   = pctDoLimite(spent, allocated);   // > 100 ⇔ gastou mais que o alocado
-        return { catName, pct, isInvest, allocated, spent, pctUsed, group: _budgetGroup(catName) };
-    });
-    if (_budgetCatSort === 'alloc_desc')      enriched.sort((a, b) => b.pct - a.pct);
-    else if (_budgetCatSort === 'alloc_asc')  enriched.sort((a, b) => a.pct - b.pct);
-    else if (_budgetCatSort === 'used_desc')  enriched.sort((a, b) => b.pctUsed - a.pctUsed);
-    else if (_budgetCatSort === 'used_asc')   enriched.sort((a, b) => a.pctUsed - b.pctUsed);
-    else if (_budgetCatSort === 'name_asc')   enriched.sort((a, b) => cmpText(splitCatName(a.catName).label, splitCatName(b.catName).label));
-    else if (_budgetCatSort === 'name_desc')  enriched.sort((a, b) => cmpText(splitCatName(b.catName).label, splitCatName(a.catName).label));
-    const sortBtn = $('btnBudgetSort');
-    if (sortBtn) sortBtn.textContent = _BUDGET_SORT_LABELS[_budgetCatSort] || _budgetCatSort;
 
-    const tileHtml = ({ catName, pct, isInvest, allocated, spent, pctUsed, group }) => {
-        const over     = pctUsed > 100;
-        const barColor = over ? 'var(--danger)' : 'var(--accent)';
-        const pctColor = over ? 'var(--danger)' : pctUsed > 80 ? '#b45309' : 'var(--text-3)';
-        // safeKey só para ids do DOM; nos handlers vai como literal JS seguro (jsStr) —
-        // encodeURIComponent não escapa ' e nomes como "Mc'Donalds" quebravam o onclick
-        const safeKey  = encodeURIComponent(catName), k = jsStr(safeKey);
-        const tipo     = group === 'entrada' ? 'entrada' : isInvest ? 'investimento' : 'saida', tp = jsStr(tipo);
-        const parts    = splitCatName(catName);
-        const icon     = escHtml(parts.icon || '📦');
-        const nameText = escHtml(parts.label || catName);
-        const detail   = _budgetCatExpanded.has(catName) ? 'flex' : 'none';
-        const renameRow = `<div class="btd-row">
-                <input type="text" id="bcat-rename-${escHtml(safeKey)}" class="btd-rename" value="${escHtml(catName)}" aria-label="Nome da categoria" onkeydown="if(event.key==='Enter')renameBudgetCat(${k},${tp})">
-                <button class="btd-save" onclick="renameBudgetCat(${k},${tp})">&#10003; Renomear</button>
-                <button class="btd-del" onclick="deleteBudgetCat(${k},${tp})">&#128465;&#65039;</button>
-            </div>`;
-        if (group === 'entrada') {
-            return `
-        <div class="budget-tile" onclick="toggleBudgetCatRow(${k})" title="${escHtml(catName)}">
-            <div class="budget-tile-icon">${icon}</div>
-            <div class="budget-tile-name">${nameText}</div>
-            <div class="budget-tile-spent">Categoria de entrada</div>
-        </div>
-        <div id="bcat-detail-${escHtml(safeKey)}" class="budget-tile-detail" style="display:${detail}" onclick="event.stopPropagation()">
-            ${renameRow}
-        </div>`;
-        }
-        return `
-        <div class="budget-tile" onclick="toggleBudgetCatRow(${k})" title="${escHtml(catName)}">
-            <span class="budget-tile-pct" style="color:${pctColor}">${pctUsed}%</span>
-            <div class="budget-tile-icon">${icon}</div>
-            <div class="budget-tile-name">${nameText}</div>
-            <div class="budget-tile-spent">${fmt(spent)}${pct > 0 ? ` / ${fmt(allocated)}` : ''}</div>
-            <div class="budget-tile-bar"><div class="budget-tile-fill" style="width:${Math.min(pctUsed, 100)}%;background:${barColor}"></div></div>
-        </div>
-        <div id="bcat-detail-${escHtml(safeKey)}" class="budget-tile-detail" style="display:${detail}" onclick="event.stopPropagation()">
-            ${isInvest ? '' : `<div class="btd-row">
-                <span class="btd-lbl">Tipo</span>
-                <div class="nw-toggle">
-                    <button class="nw-opt ${group === 'needs' ? 'active' : ''}" onclick="setBudgetCatGroup(${k},'needs')">Necessidade</button>
-                    <button class="nw-opt ${group === 'wants' ? 'active' : ''}" onclick="setBudgetCatGroup(${k},'wants')">Desejo</button>
-                </div>
-            </div>`}
-            <div class="btd-row">
-                <span class="btd-lbl">Valor</span>
-                <input type="text" class="btd-value" inputmode="decimal" value="${allocated ? allocated.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}" placeholder="0,00" onchange="updateBudgetCatValue(${k}, this.value)" title="Valor em R$ para o mês">
-                <span class="btd-lbl">ou</span>
-                <input type="number" class="budget-cat-pct-input" value="${+pct.toFixed(2)}" min="0" max="100" step="0.01" onchange="updateBudgetCatPct(${k}, this.value)" title="% do orçamento">
-                <span class="btd-lbl">%</span>
-            </div>
-            ${renameRow}
-        </div>`;
-    };
-
-    const entradaItems = (cats.entrada || []).map(catName => ({ catName, group: 'entrada' }));
-    const allItems = enriched.concat(entradaItems);
-    const groups = [
-        { key: 'needs',   label: 'Necessidades' },
-        { key: 'wants',   label: 'Desejos' },
-        { key: 'invest',  label: 'Investimentos' },
-        { key: 'entrada', label: 'Entradas' }
-    ];
-    let html = '';
-    groups.forEach(g => {
-        const items = allItems.filter(c => c.group === g.key);
-        if (!items.length) return;
-        let sub = '';
-        if (g.key !== 'entrada') {
-            const gSpent = items.reduce((s, c) => s + c.spent, 0);
-            const gPct   = items.reduce((s, c) => s + c.pct, 0);
-            sub = ` <span style="color:var(--text-3);font-weight:600">&middot; ${fmt(gSpent)}${gPct ? ` &middot; ${fmtPct(gPct)}` : ''}</span>`;
-        }
-        html += `<div class="budget-tiles-group">
-            <div class="budget-tiles-group-label">${g.label}${sub}</div>
-            <div class="budget-tiles">${items.map(tileHtml).join('')}</div>
-        </div>`;
-    });
-    el.innerHTML = html;
+// Grupo Necessidade/Desejo de uma categoria de gasto (investimentos são um grupo à parte)
+function setBudgetCatGroup(nome, group) {
+    if (group !== 'needs' && group !== 'wants') return;
+    if (budget.needsWants[nome] !== group) pushUndo(`"${nome}" como ${group === 'needs' ? 'necessidade' : 'desejo'}`, 'orc-nw:' + nome);
+    budget.needsWants[nome] = group;
+    saveBudget();
+    renderBudget();
 }
 
-function renderBudgetPie(totalBudget) {
-    const wrap = $('wrapBudgetPie');
-    if (!wrap) return;
-    const allCats = _allBudgetCats().filter(c => (budget.allocs[c] || 0) > 0);
-    if (!allCats.length || !totalBudget) {
-        wrap.innerHTML = '<div class="chart-empty" style="height:200px"><span style="font-size:24px;opacity:.3">📊</span>Defina o orçamento</div>';
-        destroyChart('budgetPie'); return;
+// ── ORÇAMENTO: RODA EDITÁVEL ────────────────────────────────────────────────
+// Anel interno = Necessidades, Desejos e Investimentos (+ cinza "sem destino"); externo = as
+// categorias de cada grupo. As alocações continuam guardadas em % do total do mês
+// (budget.allocs); aqui as contas são em centavos inteiros e voltam como % com 6 casas.
+// Regras (decididas com o dono): aumentar uma categoria tira das outras do MESMO grupo, em
+// proporção, e o total do grupo não muda; sem de onde tirar, usa o dinheiro sem destino.
+// Grupo cresce pelo sem destino e depois tirando dos outros grupos. Sobrar sem destino é
+// permitido. Categoria com valor fixo (budget.locks) não muda quando se mexe nas outras.
+const ORC_GRUPOS = [
+    { key: 'needs',  label: 'Necessidades',  one: 'Necessidade',  cor: '#2a78d6' },
+    { key: 'wants',  label: 'Desejos',       one: 'Desejo',       cor: '#eb6834' },
+    { key: 'invest', label: 'Investimentos', one: 'Investimento', cor: '#1baf7a' },
+];
+const ORC_SEM_COR = '#d5d8df', ORC_PASSO = 1000;            // passo do arraste/setas: R$ 10
+const ORC_CX = 160, ORC_CY = 160, ORC_EXT = [114, 150], ORC_INT = [88, 108], ORC_TONS = [.9, .66, .78];
+let _orcSel = null;             // { type: 'cat' | 'group', id }
+let _orcMov = null;             // "de onde veio": { antes: Map(nome → centavos), livre, alvo: [nomes], titulo }
+let _orcDrag = null, _orcHover = null, _orcNomes = [], _orcLigado = false, _orcGesto = 0, _orcAba = 'bud';
+const _orcGrupo = k => ORC_GRUPOS.find(g => g.key === k);
+const _orcSoma = (arr, f = c => c.vc) => arr.reduce((s, c) => s + f(c), 0);
+const _orcR0 = c => fmt(c / 100).replace(/,00$/, '');        // centavos → "R$ 1.234" (sem ",00")
+const _orcCompacto = () => IS_MOBILE || matchMedia('(max-width: 900px)').matches;
+function _orcTom(hex, p) {
+    const n = parseInt(hex.slice(1), 16), f = c => Math.round(c * p + 255 * (1 - p));
+    return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`;
+}
+function _orcTipo(nome) { return _isBudgetCatInvest(nome) ? 'investimento' : 'saida'; }
+
+function _orcModelo() {
+    const m = _budgetMonth, a = _budgetYear, T = getBudgetTotal(m, a), lista = txMes(m, a);
+    const saidas = lista.filter(t => t.tipo === 'saida'), invs = lista.filter(t => t.tipo === 'investimento');
+    const locks = budget.locks || {};
+    const cs = _allBudgetCats().map(nome => ({ nome, grupo: _budgetGroup(nome), vc: Math.round(T * (budget.allocs[nome] || 0)),
+        spent: _getSpentForBudgetCat(nome, saidas, invs), locked: !!locks[nome] }));
+    return { m, a, T, Tc: Math.round(T * 100), cats: cs, saidas, invs };
+}
+const _orcLivre = mod => Math.max(0, mod.Tc - _orcSoma(mod.cats));
+const _orcDoGrupo = (mod, g) => mod.cats.filter(c => c.grupo === g);
+// Tira/dá em proporção ao valor atual (maiores restos). Valor redondo em reais é repartido em
+// reais inteiros (arrastar R$ 10 não espalha centavos); valor com centavos, em centavos.
+function _orcRepartir(pool, n, peso, cap) {
+    const bruto = pool.map((c, i) => n * peso[i]), base = bruto.map((b, i) => Math.min(cap[i], Math.floor(b)));
+    let resto = n - base.reduce((s, v) => s + v, 0);
+    const ordem = bruto.map((b, i) => [b - Math.floor(b), i]).sort((x, y) => y[0] - x[0] || x[1] - y[1]).map(([, i]) => i);
+    for (let volta = 0; volta < 2 && resto > 0; volta++)
+        for (const i of ordem) { if (resto > 0 && base[i] < cap[i]) { base[i]++; resto--; } }
+    return base;
+}
+function _orcTirar(pool, quanto) {
+    const tem = _orcSoma(pool), tira = Math.min(quanto, tem);
+    if (tira <= 0) return 0;
+    const u = tira % 100 === 0 ? 100 : 1, n = tira / u;
+    const base = _orcRepartir(pool, n, pool.map(c => c.vc / tem), pool.map(c => Math.floor(c.vc / u)));
+    pool.forEach((c, i) => { c.vc -= base[i] * u; });
+    return base.reduce((s, v) => s + v, 0) * u;
+}
+function _orcDar(pool, quanto) {
+    if (!pool.length || quanto <= 0) return 0;
+    const w = _orcSoma(pool), u = quanto % 100 === 0 ? 100 : 1, n = quanto / u;
+    const base = _orcRepartir(pool, n, pool.map(c => w ? c.vc / w : 1 / pool.length), pool.map(() => Infinity));
+    pool.forEach((c, i) => { c.vc += base[i] * u; });
+    return quanto;
+}
+function _orcMudaCat(mod, c, delta) {
+    const irmas = mod.cats.filter(x => x.grupo === c.grupo && x !== c && !x.locked);
+    if (delta > 0) {
+        const tirou = _orcTirar(irmas, delta), livre = Math.min(delta - tirou, _orcLivre(mod));
+        c.vc += tirou + livre;
+        return tirou + livre;
     }
-    const labels  = allCats.map(c => c);
-    const data    = allCats.map(c => budget.allocs[c] || 0);
-    const totalPct = data.reduce((s, v) => s + v, 0);
-    if (totalPct < 100) { labels.push('Não alocado'); data.push(100 - totalPct); }
-    const colors = coresCategorias(allCats);
-    if (totalPct < 100) colors.push('#e4e4e7');
-    upsertChart('budgetPie', ensureCanvas(wrap, 'budgetPieCanvas', 200), {
-        type: 'doughnut',
-        data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] },
-        options: { ...CHART_COMMON_OPTS, cutout: '60%' }
+    const d = Math.min(-delta, c.vc);
+    c.vc -= d;
+    if (irmas.length) _orcDar(irmas, d);
+    return -d;
+}
+function _orcMudaGrupo(mod, g, delta) {
+    const proprias = mod.cats.filter(c => c.grupo === g && !c.locked);
+    if (!proprias.length) return 0;
+    if (delta > 0) {
+        const livre = Math.min(delta, _orcLivre(mod));
+        const tirou = delta > livre ? _orcTirar(mod.cats.filter(c => c.grupo !== g && !c.locked), delta - livre) : 0;
+        _orcDar(proprias, livre + tirou);
+        return livre + tirou;
+    }
+    return -_orcTirar(proprias, -delta);
+}
+function _orc503020(mod) {
+    const parte = { needs: .5, wants: .3, invest: .2 };
+    ORC_GRUPOS.forEach(g => {
+        const proprias = mod.cats.filter(c => c.grupo === g.key && !c.locked);
+        if (!proprias.length) return;
+        const quer = Math.max(0, Math.round(mod.Tc * parte[g.key]) - _orcSoma(mod.cats.filter(c => c.grupo === g.key && c.locked)));
+        const tem = _orcSoma(proprias);
+        if (quer > tem) _orcDar(proprias, quer - tem); else _orcTirar(proprias, tem - quer);
     });
+}
+// Grava o modelo em budget.allocs (% com 6 casas: ida e volta exata em centavos)
+function _orcGravar(mod) {
+    mod.cats.forEach(c => {
+        const p = mod.T > 0 ? Math.min(100, +(c.vc / mod.T).toFixed(6)) : 0;
+        if (p > 0) budget.allocs[c.nome] = p; else delete budget.allocs[c.nome];
+    });
+}
+// Aplica uma mudança: desfazer agrupado por gesto, grava e mostra "de onde veio"
+function _orcMudar(fn, { alvo = null, titulo = null, label = 'Ajuste na roda do orçamento', gesto = null } = {}) {
+    const mod = _orcModelo();
+    if (!(mod.T > 0)) { toast('⚠️ Defina o total do mês primeiro.', '#b45309'); renderBudget(); return 0; }
+    const antes = new Map(mod.cats.map(c => [c.nome, c.vc])), livre = _orcLivre(mod);
+    const feito = fn(mod);
+    if (mod.cats.every(c => c.vc === antes.get(c.nome))) { renderBudget(); return 0; }
+    pushUndo(label, gesto || 'orc-roda:' + (++_orcGesto));
+    _orcGravar(mod);
+    if (!gesto || !_orcMov || _orcMov.gesto !== gesto) _orcMov = { antes, livre, alvo: alvo || [], titulo, gesto };
+    if (_orcDrag) _orcRenderTudo(_orcModelo());
+    else { saveBudget(); renderBudget(); }
+    return feito || 1;
+}
+// alvo = { type: 'cat' | 'group', id } (padrão: a seleção atual)
+function _orcAjustar(deltaC, alvo = _orcSel) {
+    if (!alvo) return 0;
+    const ref = _orcModelo();
+    return _orcMudar(mod => {
+        if (alvo.type === 'cat') { const c = mod.cats.find(x => x.nome === alvo.id); return c ? _orcMudaCat(mod, c, deltaC) : 0; }
+        return _orcMudaGrupo(mod, alvo.id, deltaC);
+    }, { alvo: alvo.type === 'cat' ? [alvo.id] : _orcDoGrupo(ref, alvo.id).map(c => c.nome), titulo: alvo.type === 'group' ? _orcGrupo(alvo.id).label : null });
+}
+function _orcDefinir(valorTxt, alvo = _orcSel) {
+    if (!alvo) return;
+    const v = parseValor(valorTxt);
+    if (!Number.isFinite(v) || v < 0) { renderBudget(); return; }
+    const mod = _orcModelo(), quer = Math.round(roundMoney(v) * 100);
+    const c = alvo.type === 'cat' ? mod.cats.find(x => x.nome === alvo.id) : null;
+    if (alvo.type === 'cat' && !c) { renderBudget(); return; }
+    const atual = c ? c.vc : _orcSoma(_orcDoGrupo(mod, alvo.id));
+    if (!_orcAjustar(quer - atual, alvo)) renderBudget();
+}
+
+// ── Desenho ──
+function _orcPt(r, a) { const t = (a - 90) * Math.PI / 180; return [ORC_CX + r * Math.cos(t), ORC_CY + r * Math.sin(t)]; }
+function _orcArco(r0, r1, a0, a1, pad) {
+    a0 += pad; a1 -= pad;
+    if (a1 - a0 < 0.4) return '';
+    if (a1 - a0 >= 359.5) return _orcArco(r0, r1, a0 - pad, a0 + 180, pad) + _orcArco(r0, r1, a0 + 180, a1 + pad, pad);
+    const lg = a1 - a0 > 180 ? 1 : 0, f = n => n.toFixed(2);
+    const [x0, y0] = _orcPt(r1, a0), [x1, y1] = _orcPt(r1, a1), [x2, y2] = _orcPt(r0, a1), [x3, y3] = _orcPt(r0, a0);
+    return `M${f(x0)} ${f(y0)}A${r1} ${r1} 0 ${lg} 1 ${f(x1)} ${f(y1)}L${f(x2)} ${f(y2)}A${r0} ${r0} 0 ${lg} 0 ${f(x3)} ${f(y3)}Z`;
+}
+// Escala da roda: o total do mês (ou a soma, se as alocações antigas passarem do total)
+const _orcEscala = mod => Math.max(mod.Tc, _orcSoma(mod.cats));
+function _orcLayout(mod) {
+    const S = _orcEscala(mod), segs = [], grupos = [];
+    let a = 0;
+    ORC_GRUPOS.forEach(g => {
+        const g0 = a;
+        _orcDoGrupo(mod, g.key).forEach((c, i) => {
+            const span = S ? c.vc / S * 360 : 0;
+            segs.push({ c, a0: a, a1: a + span, i });
+            a += span;
+        });
+        grupos.push({ g, a0: g0, a1: a, n: _orcDoGrupo(mod, g.key).length });
+    });
+    return { segs, grupos, fim: a };
+}
+function _orcRenderRoda(mod) {
+    const svgSl = $('orcSlices'); if (!svgSl) return;
+    const ch = $('orcCatHandle'), gh = $('orcGHandles');
+    if (!(mod.T > 0) || !mod.cats.length) {
+        svgSl.innerHTML = `<path d="${_orcArco(ORC_INT[0], ORC_EXT[1], 0, 360, 0)}" fill="${ORC_SEM_COR}" opacity=".55"></path>`;
+        $('orcLabels').innerHTML = ''; gh.innerHTML = ''; ch.style.display = 'none';
+        return;
+    }
+    const { segs, grupos, fim } = _orcLayout(mod), sel = _orcSel || {};
+    const idx = new Map(_orcNomes.map((n, i) => [n, i]));
+    let h = '', lab = '';
+    if (fim < 359.6) h += `<path d="${_orcArco(ORC_INT[0], ORC_EXT[1], fim, 360, 0.6)}" fill="${ORC_SEM_COR}" data-kind="none"><title>Sem destino: ${escHtml(_orcR0(_orcLivre(mod)))}</title></path>`;
+    grupos.forEach(({ g, a0, a1 }) => {
+        const on = sel.type === 'group' && sel.id === g.key;
+        h += `<path d="${_orcArco(ORC_INT[0], ORC_INT[1] + (on ? 4 : 0), a0, a1, 0.7)}" fill="${g.cor}" data-kind="group" data-g="${g.key}"><title>${g.label}: ${escHtml(_orcR0(_orcSoma(_orcDoGrupo(mod, g.key))))}</title></path>`;
+    });
+    segs.forEach(({ c, a0, a1, i }) => {
+        const on = sel.type === 'cat' && sel.id === c.nome, hov = _orcHover === c.nome;
+        const dim = (sel.type === 'cat' && !on && !hov) || (_orcHover && !hov && !on);
+        h += `<path d="${_orcArco(ORC_EXT[0], ORC_EXT[1] + (on || hov ? 6 : 0), a0, a1, 0.55)}" fill="${_orcTom(_orcGrupo(c.grupo).cor, ORC_TONS[i % 3])}" data-kind="cat" data-i="${idx.get(c.nome)}" style="opacity:${dim ? .72 : 1}"><title>${escHtml(c.nome)}: ${escHtml(_orcR0(c.vc))}</title></path>`;
+        if (a1 - a0 >= 17) {
+            const [x, y] = _orcPt((ORC_EXT[0] + ORC_EXT[1]) / 2, (a0 + a1) / 2);
+            lab += `<text class="orc-ico" x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" dominant-baseline="central">${escHtml(splitCatName(c.nome).icon || '📦')}</text>`;
+        }
+    });
+    svgSl.innerHTML = h;
+    $('orcLabels').innerHTML = lab;
+    // Alças dos grupos: elementos persistentes (recriar no meio do arraste perderia o ponteiro)
+    if (!gh.children.length) ORC_GRUPOS.forEach(g => gh.insertAdjacentHTML('beforeend',
+        `<g class="orc-handle" data-g="${g.key}" aria-hidden="true"><circle r="16" fill="transparent"></circle><circle class="knob" r="6.5" style="stroke:${g.cor}"></circle></g>`));
+    grupos.forEach(({ g, a1, n }) => {
+        const el = gh.querySelector(`[data-g="${g.key}"]`), [x, y] = _orcPt((ORC_INT[0] + ORC_INT[1]) / 2, a1);
+        el.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
+        el.style.display = n ? '' : 'none';
+    });
+    const s = sel.type === 'cat' && segs.find(x => x.c.nome === sel.id);
+    if (s) {
+        const [x, y] = _orcPt((ORC_EXT[0] + ORC_EXT[1]) / 2 + 3, s.a1);
+        ch.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
+        ch.querySelector('.knob').style.stroke = _orcGrupo(s.c.grupo).cor;
+        ch.style.display = '';
+    } else ch.style.display = 'none';
+}
+function _orcRenderCentro(mod) {
+    const el = $('orcCenter'); if (!el) return;
+    if (!(mod.T > 0)) { el.innerHTML = `<small>Planejado</small><span class="free">Digite o total do mês acima para montar a roda</span>`; return; }
+    const livre = _orcLivre(mod), alem = _orcSoma(mod.cats) - mod.Tc;
+    el.innerHTML = `<small>Planejado</small><b>${escHtml(_orcR0(mod.Tc))}</b>`
+        + (alem > 0 ? `<span class="free over">⚠️ ${escHtml(_orcR0(alem))} além do total</span>`
+            : `<span class="free ${livre ? '' : 'ok'}">${livre ? `${escHtml(_orcR0(livre))} sem destino` : 'Tudo com destino ✓'}</span>`);
+}
+function _orcRenderChips(mod) {
+    const el = $('orcChips'); if (!el) return;
+    if (!(mod.T > 0)) { el.innerHTML = ''; return; }
+    const S = _orcEscala(mod), pc = v => fmtPct(S ? v / S * 100 : 0), sel = _orcSel || {};
+    el.innerHTML = ORC_GRUPOS.filter(g => _orcDoGrupo(mod, g.key).length).map(g =>
+        `<button class="orc-chip" data-g="${g.key}" aria-pressed="${sel.type === 'group' && sel.id === g.key}"><span class="orc-dot" style="background:${g.cor}"></span><b>${g.label}</b><span class="n">${pc(_orcSoma(_orcDoGrupo(mod, g.key)))}</span></button>`).join('')
+        + `<span class="orc-chip"><span class="orc-dot" style="background:${ORC_SEM_COR}"></span><b>Sem destino</b><span class="n">${pc(_orcLivre(mod))}</span></span>`;
+}
+function _orcStatus(c) {
+    const plano = c.vc / 100, sobra = roundMoney(plano - c.spent);
+    if (c.grupo === 'invest') {
+        if (!plano) return c.spent ? { cls: 'good', lbl: 'guardado', v: fmt(c.spent) } : { cls: 'muted', lbl: 'sem plano', v: '—' };
+        return sobra <= 0 ? { cls: 'good', lbl: 'guardado', v: fmt(c.spent) } : { cls: 'warn', lbl: 'a guardar', v: fmt(sobra) };
+    }
+    if (!plano) return c.spent ? { cls: 'warn', lbl: 'sem plano', v: fmt(c.spent) } : { cls: 'muted', lbl: 'sem gastos', v: '—' };
+    if (sobra < 0) return { cls: 'bad', lbl: 'passou', v: fmt(-sobra) };
+    return { cls: c.spent / plano >= .8 ? 'warn' : 'good', lbl: 'resta', v: fmt(sobra) };
+}
+const _orcValTxt = c => (c / 100).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+function _orcRenderSel(mod) {
+    const el = $('orcSel'); if (!el) return;
+    if (!(mod.T > 0) || !_orcSel) { el.innerHTML = mod.T > 0 && mod.cats.length ? '<div class="orc-sel-vazio">Clique numa fatia ou numa categoria para ajustar.</div>' : ''; return; }
+    const S = _orcEscala(mod), pc = v => fmtPct(S ? v / S * 100 : 0);
+    if (_orcSel.type === 'cat') {
+        const c = mod.cats.find(x => x.nome === _orcSel.id); if (!c) { el.innerHTML = ''; return; }
+        const st = _orcStatus(c), g = _orcGrupo(c.grupo), p = splitCatName(c.nome);
+        el.innerHTML = `
+        <div class="orc-sel-head"><div class="orc-sel-ico">${escHtml(p.icon || '📦')}</div>
+            <div style="min-width:0"><div class="orc-sel-name">${escHtml(p.label || c.nome)}</div><div class="orc-sel-kind"><span class="orc-dot" style="background:${g.cor}"></span>${g.one}</div></div>
+            <button class="orc-lock" data-act="lock" aria-pressed="${c.locked}" title="Valor fixo não muda quando você mexe nas outras categorias">${c.locked ? '🔒 Valor fixo' : '🔓 Fixar valor'}</button></div>
+        <div class="orc-step"><button data-act="menos" aria-label="Diminuir R$ 10">−</button>
+            <input id="orcValIn" inputmode="decimal" value="${_orcValTxt(c.vc)}" aria-label="Valor planejado para ${escHtml(p.label || c.nome)} em reais">
+            <button data-act="mais" aria-label="Aumentar R$ 10">+</button><span class="pct">${pc(c.vc)}</span></div>
+        <div class="orc-sel-spent">Gastou ${fmt(c.spent)} · <span class="orc-st-${st.cls}">${st.lbl}${st.v === '—' ? '' : ' ' + st.v}</span></div>
+        ${c.grupo === 'invest' ? '' : `<div class="orc-gsw">Grupo: ${ORC_GRUPOS.filter(x => x.key !== 'invest').map(x => `<button data-move="${x.key}" aria-pressed="${x.key === c.grupo}"><span class="orc-dot" style="background:${x.cor}"></span>${x.one}</button>`).join('')}</div>`}
+        <details class="orc-edit"><summary>✏️ Renomear ou excluir</summary>
+            <div class="btd-row"><input type="text" id="orcRenameIn" class="btd-rename" maxlength="${CAT_MAX}" value="${escHtml(c.nome)}" aria-label="Nome da categoria">
+            <button class="btd-save" data-act="renomear">✓</button><button class="btd-del" data-act="excluir" title="Excluir categoria">🗑️</button></div>
+        </details>`;
+    } else {
+        const g = _orcGrupo(_orcSel.id), cs = _orcDoGrupo(mod, g.key), fixas = cs.filter(c => c.locked).length, v = _orcSoma(cs);
+        el.innerHTML = `
+        <div class="orc-sel-head"><div class="orc-sel-ico"><span class="orc-dot" style="width:16px;height:16px;background:${g.cor}"></span></div>
+            <div><div class="orc-sel-name">${g.label}</div><div class="orc-sel-kind">${cs.length} categoria${cs.length !== 1 ? 's' : ''}${fixas ? ` · ${fixas} com valor fixo` : ''}</div></div></div>
+        <div class="orc-step"><button data-act="menos" aria-label="Diminuir R$ 10">−</button>
+            <input id="orcValIn" inputmode="decimal" value="${_orcValTxt(v)}" aria-label="Valor planejado para ${g.label} em reais">
+            <button data-act="mais" aria-label="Aumentar R$ 10">+</button><span class="pct">${pc(v)}</span></div>
+        <div class="orc-sel-spent">Gastou ${fmt(_orcSoma(cs, c => c.spent))} de ${escHtml(_orcR0(v))} planejados</div>`;
+    }
+}
+function _orcRenderGuia(mod) {
+    const el = $('orcGuide'); if (!el) return;
+    if (!(mod.T > 0) || !mod.cats.length) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    const S = _orcEscala(mod), p = k => Math.round(S ? _orcSoma(_orcDoGrupo(mod, k)) / S * 100 : 0);
+    el.innerHTML = `<span>Seu plano <b>${p('needs')} · ${p('wants')} · ${p('invest')}</b>, guia <b>50 · 30 · 20</b></span>
+        <button class="orc-soft" data-act="503020" title="Necessidades 50%, Desejos 30%, Investimentos 20% do total (valores fixos não mudam)">Aplicar 50/30/20</button>`;
+}
+function _orcRenderMov(mod) {
+    const el = $('orcMoved'); if (!el) return;
+    const mv = _orcMov;
+    if (!mv || !(mod.T > 0)) { el.textContent = ''; return; }
+    const mud = mod.cats.map(c => ({ c, d: c.vc - (mv.antes.get(c.nome) ?? c.vc) })).filter(x => x.d);
+    const dn = _orcLivre(mod) - mv.livre;
+    if (!mud.length && !dn) { el.textContent = ''; return; }
+    const sg = d => (d > 0 ? '+' : '−') + _orcR0(Math.abs(d)), nome = c => splitCatName(c.nome).label || c.nome;
+    const prin = mud.filter(x => mv.alvo.includes(x.c.nome)), resto = mud.filter(x => !mv.alvo.includes(x.c.nome)).sort((x, y) => Math.abs(y.d) - Math.abs(x.d));
+    const partes = resto.slice(0, 3).map(x => `${escHtml(nome(x.c))} ${sg(x.d)}`);
+    if (resto.length > 3) partes.push(`+${resto.length - 3} categoria${resto.length - 3 !== 1 ? 's' : ''}`);
+    if (dn) partes.push(`sem destino ${sg(dn)}`);
+    let cab = '';
+    if (prin.length === 1 && !mv.titulo) cab = `<b>${escHtml(nome(prin[0].c))} ${sg(prin[0].d)}</b>`;
+    else if (prin.length) cab = `<b>${escHtml(mv.titulo || 'Selecionadas')} ${sg(_orcSoma(prin, x => x.d))}</b>`;
+    el.innerHTML = [cab, partes.join(' · ')].filter(Boolean).join(' · ');
+}
+function _orcRenderHero(mod) {
+    const num = $('orcHeroNum'); if (!num) return;
+    const gasto = _orcSoma(mod.saidas, t => t.valor), inv = _orcSoma(_orcDoGrupo(mod, 'invest')) / 100;
+    if (!(mod.T > 0)) {
+        $('orcHeroLabel').textContent = 'Sem orçamento neste mês';
+        num.textContent = '—'; num.classList.remove('neg');
+        $('orcHeroSub').textContent = `Digite o total do mês na roda para ver quanto ainda pode gastar · gastou ${fmt(gasto)}`;
+    } else {
+        const limite = roundMoney(spendBudgetOf(mod.T)), resta = roundMoney(limite - gasto), passou = resta < 0;
+        $('orcHeroLabel').textContent = passou ? 'Você passou do limite em'
+            : { passado: 'Sobrou do limite', futuro: 'Você poderá gastar', atual: 'Você ainda pode gastar' }[periodoFase(mod.a, mod.m)];
+        num.textContent = fmt(Math.abs(resta)); num.classList.toggle('neg', passou);
+        $('orcHeroSub').textContent = `Limite de gastos ${fmt(limite)}${inv ? ` = total ${fmt(mod.T)} − investir ${fmt(inv)}` : ''} · gastou ${fmt(gasto)}`;
+    }
+    $('orcHeroGroups').innerHTML = ORC_GRUPOS.filter(g => _orcDoGrupo(mod, g.key).length).map(g => {
+        const cs = _orcDoGrupo(mod, g.key), plano = _orcSoma(cs) / 100, sp = _orcSoma(cs, c => c.spent), r = plano ? sp / plano : (sp ? 2 : 0);
+        const txt = g.key === 'invest' ? `${fmt(sp)} de ${fmt(plano)} guardados` : `${fmt(sp)} gastos de ${fmt(plano)}`;
+        return `<div class="ohg"><b>${g.label}</b><span>${txt}</span><div class="ohg-bar ${g.key !== 'invest' && r > 1 ? 'over' : ''}"><i style="width:${Math.min(100, r * 100).toFixed(1)}%"></i></div></div>`;
+    }).join('');
+}
+
+// 'ordem' (padrão) = a mesma ordem das fatias da roda; não muda enquanto se digita os valores
+let _budgetCatSort = 'ordem'; // 'ordem' | 'alloc_desc' | 'alloc_asc' | 'used_desc' | 'used_asc' | 'name_asc' | 'name_desc'
+const _BUDGET_SORT_CYCLE = ['ordem','alloc_desc','alloc_asc','used_desc','used_asc','name_asc','name_desc'];
+const _BUDGET_SORT_LABELS = {
+    ordem: '↕ Ordem da roda',
+    alloc_desc: '↓ Planejado', alloc_asc: '↑ Planejado',
+    used_desc:  '↓ % Gasto',   used_asc:  '↑ % Gasto',
+    name_asc:   '↑ Nome',      name_desc: '↓ Nome',
+};
+function toggleBudgetCatSort() {
+    const idx = _BUDGET_SORT_CYCLE.indexOf(_budgetCatSort);
+    _budgetCatSort = _BUDGET_SORT_CYCLE[(idx + 1) % _BUDGET_SORT_CYCLE.length];
+    renderBudget();
+}
+function _orcOrdenar(lista) {
+    const usado = c => c.vc ? c.spent / (c.vc / 100) : (c.spent ? Infinity : 0), nome = c => splitCatName(c.nome).label || c.nome;
+    const f = {
+        alloc_desc: (x, y) => y.vc - x.vc, alloc_asc: (x, y) => x.vc - y.vc,
+        used_desc: (x, y) => usado(y) - usado(x) || y.spent - x.spent, used_asc: (x, y) => usado(x) - usado(y) || x.spent - y.spent,
+        name_asc: (x, y) => cmpText(nome(x), nome(y)), name_desc: (x, y) => cmpText(nome(y), nome(x)),
+    }[_budgetCatSort];
+    return f ? [...lista].sort(f) : lista;
+}
+function _orcRenderLista(mod) {
+    const el = $('budgetCatList'); if (!el) return;
+    const sortBtn = $('btnBudgetSort');
+    if (sortBtn) sortBtn.textContent = _BUDGET_SORT_LABELS[_budgetCatSort] || _budgetCatSort;
+    const hint = $('orcListHint');
+    if (hint) hint.textContent = _orcCompacto() ? 'toque para ajustar' : 'digite o planejado e aperte Enter';
+    if (!mod.cats.length) { el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-3);font-size:12px">Nenhuma categoria. Crie uma na linha abaixo.</div>'; return; }
+    const foco = document.activeElement && document.activeElement.classList.contains('orc-plan') ? _orcNomes[+document.activeElement.dataset.i] : null;
+    const idx = new Map(_orcNomes.map((n, i) => [n, i])), sel = _orcSel || {};
+    // Durante o arraste a ordem fica congelada (linhas pulando enquanto o valor muda)
+    const ordem = _orcDrag && _orcDrag.ordem ? _orcDrag.ordem : null;
+    el.innerHTML = ORC_GRUPOS.map(g => {
+        let cs = _orcDoGrupo(mod, g.key);
+        if (!cs.length) return '';
+        cs = ordem ? [...cs].sort((x, y) => ordem.indexOf(x.nome) - ordem.indexOf(y.nome)) : _orcOrdenar(cs);
+        const plano = _orcSoma(cs), sp = _orcSoma(cs, c => c.spent);
+        return `<div class="orc-grp-h"><span class="orc-dot" style="background:${g.cor}"></span>${g.label}<span class="s">${fmt(sp)} de ${escHtml(_orcR0(plano))}</span></div>`
+            + cs.map(c => {
+                const st = _orcStatus(c), i = idx.get(c.nome), p = splitCatName(c.nome);
+                const r = c.vc ? Math.min(1, c.spent / (c.vc / 100)) : (c.spent ? 1 : 0);
+                return `<div class="orc-row" data-i="${i}" aria-current="${sel.type === 'cat' && sel.id === c.nome}">
+                    <span class="orc-r-ico">${escHtml(p.icon || '📦')}</span>
+                    <span class="orc-r-name">${escHtml(p.label || c.nome)}${c.locked ? ' <span title="Valor fixo">🔒</span>' : ''}</span>
+                    <span class="orc-r-plan"><input class="orc-plan" data-i="${i}" inputmode="decimal" value="${_orcValTxt(c.vc)}" aria-label="Planejado para ${escHtml(p.label || c.nome)} em reais"${mod.T > 0 ? '' : ' disabled title="Defina o total do mês primeiro"'}></span>
+                    <span class="orc-r-spent">${fmt(c.spent)}</span>
+                    <span class="orc-r-bar"><i class="orc-fill-${st.cls === 'muted' ? 'good' : st.cls}" style="width:${(r * 100).toFixed(1)}%"></i></span>
+                    <span class="orc-r-st orc-st-${st.cls}"><span class="v">${st.v}</span>${st.lbl}</span>
+                    <span class="orc-r-sub">${fmt(c.spent)} de ${escHtml(_orcR0(c.vc))}</span>
+                </div>`;
+            }).join('');
+    }).join('');
+    if (foco != null) { const inp = el.querySelector(`.orc-plan[data-i="${idx.get(foco)}"]`); if (inp) { inp.focus(); inp.select(); } }
+}
+// Categorias de entrada não têm valor planejado: ficam recolhidas, só para renomear/excluir
+function _orcRenderEntradas() {
+    const box = $('orcEntradas'); if (!box) return;
+    const lista = cats.entrada || [];
+    box.style.display = lista.length ? '' : 'none';
+    $('orcEntradasSum').textContent = `Categorias de entrada (${lista.length})`;
+    $('orcEntradasList').innerHTML = lista.map((nome, i) => `<div class="btd-row orc-ent-row">
+        <input type="text" class="btd-rename" data-ent="${i}" maxlength="${CAT_MAX}" value="${escHtml(nome)}" aria-label="Nome da categoria de entrada">
+        <button class="btd-save" data-ent-act="renomear" data-ent="${i}" title="Renomear">✓</button>
+        <button class="btd-del" data-ent-act="excluir" data-ent="${i}" title="Excluir">🗑️</button></div>`).join('');
+}
+
+// ── BUDGET RENDERING ─────────────────────────────────────────────────────────
+function _orcRenderTudo(mod) {
+    _orcRenderHero(mod); _orcRenderRoda(mod); _orcRenderCentro(mod); _orcRenderChips(mod);
+    _orcRenderMov(mod); _orcRenderSel(mod); _orcRenderGuia(mod); _orcRenderLista(mod);
+}
+function renderBudget() {
+    if (currentView === 'dashboard') renderBudgetRemaining();
+    const m = _budgetMonth, a = _budgetYear;
+    const monthLabel = $('budgetMonthLabel');
+    if (monthLabel) monthLabel.textContent = `${MESES[m]} ${a}`;
+    const custom = isMonthCustom(m, a), totalBudget = getBudgetTotal(m, a);
+    const totalInput = $('budgetTotal');
+    if (totalInput && document.activeElement !== totalInput) totalInput.value = totalBudget > 0 ? totalBudget.toLocaleString('pt-BR') : '';
+    const badge = $('budgetTypeBadge');
+    if (badge) {
+        badge.textContent = custom ? '⚡ Personalizado' : '✅ Padrão';
+        badge.title = custom ? 'Total só deste mês' : 'Total padrão de todos os meses';
+        badge.className = 'orc-badge ' + (custom ? 'custom' : 'padrao');
+    }
+    const resetBtn = $('btnResetMonthBudget');
+    if (resetBtn) resetBtn.style.display = custom ? '' : 'none';
+    _orcLigar();
+    const mod = _orcModelo();
+    _orcNomes = mod.cats.map(c => c.nome);
+    // Seleção some se a categoria saiu; sem seleção, começa pela maior (a alça ensina o arraste)
+    if (_orcSel && (_orcSel.type === 'cat' ? !_orcNomes.includes(_orcSel.id) : !_orcDoGrupo(mod, _orcSel.id).length)) _orcSel = null;
+    if (!_orcSel && mod.cats.length) _orcSel = { type: 'cat', id: [...mod.cats].sort((x, y) => y.vc - x.vc)[0].nome };
+    _orcRenderTudo(mod);
+    _orcRenderEntradas();
+    renderBudgetFixos(m, a);
+    renderVencimentos();
+}
+
+function orcTab(aba) {
+    _orcAba = aba === 'metas' ? 'metas' : 'bud';
+    const metas = _orcAba === 'metas';
+    $('orcTabBud').setAttribute('aria-selected', !metas); $('orcTabMeta').setAttribute('aria-selected', metas);
+    $('orcPanBud').hidden = metas; $('orcPanMeta').hidden = !metas;
+    $('orcHero').style.display = metas ? 'none' : '';
+}
+
+// ── Interação da roda (ligada uma vez, por delegação: nomes nunca vão para handlers inline) ──
+function _orcAngulo(e) {
+    const r = $('orcRing').getBoundingClientRect(), k = 320 / r.width;
+    const x = (e.clientX - r.left) * k - ORC_CX, y = (e.clientY - r.top) * k - ORC_CY;
+    return (Math.atan2(y, x) * 180 / Math.PI + 90 + 360) % 360;
+}
+function _orcIniciaArraste(e, tipo, id) {
+    const mod = _orcModelo();
+    if (!(mod.T > 0) || !id) return;
+    e.preventDefault(); e.stopPropagation();
+    if (tipo === 'group') _orcSel = { type: 'group', id };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
+    const ordem = [];
+    $('budgetCatList').querySelectorAll('.orc-row').forEach(r => ordem.push(_orcNomes[+r.dataset.i]));
+    _orcDrag = { tipo, id, ultimo: _orcAngulo(e), acc: 0, gesto: 'orc-arraste:' + (++_orcGesto), ordem, mudou: false };
+    _orcMov = null;
+    _orcRenderTudo(mod);
+}
+function _orcMoveArraste(e) {
+    const d0 = _orcDrag; if (!d0) return;
+    const a = _orcAngulo(e);
+    let d = a - d0.ultimo; if (d > 180) d -= 360; if (d < -180) d += 360;
+    d0.ultimo = a;
+    d0.acc += d / 360 * _orcEscala(_orcModelo());
+    const passo = Math.trunc(d0.acc / ORC_PASSO) * ORC_PASSO;
+    if (!passo) return;
+    d0.acc -= passo;
+    const feito = _orcMudar(mod => {
+        if (d0.tipo === 'cat') { const c = mod.cats.find(x => x.nome === d0.id); return c ? _orcMudaCat(mod, c, passo) : 0; }
+        return _orcMudaGrupo(mod, d0.id, passo);
+    }, { alvo: d0.tipo === 'cat' ? [d0.id] : _orcDoGrupo(_orcModelo(), d0.id).map(c => c.nome), titulo: d0.tipo === 'group' ? _orcGrupo(d0.id).label : null, gesto: d0.gesto });
+    if (feito) d0.mudou = true; else d0.acc = 0;
+}
+function _orcFimArraste() {
+    const d0 = _orcDrag; if (!d0) return;
+    _orcDrag = null;
+    if (d0.mudou) saveBudget();
+    renderBudget();
+}
+function _orcLigar() {
+    if (_orcLigado || !$('orcRing')) return;
+    _orcLigado = true;
+    const nomeDe = el => _orcNomes[+el.dataset.i];
+    const ch = $('orcCatHandle'), gh = $('orcGHandles');
+    ch.addEventListener('pointerdown', e => _orcIniciaArraste(e, 'cat', _orcSel && _orcSel.type === 'cat' ? _orcSel.id : null));
+    gh.addEventListener('pointerdown', e => { const h = e.target.closest('[data-g]'); if (h) _orcIniciaArraste(e, 'group', h.dataset.g); });
+    [ch, gh].forEach(el => {
+        el.addEventListener('pointermove', _orcMoveArraste);
+        el.addEventListener('pointerup', _orcFimArraste);
+        el.addEventListener('pointercancel', _orcFimArraste);
+        el.addEventListener('lostpointercapture', _orcFimArraste);
+    });
+    const escolher = s => { _orcSel = s; _orcMov = null; renderBudget(); };
+    $('orcSlices').addEventListener('click', e => {
+        const p = e.target.closest('path[data-kind]'); if (!p) return;
+        if (p.dataset.kind === 'group') escolher({ type: 'group', id: p.dataset.g });
+        else if (p.dataset.kind === 'cat') escolher({ type: 'cat', id: nomeDe(p) });
+    });
+    $('orcChips').addEventListener('click', e => { const b = e.target.closest('button[data-g]'); if (b) escolher({ type: 'group', id: b.dataset.g }); });
+    const lista = $('budgetCatList');
+    // Seleciona a categoria sem redesenhar a tabela (o campo em foco seria recriado)
+    const selLeve = (nome, row) => {
+        if (_orcSel && _orcSel.type === 'cat' && _orcSel.id === nome) return;
+        _orcSel = { type: 'cat', id: nome }; _orcMov = null;
+        const mod = _orcModelo(); _orcRenderRoda(mod); _orcRenderChips(mod); _orcRenderMov(mod); _orcRenderSel(mod);
+        lista.querySelectorAll('.orc-row').forEach(r => r.setAttribute('aria-current', r === row));
+    };
+    lista.addEventListener('click', e => {
+        const row = e.target.closest('.orc-row'); if (!row) return;
+        const nome = nomeDe(row);
+        if (e.target.closest('.orc-plan')) { selLeve(nome, row); return; }
+        escolher({ type: 'cat', id: nome });
+        if (_orcCompacto()) $('orcRingCard').scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    });
+    lista.addEventListener('focusin', e => { const inp = e.target.closest('.orc-plan'); if (inp) selLeve(nomeDe(inp), inp.closest('.orc-row')); });
+    // Depois do Tab o foco já está no próximo campo; o redesenho o devolve a ele
+    lista.addEventListener('change', e => {
+        const inp = e.target.closest('.orc-plan'); if (!inp) return;
+        const nome = nomeDe(inp), txt = inp.value;
+        setTimeout(() => _orcDefinir(txt, { type: 'cat', id: nome }), 0);
+    });
+    lista.addEventListener('keydown', e => {
+        const inp = e.target.closest('.orc-plan'); if (!inp) return;
+        if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+        if (e.key === 'Escape') { inp.value = inp.defaultValue; inp.blur(); }
+    });
+    lista.addEventListener('mouseover', e => {
+        if (_orcDrag) return;
+        const r = e.target.closest('.orc-row'), nome = r ? nomeDe(r) : null;
+        if (nome !== _orcHover) { _orcHover = nome; _orcRenderRoda(_orcModelo()); }
+    });
+    lista.addEventListener('mouseleave', () => { if (_orcHover) { _orcHover = null; _orcRenderRoda(_orcModelo()); } });
+    const sel = $('orcSel');
+    sel.addEventListener('click', e => {
+        const b = e.target.closest('[data-act], [data-move]'); if (!b || !_orcSel) return;
+        const act = b.dataset.act, nome = _orcSel.id;
+        if (act === 'menos') _orcAjustar(-ORC_PASSO);
+        else if (act === 'mais') _orcAjustar(ORC_PASSO);
+        else if (act === 'lock') {
+            const travar = !(budget.locks && budget.locks[nome]);
+            pushUndo(travar ? `Fixar valor de "${nome}"` : `Soltar valor de "${nome}"`);
+            if (!budget.locks) budget.locks = {};
+            if (travar) budget.locks[nome] = true; else delete budget.locks[nome];
+            saveBudget(); renderBudget();
+        } else if (act === 'renomear') {
+            const novo = ($('orcRenameIn').value || '').trim();
+            if (novo && novo !== nome && renameCategory(_orcTipo(nome), nome, novo)) { _orcSel = { type: 'cat', id: novo }; toast(`✓ Renomeado para "${novo}"`, '#16a34a'); renderBudget(); }
+        } else if (act === 'excluir') deleteCategoryFlow(_orcTipo(nome), nome);
+        else if (b.dataset.move && _orcSel.type === 'cat' && b.dataset.move !== _budgetGroup(nome)) setBudgetCatGroup(nome, b.dataset.move);
+    });
+    sel.addEventListener('change', e => { if (e.target.id === 'orcValIn') _orcDefinir(e.target.value); });
+    sel.addEventListener('keydown', e => {
+        if (e.target.id === 'orcValIn' && e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+        if (e.target.id === 'orcRenameIn' && e.key === 'Enter') { e.preventDefault(); sel.querySelector('[data-act="renomear"]').click(); }
+    });
+    $('orcGuide').addEventListener('click', e => {
+        if (!e.target.closest('[data-act="503020"]')) return;
+        if (_orcMudar(_orc503020, { titulo: 'Guia 50/30/20', label: 'Guia 50/30/20 no orçamento' })) toast('✓ 50/30/20 aplicado. Use Desfazer para voltar.', '#16a34a');
+    });
+    $('orcRingCard').addEventListener('keydown', e => {
+        if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) || e.target.closest('input, select, textarea, summary')) return;
+        e.preventDefault();
+        _orcAjustar((e.key === 'ArrowUp' || e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 5 : 1) * ORC_PASSO);
+    });
+    $('orcEntradasList').addEventListener('click', e => {
+        const b = e.target.closest('[data-ent-act]'); if (!b) return;
+        const i = +b.dataset.ent, nome = (cats.entrada || [])[i]; if (nome == null) return;
+        if (b.dataset.entAct === 'excluir') { deleteCategoryFlow('entrada', nome); return; }
+        const inp = $('orcEntradasList').querySelector(`input[data-ent="${i}"]`), novo = inp ? inp.value.trim() : '';
+        if (novo && novo !== nome && renameCategory('entrada', nome, novo)) { toast(`✓ Renomeado para "${novo}"`, '#16a34a'); renderBudget(); }
+    });
+    $('orcEntradasList').addEventListener('keydown', e => {
+        const inp = e.target.closest('input[data-ent]');
+        if (inp && e.key === 'Enter') { e.preventDefault(); $('orcEntradasList').querySelector(`[data-ent-act="renomear"][data-ent="${inp.dataset.ent}"]`).click(); }
+    });
+}
+
+// Create a category (any type) from the budget box's add-row
+function addBudgetCategory() {
+    const sel = $('budgetCatType');
+    addCatHub(sel ? sel.value : 'saida');   // usa catHubInput + ícone escolhido
+    renderBudget();
 }
 
 function renderBudgetFixos(m, a) {
@@ -6004,6 +6485,7 @@ function mergeStates(base, local, remote, prefer = null) {
             allocs:      _mergeKeyed(base.budget.allocs, local.budget.allocs, remote.budget.allocs, ctx, 'alocação'),
             monthTotals: _mergeKeyed(base.budget.monthTotals, local.budget.monthTotals, remote.budget.monthTotals, ctx, 'orçamento do mês'),
             needsWants:  _mergeKeyed(base.budget.needsWants, local.budget.needsWants, remote.budget.needsWants, ctx, 'grupo'),
+            locks:       _mergeKeyed(base.budget.locks, local.budget.locks, remote.budget.locks, ctx, 'valor fixo'),
         },
     };
     return { merged, conflicts, nomes };
@@ -7569,7 +8051,7 @@ function runSelfTests() {
     eq('sanitize: migra fatura v2', s1.tx[0].faturaData, '2026-02-05');
     eq('sanitize: série de fixo', s1.tx[0].serie, 'L:saida:A');
     eq('sanitize: categoria usada existe', s1.cats.entrada.includes('Nova'), true);
-    eq('sanitize: orçamento completo', Object.keys(s1.budget).sort(), ['allocs', 'monthTotals', 'needsWants', 'total']);
+    eq('sanitize: orçamento completo', Object.keys(s1.budget).sort(), ['allocs', 'locks', 'monthTotals', 'needsWants', 'total']);
     eq('sanitize: cor segura', s1.cards[0].cor, '#6d28d9');
     const asRaw = s => ({ t: s.tx, c: s.cats, g: s.goals, k: s.cards, b: s.budget });
     const s2 = sanitizeState(asRaw(s1));
@@ -7633,6 +8115,32 @@ function runSelfTests() {
         eq('caixa de entrada: reaplicar não muda nada', [_stateHash(r2.state) === _stateHash(r1.state), r2.resultados.filter(x => x.resultado === 'aplicado').length], [true, 0]);
         const txt = '🍔 Alimentação — "Pão" ç ã 😀';
         eq('caixa de entrada: base64 UTF-8 ida e volta', _utf8B64(_b64Utf8(txt)), txt);
+    }
+
+    // Roda do orçamento: regras de redistribuição (centavos), sobre modelos falsos — não toca nos dados
+    {
+        const mk = () => ({ T: 1000, Tc: 100000, cats: [
+            { nome: 'A', grupo: 'needs', vc: 30000 }, { nome: 'B', grupo: 'needs', vc: 20000 },
+            { nome: 'C', grupo: 'needs', vc: 10000, locked: true }, { nome: 'D', grupo: 'wants', vc: 20000 },
+            { nome: 'R', grupo: 'invest', vc: 0 }] });
+        const vals = mod => mod.cats.map(c => c.vc);
+        let mod = mk();
+        _orcMudaCat(mod, mod.cats[0], 1000);
+        eq('roda: categoria cresce tirando da irmã (a fixa não muda)', vals(mod), [31000, 19000, 10000, 20000, 0]);
+        _orcMudaCat(mod, mod.cats[0], 25000);
+        eq('roda: sem irmã para tirar, usa o sem destino', [vals(mod), _orcLivre(mod)], [[56000, 0, 10000, 20000, 0], 14000]);
+        _orcMudaCat(mod, mod.cats[0], -6000);
+        eq('roda: diminuir devolve ao grupo', vals(mod), [50000, 6000, 10000, 20000, 0]);
+        mod = mk();
+        _orcMudaGrupo(mod, 'wants', 30000);
+        eq('roda: grupo cresce pelo sem destino e depois pelos outros grupos', [vals(mod), _orcLivre(mod)], [[24000, 16000, 10000, 50000, 0], 0]);
+        const pool = [{ vc: 33333 }, { vc: 33333 }, { vc: 33334 }];
+        _orcTirar(pool, 1000);
+        eq('roda: valor redondo é repartido em reais inteiros', [pool.every(c => (33333 - c.vc) % 100 === 0 || (33334 - c.vc) % 100 === 0), 100000 - _orcSoma(pool)], [true, 1000]);
+        mod = mk(); mod.cats[4].vc = 5000;
+        _orc503020(mod);
+        eq('roda: guia 50/30/20 (respeita o valor fixo)', [_orcSoma(mod.cats.filter(c => c.grupo === 'needs')), _orcSoma(mod.cats.filter(c => c.grupo === 'wants')), mod.cats[4].vc, mod.cats[2].vc], [50000, 30000, 20000, 10000]);
+        eq('roda: % com 6 casas volta ao mesmo centavo', [56133, 1, 99999, 777700].map(vc => Math.round(7777 * +(vc / 7777).toFixed(6)) === vc), [true, true, true, true]);
     }
 
     const fails = results.filter(r => !r.ok);
