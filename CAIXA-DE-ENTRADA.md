@@ -43,8 +43,13 @@ por conta Google) e nunca vai para o Firebase nem para o chat.
   acima dos existentes (ex.: 18000000xxxxx), nunca reaproveite id apagado. O app marca
   `extId: "claude:<id da operação>"`. Id que já existe → `ignorado: já existe`.
   `faturaData` pode ser omitida: o app calcula pelo cartão.
+  Campos opcionais do app: `juros` = parte do `valor` que é juros/multa (boleto pago com atraso:
+  um lançamento só, na categoria do boleto, com `valor` = total pago); `parcela` =
+  `{ "serie": "P<id>", "k": 2, "n": 6 }` liga as parcelas de uma compra (todas com a mesma
+  `serie`; o app usa para remover/editar em grupo). Sem `parcela` a entrada continua valendo,
+  só que solta.
 - `update`: `espera` = valores atuais que precisam bater (ex.: o valor antigo); `muda` = campos
-  novos. Campos aceitos: desc, valor, data, tipo, cat, pagamento, cartaoId, faturaData, fixo.
+  novos. Campos aceitos: desc, valor, data, tipo, cat, pagamento, cartaoId, faturaData, fixo, juros.
   Se o dono editou o lançamento depois, `espera` não bate → `ignorado: mudou desde então`.
 - `delete`: remove se `espera` bater; se já não existe → `ignorado: já não existe`.
 - Tudo é idempotente: reprocessar o mesmo arquivo não duplica nem desfaz nada.
@@ -59,6 +64,7 @@ por conta Google) e nunca vai para o Firebase nem para o chat.
 - Zen Telecom e supermercado acima de R$ 100 → categoria 👨 ‍Família.
 - Transferências entre contas próprias, caixinhas/RDB e pagamento de fatura não são gasto.
 - Empréstimo: o valor recebido não é receita; só juros/encargos entram como gasto, quando pagos.
+  (O app tem a seção Empréstimos: cadastra o contrato e lança sozinho só os juros de cada parcela.)
 - Pix no crédito / limite convertido em saldo para conta própria: só os encargos são gasto.
 - Compra parcelada: uma entrada por parcela ("Nome - Parcela k/N"), na data de cada mês e com a
   fatura certa. BTG mostra o valor TOTAL da compra parcelada; Nubank mostra o da parcela.

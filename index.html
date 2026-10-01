@@ -342,6 +342,31 @@
         sequencial, clique mostra o dia); maiores gastos e lugares que se repetiram; o que
         mudou por categoria com os últimos 6 meses. Tudo em HTML, sem depender do Chart.js.
         Autoteste +2 (113).
+      • ORÇAMENTO, PARCELAS, JUROS E EMPRÉSTIMOS (it. 57, pedidos do dono): (1) digitar o planejado na
+        tabela de categorias muda SÓ aquela categoria (nada é tirado das outras); a faixa no topo mostra
+        quanto falta ou passou do total, ao vivo enquanto digita (roda/alças/setas seguem reajustando; no
+        celular, onde a tabela não tem campo, o painel da categoria faz o mesmo). (2) cadeado de valor fixo
+        em cada linha. (3) donut: a categoria selecionada tem alça nas DUAS pontas; cada ponta move a
+        fronteira com o vizinho daquele lado (_orcMudaBorda; sem vizinho livre cai na regra de sempre).
+        (4) excluir categoria pergunta onde: só no mês aberto, dali em diante ou tudo — as duas primeiras
+        usam budget.off (faixas de meses por categoria: sanitização, merge, renomeação, limite de gastos),
+        com "Categorias fora deste mês" para voltar; lançamentos do escopo são movidos como antes.
+        (5) abas Orçamento|Metas e o botão de recolher o painel lateral saíram; metas sempre no fim da
+        página, com Empréstimos abaixo. (6) ordenação lembrada por aparelho: categorias do orçamento, "o que
+        mudou por categoria" (novo seletor) e caixinhas. (7) Visão Geral: ⊞ Categoria vira caixinhas (cor,
+        total, % do tipo, lançamentos) com ordenação; "Orçamento do mês" lista as categorias que mais
+        apertam; o patrimônio foi para a Visão Anual (ano escolhido, vermelho abaixo de zero). (8) cartão
+        azul (mensal e anual) plota a FOLGA (ritmo − gasto acumulado): para cima = gastou menos, para
+        baixo = gastou mais. (9) PARCELAS automáticas: "Parcelar" no lançamento novo gera N lançamentos
+        ("Nome - Parcela k/N", um por mês, fatura certa, centavos exatos) ligados por parcela:{serie,k,n};
+        remover pergunta o escopo (só esta/esta e as seguintes/todas), editar pode valer para as seguintes,
+        caixa "Parcelas do mês" no Orçamento. (10) JUROS embutidos: campo "juros/multa incluídos" — o boleto
+        atrasado continua UM lançamento na categoria dele, com t.juros (selo "juros", soma em "juros e
+        tarifas" e nos destaques do Mensal). (11) EMPRÉSTIMOS (estado novo `loans`, chave l: sanitização,
+        sync por id, backup, desfazer, inbox): contrato → lançamentos automáticos, por padrão só os JUROS de
+        cada parcela (regra do dono: o valor recebido não é receita e o principal não é gasto), ou a parcela
+        inteira; juros pela tabela Price/rateio; painel com falta pagar, pago, juros e próxima parcela. Autoteste 143;
+        fuzz e sync fuzz cobrem parcelas, juros, empréstimos e categorias fora do mês.
       Ferramentas de manutenção (use após qualquer mudança, em index.html?preview):
         runSelfTests() · runFuzz() · runSyncFuzz()
     -->
@@ -455,6 +480,12 @@
         .tag-cred { font-size: 9px; font-weight: 700; padding: 2px 5px; border-radius: 3px; background: #e0f2fe; color: #0369a1; margin-left: 5px; vertical-align: middle; }
         .tag-deb { font-size: 9px; font-weight: 700; padding: 2px 5px; border-radius: 3px; background: #dbeafe; color: #1d4ed8; margin-left: 5px; vertical-align: middle; }
         .tag-fixo { font-size: 9px; font-weight: 700; padding: 2px 5px; border-radius: 3px; background: #fef3c7; color: #92400e; margin-left: 6px; vertical-align: middle; }
+        .tag-parc { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 3px; background: #ede9fe; color: #5b21b6; margin-left: 5px; vertical-align: middle; white-space: nowrap; }
+        .tag-juros { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 3px; background: #ffedd5; color: #9a3412; margin-left: 5px; vertical-align: middle; white-space: nowrap; }
+        .form-mais { border: 1px dashed var(--border); border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; }
+        .form-mais summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text-2); }
+        .form-mais[open] summary { margin-bottom: 8px; }
+        .form-mais .field:last-child { margin-bottom: 0; }
         .tag-card { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 3px; margin-left: 5px; vertical-align: middle; }
         /* FATURA INFO */
         .fatura-info { border-radius: 7px; padding: 8px 10px; font-size: 11px; margin-bottom: 8px; background: var(--accent-soft); border: 1px solid #bfdbfe; color: var(--accent); line-height: 1.5; }
@@ -769,6 +800,15 @@
         .aporte-acts { display: flex; gap: 2px; flex-shrink: 0; opacity: 0; transition: opacity .15s; margin-left: 6px; }
         .aporte-item:hover .aporte-acts { opacity: 1; }
         body.mobile .aporte-acts { opacity: 1; }
+        .loan-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 14px; }
+        .loan-tiles:empty { display: none; }
+        .loan-tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; min-width: 0; }
+        .loan-tile small { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text-2); margin-bottom: 4px; }
+        .loan-tile b { display: block; font-size: 20px; font-weight: 800; letter-spacing: -.4px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+        .loan-tile span { display: block; font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
+        .loan-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; font-size: 12px; color: var(--text-2); margin: 10px 0 12px; }
+        .loan-facts b { display: block; color: var(--text); font-size: 13px; font-variant-numeric: tabular-nums; }
+        .loan-facts small { display: block; font-size: 10.5px; color: var(--text-3); text-transform: uppercase; letter-spacing: .4px; }
         .goal-add-card { background: var(--bg); border: 2px dashed var(--border); border-radius: 12px; min-height: 180px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; cursor: pointer; transition: border-color .15s; color: var(--text-3); }
         .goal-add-card:hover { border-color: var(--accent2); color: var(--text-2); }
 
@@ -999,7 +1039,7 @@
         #toast { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); background: rgba(24,24,27,.88) !important; border: 1px solid rgba(255,255,255,.08); box-shadow: 0 8px 32px rgba(0,0,0,.2); border-radius: 10px; padding: 10px 18px; font-weight: 600; letter-spacing: -.1px; }
 
         /* ── BETTER TAG PILLS ── */
-        .tag-cred, .tag-deb, .tag-fixo, .tag-card { font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 4px; letter-spacing: .3px; }
+        .tag-cred, .tag-deb, .tag-fixo, .tag-card, .tag-parc, .tag-juros { font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 4px; letter-spacing: .3px; }
 
         /* ── TABLE READABILITY ── */
         tbody tr:nth-child(4n+3) > td { background: rgba(0,0,0,.015); }
@@ -1348,7 +1388,8 @@
         .cat-del-escopo { display: grid; gap: 8px; }
         .cat-del-escopo label { display: flex; align-items: flex-start; gap: 10px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--text); }
         .cat-del-escopo label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
-        .cat-del-escopo input { margin-top: 3px; accent-color: var(--accent); }
+        .cat-del-escopo input { width: auto; flex: none; margin: 3px 0 0; padding: 0; accent-color: var(--accent); }
+        .cat-del-escopo label > span { flex: 1; min-width: 0; text-align: left; }
         .cat-del-escopo b { display: block; font-weight: 600; }
         .cat-del-escopo small { display: block; color: var(--text-3); font-size: 11.5px; font-weight: 400; margin-top: 1px; }
         .orc-off { font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: #fff7ed; color: #b45309; white-space: nowrap; margin-left: 4px; }
@@ -1547,6 +1588,24 @@
             <select id="mob-cartao" onchange="mobOnCartaoChange()"></select>
         </div>
         <div id="mobFaturaInfo" class="fatura-info" style="display:none"></div>
+        <details class="form-mais" id="mobMaisField">
+            <summary>➕ Parcelar ou juros de atraso</summary>
+            <div class="field">
+                <label>Parcelas</label>
+                <div class="g2">
+                    <input type="number" id="mob-parcelas" min="1" max="120" value="1" inputmode="numeric" aria-label="Número de parcelas">
+                    <select id="mob-parcelasModo" aria-label="O valor digitado é">
+                        <option value="total">valor total</option>
+                        <option value="parcela">valor da parcela</option>
+                    </select>
+                </div>
+                <div id="mob-parcelasInfo" class="fatura-info" style="display:none;margin:6px 0 0"></div>
+            </div>
+            <div class="field">
+                <label>Juros/multa incluídos no valor (R$)</label>
+                <input type="text" id="mob-juros" inputmode="decimal" placeholder="0,00">
+            </div>
+        </details>
         <label class="check-row" style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:13px;cursor:pointer;margin-bottom:10px">
             <input type="checkbox" id="mob-fixo"> Gasto fixo mensal?
         </label>
@@ -1605,6 +1664,15 @@
             <select id="mob-edit-cartao" onchange="mobEditCartaoChange()"></select>
         </div>
         <div id="mobEditFaturaInfo" class="fatura-info" style="display:none"></div>
+        <div id="mobEditMaisField">
+            <div class="field">
+                <label>Juros/multa incluídos no valor (R$)</label>
+                <input type="text" id="mob-edit-juros" inputmode="decimal" placeholder="0,00">
+            </div>
+            <label class="check-row" id="mobEditProxRow" style="display:none;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:13px;cursor:pointer;margin-bottom:8px">
+                <input type="checkbox" id="mob-edit-prox"> <span id="mobEditProxTxt">Aplicar às parcelas seguintes</span>
+            </label>
+        </div>
         <label class="check-row" style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:13px;cursor:pointer;margin-bottom:4px">
             <input type="checkbox" id="mob-edit-fixo"> Gasto fixo mensal?
         </label>
@@ -1686,6 +1754,24 @@
                 <select id="cartao" onchange="onCartaoChange()"></select>
             </div>
             <div id="faturaInfo" class="fatura-info" style="display:none"></div>
+            <details class="form-mais" id="maisField">
+                <summary>➕ Parcelar ou juros de atraso</summary>
+                <div class="field">
+                    <label>Parcelas</label>
+                    <div class="g2">
+                        <input type="number" id="parcelas" min="1" max="120" value="1" inputmode="numeric" aria-label="Número de parcelas" title="Em quantas vezes (1 = à vista)">
+                        <select id="parcelasModo" aria-label="O valor digitado é" title="O valor digitado é o total da compra ou o de cada parcela">
+                            <option value="total">valor total</option>
+                            <option value="parcela">valor da parcela</option>
+                        </select>
+                    </div>
+                    <div id="parcelasInfo" class="fatura-info" style="display:none;margin:6px 0 0"></div>
+                </div>
+                <div class="field">
+                    <label>Juros/multa incluídos no valor (R$)</label>
+                    <input type="text" id="juros" inputmode="decimal" placeholder="0,00" title="Boleto pago com atraso: quanto do valor é juros ou multa. Fica no mesmo lançamento e na categoria do boleto">
+                </div>
+            </details>
             <label class="check-row">
                 <input type="checkbox" id="fixo"> Gasto fixo mensal?
             </label>
@@ -2090,6 +2176,13 @@
                         </div>
                         <div id="vencList" class="orc-pad"></div>
                     </div>
+                    <div class="data-table-box" id="parcBox" style="display:none">
+                        <div class="data-table-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                            <span>🧾 Parcelas do mês</span>
+                            <span id="parcTotal" style="font-weight:700;color:var(--danger);white-space:nowrap"></span>
+                        </div>
+                        <div id="parcList" class="orc-pad"></div>
+                    </div>
                     <div class="data-table-box">
                         <div class="data-table-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
                             <span>📌 Gastos fixos do mês</span>
@@ -2114,6 +2207,19 @@
                 <button class="btn-save" style="width:auto;padding:7px 16px;margin:0;font-size:12px" onclick="abrirNovaGoal()">+ Nova Meta</button>
             </div>
             <div class="goals-grid" id="goalsGrid"></div>
+        </div>
+
+        <!-- EMPRÉSTIMOS (abaixo das metas): parcelas automáticas, juros e quanto falta pagar -->
+        <div id="orcPanLoans" class="orc-metas">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap">
+                <div>
+                    <div style="font-size:16px;font-weight:700">🏦 Empréstimos</div>
+                    <div style="font-size:12px;color:var(--text-3)">Parcelas lançadas sozinhas, juros de cada uma e quanto falta pagar</div>
+                </div>
+                <button class="btn-save" style="width:auto;padding:7px 16px;margin:0;font-size:12px" onclick="abrirNovoLoan()">+ Novo empréstimo</button>
+            </div>
+            <div class="loan-tiles" id="loansResumo"></div>
+            <div class="goals-grid" id="loansGrid"></div>
         </div>
     </div>
 </div>
@@ -2224,6 +2330,76 @@
         <div class="modal-footer">
             <button class="btn-mcancel" onclick="closeCatDelete()">Cancelar</button>
             <button class="btn-confirm" onclick="confirmCatDelete()">Remover</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL EMPRÉSTIMO -->
+<div class="overlay" id="ovLoan" onclick="closeLoan(event)">
+    <div class="modal" style="width:460px">
+        <div class="modal-title" id="loanModalTitle">Novo empréstimo</div>
+        <input type="hidden" id="loanEditId">
+        <div class="field">
+            <label>Nome</label>
+            <input type="text" id="loanNome" maxlength="120" placeholder="Ex: Empréstimo do carro">
+        </div>
+        <div class="g2">
+            <div class="field">
+                <label>Valor emprestado (R$)</label>
+                <input type="text" id="loanValor" inputmode="decimal" placeholder="10.000,00">
+            </div>
+            <div class="field">
+                <label>Taxa de juros (% ao mês)</label>
+                <input type="text" id="loanTaxa" inputmode="decimal" placeholder="opcional, ex: 1,99">
+            </div>
+        </div>
+        <div class="g2">
+            <div class="field">
+                <label>Nº de parcelas</label>
+                <input type="number" id="loanN" min="2" max="600" inputmode="numeric" placeholder="24">
+            </div>
+            <div class="field">
+                <label>Valor da parcela (R$)</label>
+                <input type="text" id="loanParcela" inputmode="decimal" placeholder="vazio = calcular">
+            </div>
+        </div>
+        <div class="field">
+            <label>Data da 1ª parcela</label>
+            <input type="date" id="loanPrimeira">
+        </div>
+        <div id="loanPreview" class="fatura-info" style="display:none"></div>
+        <div class="field">
+            <label>Nota (opcional)</label>
+            <input type="text" id="loanNota" maxlength="500" placeholder="Ex: banco, contrato, finalidade">
+        </div>
+        <div class="field" id="loanGerarRow">
+            <label>Lançar automaticamente nos lançamentos (uma por mês)</label>
+            <select id="loanLancar" style="width:100%">
+                <option value="juros">Só os juros de cada parcela (o valor emprestado e o principal não são gasto)</option>
+                <option value="parcela">A parcela inteira, todo mês</option>
+                <option value="nada">Nada: só acompanhar aqui</option>
+            </select>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-mcancel" onclick="closeLoan()">Cancelar</button>
+            <button class="btn-confirm" onclick="salvarLoan()">Salvar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL REMOVER PARCELA (escopo: só esta / esta e as seguintes / todas) -->
+<div class="overlay" id="ovParcRemover" onclick="if(event.target===this)closeParcRemover()">
+    <div class="modal" style="width:420px">
+        <div class="modal-title">🗑️ Remover parcela</div>
+        <div class="modal-sub" id="parcRemSub"></div>
+        <div class="field cat-del-escopo" role="radiogroup" aria-label="Quais parcelas remover">
+            <label><input type="radio" name="parcRemEscopo" value="esta" checked><span><b id="parcRemLblEsta">Só esta parcela</b><small>As outras continuam lançadas.</small></span></label>
+            <label id="parcRemRowProx"><input type="radio" name="parcRemEscopo" value="proximas"><span><b id="parcRemLblProx">Esta e as seguintes</b><small id="parcRemNotaProx"></small></span></label>
+            <label><input type="radio" name="parcRemEscopo" value="todas"><span><b id="parcRemLblTodas">Todas as parcelas</b><small id="parcRemNotaTodas"></small></span></label>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-mcancel" onclick="closeParcRemover()">Cancelar</button>
+            <button class="btn-confirm" onclick="confirmarRemoverParcela()">Remover</button>
         </div>
     </div>
 </div>
@@ -2847,6 +3023,8 @@ function openMobForm() {
     $('mobFormTitle').textContent = 'Novo Lançamento';
     $('mob-desc').value = ''; $('mob-valor').value = '';
     $('mob-fixo').checked = false;
+    $('mob-parcelas').value = '1'; $('mob-parcelasModo').value = 'total'; $('mob-juros').value = '';
+    $('mobMaisField').open = false; formParcInfo(FORM_MOBILE);
     $('mob-data').value = todayLocalISO();
     mobOnTipoChange();
     $('mobFormSheet').classList.add('open');
@@ -2869,6 +3047,10 @@ function openMobEdit(id) {
     $('mob-edit-tipo').value = t.tipo;
     $('mob-edit-fixo').checked = t.fixo;
     $('mob-edit-pag').value = t.pagamento || 'debito';
+    $('mob-edit-juros').value = t.juros ? fmtValorInput(t.juros) : '';
+    $('mob-edit-prox').checked = false;
+    $('mobEditProxRow').style.display = t.parcela && t.parcela.k < t.parcela.n ? 'flex' : 'none';
+    $('mobEditProxTxt').textContent = t.parcela ? `Aplicar às parcelas seguintes (${t.parcela.k + 1}–${t.parcela.n})` : '';
     mobEditTipoChange(t.cat);
     // Cartão DESTE lançamento (formPagChange sugeriu o padrão). Só saídas mostram cartão:
     // antes um estorno (entrada no crédito) exibia um seletor de cartão que era ignorado.
@@ -3058,6 +3240,7 @@ function _sanCats(c) {
 // Limites plausíveis: acima de ~R$ 90 trilhões o double perde os centavos e as somas ficam
 // erradas; um "0" a mais digitado sem querer ou um extrato corrompido não pode entrar mudo.
 const VALOR_MAX = 1e11, DESC_MAX = 200, CAT_MAX = 60, CARD_MAX = 40;
+const PARCELAS_MAX = 120, LOAN_N_MAX = 600;   // parcelas numa compra / num empréstimo
 const _valorOk = v => Number.isFinite(v) && Math.abs(v) <= VALOR_MAX;
 function _sanTx(list, cardList, fromVersion, report) {
     const seen = new Set();
@@ -3088,9 +3271,33 @@ function _sanTx(list, cardList, fromVersion, report) {
         // Série de fixos: identidade estável da recorrência (antes era só a descrição)
         if (o.fixo) o.serie = (typeof t.serie === 'string' && t.serie) ? t.serie : `L:${tipo}:${o.desc}`;
         if (typeof t.extId === 'string' && t.extId) o.extId = t.extId;   // id do banco (dedup de importação)
+        // Compra parcelada / parcela de empréstimo: { serie, k, n } liga as parcelas entre si (só saídas)
+        const pr = t.parcela;
+        if (tipo === 'saida' && pr && typeof pr === 'object' && typeof pr.serie === 'string' && pr.serie) {
+            const n = Math.round(+pr.n), k = Math.round(+pr.k);
+            if (n >= 2 && n <= LOAN_N_MAX && k >= 1 && k <= n) o.parcela = { serie: pr.serie, k, n };
+        }
+        // Juros/multa EMBUTIDOS no valor (boleto pago com atraso, parcela de empréstimo): parte do
+        // valor que é juros — o lançamento continua um só, na categoria do boleto
+        if (tipo === 'saida') { const j = roundMoney(parseValor(t.juros)); if (j > 0 && _valorOk(j)) o.juros = Math.min(j, o.valor); }
         out.push(o);
     });
     return out;
+}
+// Empréstimos: contrato (valor, taxa, parcelas) + a série de lançamentos que ele gera (loan.serie)
+function _sanLoans(list) {
+    const seen = new Set();
+    const money = v => { const n = parseValor(v); return _valorOk(n) && n > 0 ? roundMoney(n) : 0; };
+    return _asList(list).filter(l => l && typeof l === 'object').map(l => {
+        let id = toId(l.id);
+        if (!id || seen.has(id)) id = newId();
+        seen.add(id);
+        const n = Math.round(+l.n), taxa = +l.taxa;
+        return { id, nome: String(l.nome ?? '').trim().slice(0, DESC_MAX) || 'Empréstimo',
+                 valor: money(l.valor), taxa: Number.isFinite(taxa) && taxa > 0 ? Math.min(100, +taxa.toFixed(4)) : 0,
+                 n: n >= 1 && n <= LOAN_N_MAX ? n : 1, parcela: money(l.parcela), primeira: _normDate(l.primeira) || '',
+                 serie: typeof l.serie === 'string' && l.serie ? l.serie : 'E' + id, nota: String(l.nota ?? '').slice(0, 500) };
+    });
 }
 function _sanGoals(list, report) {
     const seen = new Set();
@@ -3128,18 +3335,18 @@ function _sanBudget(b) {
     });
     return out;
 }
-// raw usa as chaves curtas do payload/backup: t=tx, c=cats, g=goals, k=cards, b=budget
+// raw usa as chaves curtas do payload/backup: t=tx, c=cats, g=goals, k=cards, b=budget, l=loans
 function sanitizeState(raw, fromVersion = SCHEMA_VERSION) {
     raw = raw && typeof raw === 'object' ? raw : {};
     const report = { dropped: [] };
     // Novos ids precisam ficar acima de todos os existentes (inclusive de outro dispositivo)
-    [raw.t, raw.g, raw.k].forEach(l => _asList(l).forEach(x => { const id = toId(x && x.id); if (id) _bumpLastId(id); }));
+    [raw.t, raw.g, raw.k, raw.l].forEach(l => _asList(l).forEach(x => { const id = toId(x && x.id); if (id) _bumpLastId(id); }));
     const cardsN = _sanCards(raw.k);
     const catsN  = _sanCats(raw.c);
     const txN    = _sanTx(raw.t, cardsN, fromVersion, report);
     // Invariante: toda categoria usada existe na lista do seu tipo (renomear/remover a alcançam)
     txN.forEach(t => { if (t.cat && !catsN[t.tipo].includes(t.cat)) catsN[t.tipo].push(t.cat); });
-    return { tx: txN, cats: catsN, goals: _sanGoals(raw.g, report), cards: cardsN, budget: _sanBudget(raw.b), report };
+    return { tx: txN, cats: catsN, goals: _sanGoals(raw.g, report), cards: cardsN, budget: _sanBudget(raw.b), loans: _sanLoans(raw.l), report };
 }
 // Registros irrecuperáveis (sem data/valor) não somem: vão para fin5_quarantine
 function _quarantine(report) {
@@ -3182,9 +3389,9 @@ function descartarQuarentena() {
 }
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
-let tx, cats, goals, cards, budget;
-function restoreState(s) { ({ tx, cats, goals, cards, budget } = s); _invalidateTxCache(); }
-function snapshotState() { return _clone({ tx, cats, goals, cards, budget }); }
+let tx, cats, goals, cards, budget, loans;
+function restoreState(s) { ({ tx, cats, goals, cards, budget, loans } = s); _invalidateTxCache(); }
+function snapshotState() { return _clone({ tx, cats, goals, cards, budget, loans }); }
 function loadLocalState() {
     let hasData = false;
     hasData = lsGet('fin5_data') != null;
@@ -3195,6 +3402,7 @@ function loadLocalState() {
         g: loadJSON('fin5_goals', []),
         k: loadJSON('fin5_cards', []),
         b: loadJSON('fin5_budget', null),
+        l: loadJSON('fin5_loans', []),
     }, fromVersion);
     _quarantine(s.report);
     restoreState(s);
@@ -3248,11 +3456,12 @@ const txFaturaMes = (m, a) => _txIndex().byFat.get(ymKey(m, a)) || _EMPTY;   // 
 const _persist = (key, val) => { storeJSON(key, val); _dashDirty = true; };
 function save()       { _invalidateTxCache(); _persist('fin5_data', tx); }
 function saveGoals()  { _persist('fin5_goals', goals); }
+function saveLoans()  { _persist('fin5_loans', loans); }
 function saveCats()   { _persist('fin5_cats', cats); }
 function saveCards()  { _persist('fin5_cards', cards); }
 function saveBudget() { _persist('fin5_budget', budget); schedulePush(); }
 function persistAll() {
-    save(); saveCats(); saveGoals(); saveCards(); storeJSON('fin5_budget', budget);
+    save(); saveCats(); saveGoals(); saveCards(); saveLoans(); storeJSON('fin5_budget', budget);
     storeJSON('fin5_schema', SCHEMA_VERSION);
 }
 
@@ -3264,7 +3473,7 @@ function safeRender(fn, ...args) {
 function renderCurrentView() {
     if (currentView === 'anual')  safeRender(renderAnual);
     if (currentView === 'mensal') safeRender(renderMensal);
-    if (currentView === 'metas')  { safeRender(renderBudget); safeRender(renderGoals); }
+    if (currentView === 'metas')  { safeRender(renderBudget); safeRender(renderGoals); }   // renderBudget também desenha parcelas e empréstimos
 }
 // Re-renderiza tudo que depende do estado: KPIs/sidebar/dashboard + a view aberta.
 // Antes, salvar um lançamento estando na visão Mensal/Anual deixava a tela desatualizada.
@@ -3287,7 +3496,10 @@ if (loadLocalState()) persistAll();
 
 // Payment badge HTML — shared across table, fixos, mobile list
 const txPayBadge = t => t.tipo !== 'saida' ? '' :
-    t.pagamento === 'credito' ? '<span class="tag-cred">CRÉD</span>' : '<span class="tag-deb">DÉB</span>';
+    (t.pagamento === 'credito' ? '<span class="tag-cred">CRÉD</span>' : '<span class="tag-deb">DÉB</span>') + txExtraBadges(t);
+// Parcela k/n e juros embutidos: aparecem em todas as listas junto do selo de pagamento
+const txExtraBadges = t => (t.parcela ? `<span class="tag-parc" title="Parcela ${t.parcela.k} de ${t.parcela.n}">${t.parcela.k}/${t.parcela.n}</span>` : '')
+    + (t.juros ? `<span class="tag-juros" title="Inclui ${escHtml(fmt(t.juros))} de juros/multa">juros ${escHtml(fmt(t.juros))}</span>` : '');
 // Type colour + sign — shared across renders
 const txCor  = t => t.tipo === 'entrada' ? 'var(--success)' : t.tipo === 'investimento' ? 'var(--invest)' : 'var(--danger)';
 const catLabel = t => t.cat && t.cat.trim() ? t.cat : '(sem categoria)';
@@ -3335,10 +3547,11 @@ function init() {
         });
         document.addEventListener('keydown', _onGlobalKey);
         _setupModalFocus();
+        safeRender(_ligarParcelas);
         safeRender(_setupA11y);   // acessibilidade nunca pode impedir o app de abrir
         // Outra aba do app salvou → recarrega o estado em vez de sobrescrever depois
         window.addEventListener('storage', e => {
-            if (!e.key || !e.key.startsWith(LS_PREFIX) || !/^fin5_(data|cats|goals|cards|budget)$/.test(e.key.slice(LS_PREFIX.length))) return;
+            if (!e.key || !e.key.startsWith(LS_PREFIX) || !/^fin5_(data|cats|goals|cards|budget|loans)$/.test(e.key.slice(LS_PREFIX.length))) return;
             loadLocalState();
             undoStack = []; _updateUndoBtn();   // snapshots antigos desfariam a mudança da outra aba
             renderAll();
@@ -3362,6 +3575,8 @@ const MODALS = {
     ovAplicarMeses: { close: () => $('ovAplicarMeses').classList.remove('open'), submit: () => confirmarAplicarMeses() },
     ovRecalcFatura: { close: () => closeRecalcFatura() },
     ovCatDelete:    { close: () => closeCatDelete(), submit: () => confirmCatDelete() },
+    ovParcRemover:  { close: () => closeParcRemover(), submit: () => confirmarRemoverParcela() },
+    ovLoan:         { close: () => closeLoan(), submit: () => salvarLoan() },
     ovEditFixo:     { close: () => closeEditFixo(), submit: () => confirmarEdicaoFixo() },
     ovNovaGoal:     { close: () => closeNovaGoal(), submit: () => salvarGoal() },
     ovAporte:       { close: () => closeAporte(), submit: () => confirmarAporte() },
@@ -3673,13 +3888,17 @@ function setTab(tab) {
 // (cartaoId salvo como string, validação diferente, fatura recalculada ou não).
 // pagField/cartaoField/faturaInfo: blocos que formTipoChange/formPagChange mostram e ocultam
 const FORM_DESKTOP  = { desc: 'desc', valor: 'valor', data: 'data', tipo: 'tipo', cat: 'categoria', fixo: 'fixo', pag: 'pagamento', cartao: 'cartao',
-                        pagField: 'pagamentoField', cartaoField: 'cartaoField', faturaInfo: 'faturaInfo' };
+                        pagField: 'pagamentoField', cartaoField: 'cartaoField', faturaInfo: 'faturaInfo',
+                        parc: 'parcelas', parcModo: 'parcelasModo', parcInfo: 'parcelasInfo', juros: 'juros', maisField: 'maisField' };
 const FORM_MOBILE   = { desc: 'mob-desc', valor: 'mob-valor', data: 'mob-data', tipo: 'mob-tipo', cat: 'mob-categoria', fixo: 'mob-fixo', pag: 'mob-pagamento', cartao: 'mob-cartao',
-                        pagField: 'mobPagamentoField', cartaoField: 'mobCartaoField', faturaInfo: 'mobFaturaInfo' };
+                        pagField: 'mobPagamentoField', cartaoField: 'mobCartaoField', faturaInfo: 'mobFaturaInfo',
+                        parc: 'mob-parcelas', parcModo: 'mob-parcelasModo', parcInfo: 'mob-parcelasInfo', juros: 'mob-juros', maisField: 'mobMaisField' };
 const FORM_MOB_EDIT = { desc: 'mob-edit-desc', valor: 'mob-edit-valor', data: 'mob-edit-data', tipo: 'mob-edit-tipo', cat: 'mob-edit-cat', fixo: 'mob-edit-fixo', pag: 'mob-edit-pag', cartao: 'mob-edit-cartao',
-                        pagField: 'mobEditPagField', cartaoField: 'mobEditCartaoField', faturaInfo: 'mobEditFaturaInfo' };
+                        pagField: 'mobEditPagField', cartaoField: 'mobEditCartaoField', faturaInfo: 'mobEditFaturaInfo',
+                        juros: 'mob-edit-juros', prox: 'mob-edit-prox', maisField: 'mobEditMaisField' };
 const formInline = id => ({ desc: 'ie-desc-' + id, valor: 'ie-valor-' + id, data: 'ie-data-' + id, tipo: 'ie-tipo-' + id, cat: 'ie-cat-' + id, fixo: 'ie-fixo-' + id, pag: 'ie-pag-' + id, cartao: 'ie-cartao-' + id,
-                            pagField: 'ie-pag-wrap-' + id, cartaoField: 'ie-cartao-wrap-' + id });   // sem aviso de fatura
+                            pagField: 'ie-pag-wrap-' + id, cartaoField: 'ie-cartao-wrap-' + id,
+                            juros: 'ie-juros-' + id, prox: 'ie-prox-' + id, maisField: 'ie-mais-' + id });   // sem aviso de fatura
 
 const fmtValorInput = v => v.toFixed(2).replace('.', ',');
 
@@ -3698,6 +3917,12 @@ function readTxForm(f) {
         fixo: !!($(f.fixo) && $(f.fixo).checked),
         pagamento,
         cartaoId: pagamento === 'credito' ? toId($(f.cartao) && $(f.cartao).value) : null,
+        // Juros/multa embutidos (parte do valor); `undefined` = formulário sem o campo (mantém o que já havia)
+        juros: tipo === 'saida' && f.juros && $(f.juros) ? (($(f.juros).value || '').trim() ? parseValor($(f.juros).value) : 0) : undefined,
+        // Parcelas só existem em lançamento novo (formulários com o campo); modo: o valor é o total ou o de cada parcela
+        parcelas: f.parc && $(f.parc) && tipo === 'saida' ? (Math.round(+$(f.parc).value) || 1) : 1,
+        parcModo: f.parcModo && $(f.parcModo) ? $(f.parcModo).value : 'total',
+        prox: !!(f.prox && $(f.prox) && $(f.prox).checked),   // edição: aplicar também às parcelas seguintes
     };
 }
 
@@ -3710,6 +3935,13 @@ function validateTx(f) {
     if ((f.cat || '').length > CAT_MAX)            return warn(`Nome de categoria longo demais (máx. ${CAT_MAX} caracteres).`);
     if (!isValidISODate(f.data))                   return warn('Selecione uma data válida.');
     if (!TIPOS.includes(f.tipo))                   return warn('Tipo inválido.');
+    if (f.juros !== undefined && (!Number.isFinite(f.juros) || f.juros < 0)) return warn('Juros inválidos.');
+    if (f.juros > f.valor)                         return warn('Os juros não podem passar do valor total.');
+    if (f.parcelas > 1) {
+        if (f.tipo !== 'saida')                    return warn('Parcelas só valem para gastos.');
+        if (f.fixo)                                return warn('Gasto fixo e parcelado não combinam: desmarque um dos dois.');
+        if (f.parcelas > PARCELAS_MAX)             return warn(`No máximo ${PARCELAS_MAX} parcelas.`);
+    }
     return true;
 }
 
@@ -3729,6 +3961,8 @@ function makeTx(f, base = null) {
         desc: f.desc, valor: roundMoney(f.valor), data: f.data, tipo: f.tipo, cat: f.cat || '',
         fixo: !!f.fixo, pagamento, cartaoId: cartaoId || null,
     };
+    // Juros embutidos: informado no formulário → vale; sem campo (undefined) → herda o da versão anterior
+    if (f.juros !== undefined) { if (f.juros > 0 && f.tipo === 'saida') t.juros = roundMoney(f.juros); else delete t.juros; }
     const keepFatura = base && base.faturaData && base.data === t.data && base.cartaoId === t.cartaoId;
     t.faturaData = (t.pagamento === 'credito' && t.cartaoId)
         ? (keepFatura ? base.faturaData : calcFaturaData(t.cartaoId, t.data))
@@ -3758,6 +3992,7 @@ function submitTx(f, editId = null, onDone = null) {
     if (!validateTx(f)) return false;
     const old = editId != null ? tx.find(t => t.id === editId) : null;
     if (editId != null && !old) { toast('⚠️ Lançamento não encontrado (removido em outro dispositivo?).', '#b45309'); return false; }
+    if (!old && f.parcelas > 1) return _submitParcelado(f, onDone);
     pushUndo(old ? `Edição de "${f.desc}"` : `Adição de "${f.desc}"`);
     if (ensureCat(f.tipo, f.cat)) saveCats();
     if (f.pagamento === 'credito' && f.cartaoId) lsSet('fin5_lastCard', String(f.cartaoId));   // inclui fixos (desviam p/ o modal)
@@ -3773,9 +4008,109 @@ function submitTx(f, editId = null, onDone = null) {
     }
     const t = makeTx(f, old);
     tx = old ? tx.map(x => x.id === old.id ? t : x) : tx.concat(t);
+    const prox = old && old.parcela && f.prox;
+    if (prox) tx = _propagarParcelas(tx, old, t);
     commit();
-    toast(old ? '✓ Atualizado!' : '✓ Salvo!');
+    toast(prox ? '✓ Atualizado, inclusive as parcelas seguintes!' : old ? '✓ Atualizado!' : '✓ Salvo!');
     return true;
+}
+
+// ── PARCELAS: a compra parcelada é gerada automaticamente ─────────────────────
+// Um lançamento por parcela ("Nome - Parcela k/N", mesmo padrão dos extratos), no mesmo dia dos
+// meses seguintes e com a fatura certa de cada uma. `parcela: { serie, k, n }` liga as parcelas:
+// remover/editar vale para a série. Divisão em centavos exatos (o resto vai para as primeiras).
+function parcelasDividir(total, n) {
+    const c = Math.round(total * 100), base = Math.floor(c / n), resto = c - base * n;
+    return Array.from({ length: n }, (_, i) => (base + (i < resto ? 1 : 0)) / 100);
+}
+const _sufixoParcela = (k, n) => ` - Parcela ${k}/${n}`;
+const _descSemParcela = d => String(d || '').replace(/\s*[-–]?\s*parcela\s*\d+\s*\/\s*\d+\s*$/i, '').trim();
+// Lista de lançamentos (já normalizados, ainda não gravados) de uma compra em n parcelas
+function gerarParcelas(f, n, modo = 'total', prefixoSerie = 'P') {
+    const porParcela = modo === 'parcela';
+    const valores = porParcela ? Array(n).fill(roundMoney(f.valor)) : parcelasDividir(f.valor, n);
+    const jur = f.juros > 0 ? (porParcela ? Array(n).fill(roundMoney(f.juros)) : parcelasDividir(f.juros, n)) : Array(n).fill(0);
+    const serie = prefixoSerie + newId(), base = _descSemParcela(f.desc) || f.desc;
+    return valores.map((valor, i) => {
+        const suf = _sufixoParcela(i + 1, n);
+        const t = makeTx({ ...f, fixo: false, desc: base.slice(0, DESC_MAX - suf.length) + suf, valor, juros: Math.min(jur[i], valor), data: addMonthsISO(f.data, i) });
+        t.parcela = { serie, k: i + 1, n };
+        return t;
+    });
+}
+function _submitParcelado(f, onDone) {
+    const n = f.parcelas, lista = gerarParcelas(f, n, f.parcModo);
+    pushUndo(`Adição de "${f.desc}" em ${n} parcelas`);
+    if (ensureCat(f.tipo, f.cat)) saveCats();
+    if (f.pagamento === 'credito' && f.cartaoId) lsSet('fin5_lastCard', String(f.cartaoId));
+    if (onDone) onDone();
+    tx = tx.concat(lista);
+    commit();
+    const mes = t => `${MES_ABREV[+t.data.slice(5, 7) - 1]}/${t.data.slice(2, 4)}`, v0 = lista[0].valor;
+    toast(`✓ ${n} parcelas lançadas${lista.every(t => t.valor === v0) ? ` (${n}× de ${fmt(v0)})` : ''} · ${mes(lista[0])} → ${mes(lista[n - 1])}`);
+    return true;
+}
+// Edição de uma parcela aplicada às seguintes da mesma série: valor, categoria, pagamento/cartão e nome
+function _propagarParcelas(lista, antes, depois) {
+    const base = _descSemParcela(depois.desc) || depois.desc;
+    return lista.map(x => {
+        if (!x.parcela || x.parcela.serie !== antes.parcela.serie || x.parcela.k <= antes.parcela.k) return x;
+        const suf = _sufixoParcela(x.parcela.k, x.parcela.n);
+        return makeTx({ desc: base.slice(0, DESC_MAX - suf.length) + suf, valor: depois.valor, data: x.data, tipo: depois.tipo, cat: depois.cat, fixo: false,
+                        pagamento: depois.pagamento, cartaoId: depois.cartaoId, juros: depois.juros || 0 }, x);
+    });
+}
+// Parcelas da mesma série, em ordem
+const parcelasDaSerie = serie => tx.filter(t => t.parcela && t.parcela.serie === serie).sort((x, y) => x.parcela.k - y.parcela.k);
+
+// Remover uma parcela pergunta o escopo: só esta, esta e as seguintes, ou a série toda
+let _parcRemPend = null;   // { id, serie }
+function _abrirRemoverParcela(t) {
+    const serie = parcelasDaSerie(t.parcela.serie), { k, n } = t.parcela;
+    const apos = serie.filter(x => x.parcela.k >= k), soma = l => fmt(l.reduce((s, x) => s + x.valor, 0));
+    _parcRemPend = { id: t.id, serie: t.parcela.serie };
+    $('parcRemSub').textContent = `"${_descSemParcela(t.desc) || t.desc}" — parcela ${k} de ${n}`;
+    $('parcRemLblEsta').textContent = `Só a parcela ${k}/${n}`;
+    $('parcRemRowProx').style.display = apos.length > 1 ? '' : 'none';
+    $('parcRemLblProx').textContent = `Esta e as seguintes (${k} a ${apos[apos.length - 1].parcela.k})`;
+    $('parcRemNotaProx').textContent = `${apos.length} parcelas, ${soma(apos)}.`;
+    $('parcRemLblTodas').textContent = `Todas as ${serie.length} parcelas`;
+    $('parcRemNotaTodas').textContent = `${soma(serie)}${serie.length > apos.length ? ', inclusive as anteriores' : ''}.`;
+    document.querySelector('input[name="parcRemEscopo"][value="esta"]').checked = true;
+    $('ovParcRemover').classList.add('open');
+}
+function closeParcRemover() { $('ovParcRemover').classList.remove('open'); _parcRemPend = null; }
+function confirmarRemoverParcela() {
+    const p = _parcRemPend, t = p && tx.find(x => x.id === p.id);
+    if (!t) { closeParcRemover(); return; }
+    const esc = (document.querySelector('input[name="parcRemEscopo"]:checked') || {}).value || 'esta', k = t.parcela.k;
+    const sai = x => x.parcela && x.parcela.serie === p.serie && (esc === 'todas' || (esc === 'proximas' ? x.parcela.k >= k : x.id === p.id));
+    const n = tx.filter(sai).length;
+    pushUndo(`Remoção de ${n} parcela${n !== 1 ? 's' : ''} de "${_descSemParcela(t.desc) || t.desc}"`);
+    tx = tx.filter(x => !sai(x));
+    if (_openInlineId != null && !tx.some(x => x.id === _openInlineId)) _openInlineId = null;
+    closeParcRemover(); closeMobEdit();
+    commit();
+    toast(`${n} parcela${n !== 1 ? 's' : ''} removida${n !== 1 ? 's' : ''}.`, '#52525b');
+}
+
+// Prévia no formulário de lançamento novo: "6× de R$ 100,00 · de 15/10/2026 a 15/03/2027"
+function formParcInfo(F) {
+    const el = F.parcInfo && $(F.parcInfo); if (!el) return;
+    const n = Math.round(+$(F.parc).value) || 1, v = parseValor($(F.valor).value), data = $(F.data).value;
+    if (!(n > 1) || $(F.tipo).value !== 'saida' || !(v > 0) || !isValidISODate(data)) { el.style.display = 'none'; return; }
+    const porParcela = $(F.parcModo).value === 'parcela';
+    const total = porParcela ? roundMoney(v * n) : roundMoney(v), p = porParcela ? roundMoney(v) : parcelasDividir(total, n)[0];
+    const br = iso => iso.split('-').reverse().join('/');
+    el.innerHTML = `<b>${n}× de ${escHtml(fmt(p))}</b> · total ${escHtml(fmt(total))}<br>${br(data)} → ${br(addMonthsISO(data, n - 1))}, uma por mês`;
+    el.style.display = '';
+}
+function _ligarParcelas() {
+    [FORM_DESKTOP, FORM_MOBILE].forEach(F => [F.valor, F.data, F.parc, F.parcModo, F.tipo].forEach(id => {
+        const el = $(id); if (!el) return;
+        ['input', 'change'].forEach(ev => el.addEventListener(ev, () => formParcInfo(F)));
+    }));
+    ['loanValor', 'loanTaxa', 'loanN', 'loanParcela'].forEach(id => { const el = $(id); if (el) el.addEventListener('input', loanPreview); });
 }
 
 function adicionar() {
@@ -3819,11 +4154,14 @@ function cancelarEdicao() {
     $('btnCancelar').style.display = 'none';
     $('desc').value  = '';
     $('valor').value = '';
+    $('parcelas').value = '1'; $('parcelasModo').value = 'total'; $('juros').value = '';
+    $('maisField').open = false; formParcInfo(FORM_DESKTOP);
 }
 
 function remover(id) {
     const t = tx.find(x => x.id === id);
     if (!t) { toast('⚠️ Lançamento não encontrado.', '#b45309'); return false; }
+    if (t.parcela && parcelasDaSerie(t.parcela.serie).length > 1) { _abrirRemoverParcela(t); return false; }   // pergunta o escopo
     if (!confirm(`Remover "${t.desc}"?`)) return false;
     pushUndo(`Remoção de "${t.desc}"`);
     tx = tx.filter(x => x.id !== id);
@@ -4159,7 +4497,7 @@ function downloadBlob(blob, filename) {
 }
 
 function exportar() {
-    const data = { t: tx, c: cats, g: goals, k: cards, b: budget, v: SCHEMA_VERSION, exportedAt: new Date().toISOString() };
+    const data = { t: tx, c: cats, g: goals, k: cards, b: budget, l: loans, v: SCHEMA_VERSION, exportedAt: new Date().toISOString() };
     const q = loadJSON('fin5_quarantine', []);
     if (q.length) data.q = q;   // registros separados também vão para a cópia (e voltam na importação)
     downloadBlob(new Blob([JSON.stringify(data)], { type: 'application/json' }), `backup_finances_${todayLocalISO()}.json`);
@@ -4226,7 +4564,7 @@ function importar(input) {
     r.onload = () => {
         try {
             const d = JSON.parse(r.result);
-            if (!d || typeof d !== 'object' || (!d.t && !d.c && !d.g && !d.k && !d.b)) {
+            if (!d || typeof d !== 'object' || (!d.t && !d.c && !d.g && !d.k && !d.b && !d.l)) {
                 toast('⚠️ Arquivo não parece ser um backup válido.', '#b45309');
                 return;
             }
@@ -4234,7 +4572,7 @@ function importar(input) {
             if (!confirm(`Substituir os dados atuais pelo backup${d.t ? ` (${n} lançamentos)` : ''}?\nDá para desfazer com Ctrl+Z.`)) return;
             // Partes ausentes no arquivo mantêm o estado atual; tudo passa pela sanitização
             const s = sanitizeState({
-                t: d.t || tx, c: d.c || cats, g: d.g || goals, k: d.k || cards, b: d.b || budget,
+                t: d.t || tx, c: d.c || cats, g: d.g || goals, k: d.k || cards, b: d.b || budget, l: d.l || loans,
             }, Number(d.v) || 2);
             pushUndo('Importação de backup');
             _quarantine(s.report);
@@ -4266,7 +4604,7 @@ function importar(input) {
 // (falha ao marcar, dois aparelhos ao mesmo tempo) nunca duplica nem sobrescreve.
 // Detalhes para quem grava as operações: CAIXA-DE-ENTRADA.md.
 const INBOX_ARQ = 'inbox.json', ESTADO_ARQ = 'estado.json';
-const INBOX_CAMPOS = ['desc', 'valor', 'data', 'tipo', 'cat', 'pagamento', 'cartaoId', 'faturaData', 'fixo'];
+const INBOX_CAMPOS = ['desc', 'valor', 'data', 'tipo', 'cat', 'pagamento', 'cartaoId', 'faturaData', 'fixo', 'juros'];
 const INBOX_MIN_MS  = 2 * 60 * 1000;     // checagens automáticas no máximo a cada 2 min
 const ESTADO_MIN_MS = 10 * 60 * 1000;    // cópia dos dados no máximo a cada 10 min
 // Por conta: outra conta entrando no mesmo navegador não herda o token nem a caixa
@@ -4324,7 +4662,7 @@ function inboxAplicar(state, ops) {
         }
         res('ignorado: operação desconhecida');
     });
-    const s = sanitizeState({ t: lista.filter(t => !removidos.has(t)), c: state.cats, g: state.goals, k: state.cards, b: state.budget });
+    const s = sanitizeState({ t: lista.filter(t => !removidos.has(t)), c: state.cats, g: state.goals, k: state.cards, b: state.budget, l: state.loans });
     // Lançamento recusado pela sanitização (sem data/valor) vai para a quarentena, não conta como aplicado
     const ids = new Set(s.tx.map(t => t.id));
     adicionados.forEach((i, tid) => { if (!ids.has(tid)) resultados[i].resultado = 'ignorado: inválido (quarentena)'; });
@@ -4406,7 +4744,7 @@ async function _inboxCopiaEstado(cfg) {
     const key = _inboxKey(_currentUser.uid) + '_copia';
     const h = _stateHash(), ult = loadJSON(key, null);
     if (ult && (ult.hash === h || Date.now() - ult.em < ESTADO_MIN_MS)) return false;
-    const dados = { t: tx, c: cats, g: goals, k: cards, b: budget, v: SCHEMA_VERSION, exportedAt: new Date().toISOString() };
+    const dados = { t: tx, c: cats, g: goals, k: cards, b: budget, l: loans, v: SCHEMA_VERSION, exportedAt: new Date().toISOString() };
     let sha = ult && ult.sha;
     for (let tent = 0; tent < 3; tent++) {
         const novo = await _ghGravar(cfg, ESTADO_ARQ, dados, sha, 'App: cópia dos dados');
@@ -4497,6 +4835,10 @@ function _inlineEditorHtml(t) {
         </div>
         <div style="display:flex;gap:16px;margin-top:8px;align-items:center;flex-wrap:wrap">
             <label class="ie-check"><input type="checkbox" id="ie-fixo-${t.id}" ${t.fixo ? 'checked' : ''}> Gasto fixo mensal</label>
+            <div id="ie-mais-${t.id}" style="${t.tipo !== 'saida' ? 'display:none' : ''}">
+                <label class="ie-check">Juros incluídos:&nbsp;<input id="ie-juros-${t.id}" type="text" inputmode="decimal" value="${t.juros ? fmtValorInput(t.juros) : ''}" placeholder="0,00" style="${selStyle};width:84px"></label>
+            </div>
+            ${t.parcela && t.parcela.k < t.parcela.n ? `<label class="ie-check"><input type="checkbox" id="ie-prox-${t.id}"> Aplicar às parcelas seguintes (${t.parcela.k + 1}–${t.parcela.n})</label>` : ''}
             <div id="ie-pag-wrap-${t.id}" style="${t.tipo !== 'saida' ? 'display:none' : ''}">
                 <label class="ie-check">Pagamento:&nbsp;
                     <select id="ie-pag-${t.id}" onchange="ieUpdateCartao(${t.id})" style="${selStyle}">${pagOpts}</select>
@@ -5321,7 +5663,13 @@ function renderMensal() {
 
 function _mesCascata(r, saidas, saldo) {
     const grupos = { fixos: [], parcelas: [], juros: [], dia: [] };
-    saidas.forEach(t => grupos[_mesTipoGasto(t)].push(t));
+    saidas.forEach(t => {
+        const g = _mesTipoGasto(t), j = g === 'juros' ? 0 : (t.juros || 0);
+        if (!(j > 0)) { grupos[g].push(t); return; }
+        // Juros embutidos: a parte de juros vai para "Juros e tarifas", o resto fica no tipo do lançamento
+        if (t.valor - j > 0) grupos[g].push({ ...t, valor: roundMoney(t.valor - j) });
+        grupos.juros.push({ ...t, valor: j, desc: `${t.desc} (juros)` });
+    });
     const soma = arr => roundMoney(arr.reduce((s, t) => s + t.valor, 0));
     const detalhe = arr => [...arr].sort((x, y) => y.valor - x.valor).slice(0, 3).map(t => `${t.desc}: ${fmt(t.valor)}`).join('\n');
     const passos = [{ nome: 'Entrou', v: r.ent, cor: MES_CORES.entrou, tipo: '+' }];
@@ -5359,14 +5707,20 @@ function _mesCascata(r, saidas, saldo) {
     $('mCascataNota').innerHTML = notas.join(' · ');
 }
 
+// Juros/multas pagos no mês: lançamentos que SÃO juros (pela descrição) mais a parte de juros
+// EMBUTIDA em outros (boleto pago com atraso, parcela de empréstimo)
+function _mesJuros(saidas) {
+    const ehJuros = t => MES_JUROS_RE.test(t.desc || ''), proprios = saidas.filter(ehJuros), embutidos = saidas.filter(t => t.juros && !ehJuros(t));
+    return { v: roundMoney(proprios.reduce((s, t) => s + t.valor, 0) + embutidos.reduce((s, t) => s + t.juros, 0)), n: proprios.length + embutidos.length };
+}
 function _mesDestaques(r, saidas, porCat, m, a, fase) {
     const itens = [], cmp = porCat.filter(x => x.d != null && x.c !== '(sem categoria)');
     const alta = cmp.filter(x => x.d >= 100 && (!x.med || x.d / x.med >= 0.2)).sort((x, y) => y.d - x.d)[0];
     if (alta) itens.push(['📈', `<b>${escHtml(_mesIco(alta.c) + ' ' + _mesNomeCat(alta.c))}</b> subiu ${_mesR0(alta.d)} em relação à média (${_mesR0(alta.med)} → ${_mesR0(alta.cur)})`]);
     const queda = cmp.filter(x => x.d <= -100).sort((x, y) => x.d - y.d)[0];
     if (queda) itens.push(['📉', `<b>${escHtml(_mesIco(queda.c) + ' ' + _mesNomeCat(queda.c))}</b> caiu ${_mesR0(-queda.d)} (${_mesR0(queda.med)} → ${_mesR0(queda.cur)})`]);
-    const juros = saidas.filter(t => MES_JUROS_RE.test(t.desc || '')), vj = roundMoney(juros.reduce((s, t) => s + t.valor, 0));
-    if (vj > 0) itens.push(['⚠️', `<b>${fmt(vj)} em juros, IOF e multas</b> (${juros.length} lançamento${juros.length !== 1 ? 's' : ''}, ${Math.round(vj / (r.gas || 1) * 100)}% dos gastos): dinheiro que não comprou nada`]);
+    const { v: vj, n: nj } = _mesJuros(saidas);
+    if (vj > 0) itens.push(['⚠️', `<b>${fmt(vj)} em juros, IOF e multas</b> (${nj} lançamento${nj !== 1 ? 's' : ''}, ${Math.round(vj / (r.gas || 1) * 100)}% dos gastos): dinheiro que não comprou nada`]);
     const dias = new Date(a, m + 1, 0).getDate(), porDia = Array(dias + 1).fill(0), qtd = Array(dias + 1).fill(0);
     saidas.forEach(t => { const d = +t.data.slice(8, 10); porDia[d] += t.valor; qtd[d]++; });
     const maior = porDia.reduce((b, v, d) => v > porDia[b] ? d : b, 1);
@@ -6419,6 +6773,8 @@ function renderBudget() {
     _orcRenderOcultas(mod);
     _orcRenderEntradas();
     renderBudgetFixos(m, a);
+    safeRender(renderBudgetParcelas, m, a);
+    safeRender(renderLoans);
     renderVencimentos();
 }
 
@@ -6537,7 +6893,12 @@ function _orcLigar() {
         } else if (act === 'excluir') deleteCategoryFlow(_orcTipo(nome), nome);
         else if (b.dataset.move && _orcSel.type === 'cat' && b.dataset.move !== _budgetGroup(nome)) setBudgetCatGroup(nome, b.dataset.move);
     });
-    sel.addEventListener('change', e => { if (e.target.id === 'orcValIn') _orcDefinir(e.target.value); });
+    // No celular o campo da tabela some e o painel é o único lugar para digitar: lá digitar também não
+    // mexe nas outras (como na tabela); no computador o painel fica do lado da roda e reajusta
+    sel.addEventListener('change', e => {
+        if (e.target.id !== 'orcValIn') return;
+        if (_orcCompacto() && _orcSel && _orcSel.type === 'cat') _orcDefinirSolto(e.target.value, _orcSel.id); else _orcDefinir(e.target.value);
+    });
     sel.addEventListener('keydown', e => {
         if (e.target.id === 'orcValIn' && e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
         if (e.target.id === 'orcRenameIn' && e.key === 'Enter') { e.preventDefault(); sel.querySelector('[data-act="renomear"]').click(); }
@@ -6715,7 +7076,7 @@ function _claimLocalData(uid) {
     if (deOutro) {
         const meta = loadJSON(_syncKey(owner), null);
         if ((!meta || meta.hash !== h) && !vazio)
-            storeJSON(_pendKey(owner), { t: tx, c: cats, g: goals, k: cards, b: budget });
+            storeJSON(_pendKey(owner), { t: tx, c: cats, g: goals, k: cards, b: budget, l: loans });
         _trocarQuarentena(owner, uid);
     }
     const pend = loadJSON(_pendKey(uid), null);
@@ -6910,8 +7271,8 @@ function _cyrb53(str, seed = 0) {
     h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
     return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
 }
-function _stateHash(s = { tx, cats, goals, cards, budget }) {
-    return _cyrb53(JSON.stringify(_canon({ t: s.tx, c: s.cats, g: s.goals, k: s.cards, b: s.budget })) || '');
+function _stateHash(s = { tx, cats, goals, cards, budget, loans }) {
+    return _cyrb53(JSON.stringify(_canon({ t: s.tx, c: s.cats, g: s.goals, k: s.cards, b: s.budget, l: s.loans })) || '');
 }
 
 const _syncKey = uid => 'fb_sync_' + uid;
@@ -6925,7 +7286,7 @@ const _baseKey = uid => 'fb_base_' + uid;
 function _setSyncBase(st, ts) {
     if (!_currentUser) return;
     const key = _baseKey(_currentUser.uid);
-    if (!storeJSON(key, { ts, t: st.tx, c: st.cats, g: st.goals, k: st.cards, b: st.budget })) {
+    if (!storeJSON(key, { ts, t: st.tx, c: st.cats, g: st.goals, k: st.cards, b: st.budget, l: st.loans })) {
         lsDel(key);
     }
 }
@@ -7000,6 +7361,7 @@ function mergeStates(base, local, remote, prefer = null) {
         tx:    _mergeById(base.tx, local.tx, remote.tx, ctx, 'lançamento'),
         goals: _mergeById(base.goals, local.goals, remote.goals, ctx, 'meta'),
         cards: _mergeById(base.cards, local.cards, remote.cards, ctx, 'cartão'),
+        loans: _mergeById(base.loans, local.loans, remote.loans, ctx, 'empréstimo'),
         cats:  Object.fromEntries(TIPOS.map(tp => [tp, _mergeSet(base.cats[tp], local.cats[tp], remote.cats[tp])])),
         budget: {
             total:       total.conflict ? (prefer === 'remote' ? remote.budget.total : local.budget.total) : total.v,
@@ -7031,7 +7393,7 @@ function _userRef() {
 }
 function _buildPayload() {
     // JSON round-trip remove undefined/NaN (o set() do Firebase rejeita undefined)
-    const data = JSON.parse(JSON.stringify({ t: tx, c: cats, g: goals, k: cards, b: budget }));
+    const data = JSON.parse(JSON.stringify({ t: tx, c: cats, g: goals, k: cards, b: budget, l: loans }));
     return { ..._mapKeys(data, _fbKeyEnc), ts: Date.now(), v: SCHEMA_VERSION };
 }
 
@@ -7108,7 +7470,7 @@ async function _mergeOrConflict(remote, attempt = 0) {
             _showConflict(remote, nomes);     // escolha resolve SÓ esses itens (resolveConflict)
             return 'conflict';
         }
-        restoreState(sanitizeState({ t: merged.tx, c: merged.cats, g: merged.goals, k: merged.cards, b: merged.budget }));
+        restoreState(sanitizeState({ t: merged.tx, c: merged.cats, g: merged.goals, k: merged.cards, b: merged.budget, l: merged.loans }));
         persistAll();
         undoStack = []; _updateUndoBtn();   // snapshots antigos desfariam o que veio do outro dispositivo
         renderAll(); renderGoals(); renderCartoesMini();
@@ -7200,7 +7562,7 @@ async function resolveConflict(choice) {
             pushUndo('Resolver conflito de sincronização');
             const rs = sanitizeState(_mapKeys(remote, _fbKeyDec), Number(remote.v) || 2);
             const { merged } = mergeStates(base, snapshotState(), rs, choice === 'remote' ? 'remote' : 'local');
-            restoreState(sanitizeState({ t: merged.tx, c: merged.cats, g: merged.goals, k: merged.cards, b: merged.budget }));
+            restoreState(sanitizeState({ t: merged.tx, c: merged.cats, g: merged.goals, k: merged.cards, b: merged.budget, l: merged.loans }));
             persistAll();
             renderAll(); renderGoals(); renderCartoesMini();
             if (await _pushCAS(remote.ts || 0) === 'conflict') return;   // outro dispositivo gravou de novo
@@ -7334,6 +7696,7 @@ function _mostrar(id, on) { const el = id && $(id); if (el) el.style.display = o
 function formTipoChange(F, selectedCat) {
     const tipo = $(F.tipo).value;
     _mostrar(F.pagField, tipo === 'saida');
+    _mostrar(F.maisField, tipo === 'saida');   // parcelas e juros só existem em gastos
     if (tipo === 'saida') formPagChange(F);
     else { _mostrar(F.cartaoField, false); _mostrar(F.faturaInfo, false); }
     populateCatSelect($(F.cat), tipo, selectedCat);   // undefined (troca de tipo) = mantém se existir
@@ -8078,6 +8441,205 @@ function extConfirmImport() {
     toast(`✅ ${toImport.length} lançamento${toImport.length > 1 ? 's' : ''} importado${toImport.length > 1 ? 's' : ''}!`, '#16a34a');
 }
 
+// ── EMPRÉSTIMOS ───────────────────────────────────────────────────────────────
+// Um empréstimo é o contrato (valor, taxa, parcelas, 1ª data); as parcelas são lançamentos de saída
+// gerados automaticamente ("Nome - Parcela k/N", categoria Empréstimos), ligados por loan.serie e
+// com a parte de JUROS de cada uma embutida (t.juros — alimenta "juros e tarifas" no Mensal).
+// O painel calcula tudo pelo cronograma do contrato: parcela com data até hoje conta como paga.
+const LOAN_CAT = '💸 Empréstimos';
+
+// Parcela pela tabela Price: P·i / (1 − (1+i)^−n); sem taxa, valor ÷ n
+function loanPmt(valor, taxaPct, n) {
+    const i = taxaPct / 100;
+    if (!(valor > 0) || !(n >= 1)) return 0;
+    return roundMoney(i > 0 ? valor * i / (1 - Math.pow(1 + i, -n)) : valor / n);
+}
+// Parcelas do contrato, cada uma com os juros que carrega: saldo × taxa quando há taxa; sem ela,
+// o total de juros (parcelas − valor emprestado) é rateado igualmente
+function loanCronograma(l) {
+    const n = l.n, p = l.parcela, i = l.taxa / 100, jurosTotal = Math.max(0, roundMoney(p * n - l.valor));
+    const rateio = i > 0 ? null : parcelasDividir(jurosTotal, n);
+    let saldo = l.valor;
+    const cron = Array.from({ length: n }, (_, idx) => {
+        let j;
+        if (i > 0) { j = roundMoney(saldo * i); saldo = roundMoney(saldo - (p - j)); } else j = rateio[idx];
+        return { k: idx + 1, data: l.primeira ? addMonthsISO(l.primeira, idx) : '', valor: p, juros: roundMoney(Math.min(Math.max(j, 0), p)) };
+    });
+    // Arredondamentos: a última parcela fecha a conta, para a soma dos juros ser exatamente parcelas − valor
+    const resto = roundMoney(jurosTotal - cron.reduce((s, x) => s + x.juros, 0)), ult = cron[n - 1];
+    ult.juros = roundMoney(Math.min(Math.max(ult.juros + resto, 0), p));
+    return cron;
+}
+function loanResumo(l, hoje = todayLocalISO()) {
+    const cron = loanCronograma(l), venceu = x => !!x.data && x.data <= hoje;
+    const pagas = cron.filter(venceu), faltam = cron.filter(x => !venceu(x));
+    const soma = (arr, f = x => x.valor) => roundMoney(arr.reduce((s, x) => s + f(x), 0));
+    return { cron, pagas: pagas.length, faltam: faltam.length, total: soma(cron), pago: soma(pagas), falta: soma(faltam),
+             jurosTotal: soma(cron, x => x.juros), jurosPagos: soma(pagas, x => x.juros), jurosFalta: soma(faltam, x => x.juros),
+             proxima: faltam[0] || null, fim: cron.length ? cron[cron.length - 1].data : '' };
+}
+// Lançamentos (já normalizados, ainda não gravados) do empréstimo. modo 'juros' (padrão, regra do dono:
+// o valor recebido não é receita e o principal pago não é gasto) lança só os juros de cada parcela
+// ("Nome - Juros - Parcela k/N"); 'parcela' lança a parcela inteira, com os juros embutidos
+function loanTx(l, modo = 'juros') {
+    const soJuros = modo === 'juros', rot = soJuros ? ' - Juros' : '';
+    return loanCronograma(l).filter(p => !soJuros || p.juros > 0).map(p => {
+        const suf = _sufixoParcela(p.k, l.n);
+        const t = makeTx({ desc: l.nome.slice(0, DESC_MAX - suf.length - rot.length) + rot + suf, valor: soJuros ? p.juros : p.valor, data: p.data, tipo: 'saida',
+                           cat: LOAN_CAT, fixo: false, pagamento: 'debito', cartaoId: null, juros: soJuros ? 0 : p.juros });
+        t.parcela = { serie: l.serie, k: p.k, n: l.n };
+        return t;
+    });
+}
+const _mesAno = iso => iso ? `${MES_ABREV[+iso.slice(5, 7) - 1]}/${iso.slice(0, 4)}` : '—';
+const _dataBR = iso => iso ? iso.split('-').reverse().join('/') : '—';
+
+function renderLoans() {
+    const grid = $('loansGrid'), res = $('loansResumo');
+    if (!grid || !res) return;
+    const hoje = todayLocalISO(), ym = ymKey(_budgetMonth, _budgetYear);
+    const infos = loans.map(l => ({ l, r: loanResumo(l, hoje) }));
+    const novo = `<div class="goal-add-card" onclick="abrirNovoLoan()">
+        <span style="font-size:32px;opacity:.25">＋</span>
+        <span style="font-size:13px;font-weight:500">${infos.length ? 'Novo empréstimo' : 'Cadastrar empréstimo'}</span>
+        ${infos.length ? '' : '<span style="font-size:11px;text-align:center;padding:0 18px;opacity:.85">As parcelas entram sozinhas nos lançamentos, com os juros de cada uma</span>'}</div>`;
+    if (!infos.length) { res.innerHTML = ''; grid.innerHTML = novo; return; }
+
+    // O todo: tudo que falta, o que vence no mês aberto, o já pago e os juros
+    const soma = f => roundMoney(infos.reduce((s, x) => s + f(x), 0));
+    const doMes = infos.flatMap(({ l, r }) => r.cron.filter(p => p.data.slice(0, 7) === ym).map(p => ({ l, p })));
+    const fimGeral = infos.map(x => x.r.fim).filter(Boolean).sort().pop() || '';
+    const faltamN = infos.reduce((s, x) => s + x.r.faltam, 0);
+    res.innerHTML = `
+        <div class="loan-tile"><small>Falta pagar</small><b>${fmt(soma(x => x.r.falta))}</b><span>${faltamN ? `${faltamN} parcela${faltamN !== 1 ? 's' : ''}${fimGeral ? ` · quita tudo em ${_mesAno(fimGeral)}` : ''}` : '✓ tudo quitado'}</span></div>
+        <div class="loan-tile"><small>Parcelas de ${MESES[_budgetMonth]}</small><b>${fmt(roundMoney(doMes.reduce((s, x) => s + x.p.valor, 0)))}</b><span>${doMes.length ? `${doMes.length} parcela${doMes.length !== 1 ? 's' : ''}` : 'nenhuma neste mês'}</span></div>
+        <div class="loan-tile"><small>Já pago</small><b>${fmt(soma(x => x.r.pago))}</b><span>de ${fmt(soma(x => x.r.total))} no total</span></div>
+        <div class="loan-tile"><small>Juros no total</small><b>${fmt(soma(x => x.r.jurosTotal))}</b><span>${fmt(soma(x => x.r.jurosFalta))} ainda por pagar</span></div>`;
+    grid.innerHTML = infos.map(({ l, r }) => {
+        const pct = l.n ? Math.min(100, Math.floor(r.pagas / l.n * 100)) : 0, quitado = r.faltam === 0;
+        return `<div class="goal-card">
+            <div class="goal-accent" style="background:#7c3aed"></div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:10px">
+                <div class="goal-name" style="margin-top:0">🏦 ${escHtml(l.nome)}</div>
+                <div class="goal-actions">
+                    <button class="icon-btn" onclick="abrirEditLoan(${l.id})" title="Editar nome e nota">✏️</button>
+                    <button class="icon-btn" onclick="removerLoan(${l.id})" title="Remover">🗑️</button>
+                </div>
+            </div>
+            <div class="goal-desc">${l.nota ? escHtml(l.nota) : '&nbsp;'}</div>
+            <div class="goal-amounts"><div class="goal-atual" style="color:#6d28d9">${quitado ? '✓ Quitado' : fmt(r.falta)}</div><div class="goal-target">${quitado ? fmt(r.total) : 'falta pagar'}</div></div>
+            <div class="goal-track"><div class="goal-fill" style="width:${pct}%;background:#7c3aed"></div></div>
+            <div class="goal-meta-row"><span class="goal-pct" style="color:#6d28d9">${r.pagas} de ${l.n} parcelas pagas</span><span>${pct}%</span></div>
+            <div class="loan-facts">
+                <div><small>Parcela</small><b>${fmt(l.parcela)}</b></div>
+                <div><small>Emprestado</small><b>${fmt(l.valor)}</b></div>
+                <div><small>Juros no total</small><b>${fmt(r.jurosTotal)}${l.taxa ? ` · ${escHtml(fmtPct(l.taxa))} a.m.` : ''}</b></div>
+                <div><small>Total a pagar</small><b>${fmt(r.total)}</b></div>
+                <div><small>${quitado ? 'Quitado em' : 'Próxima parcela'}</small><b>${quitado ? _mesAno(r.fim) : _dataBR(r.proxima && r.proxima.data)}</b></div>
+                <div><small>Termina em</small><b>${_mesAno(r.fim)}</b></div>
+            </div>
+        </div>`;
+    }).join('') + novo;
+}
+
+function _loanCampos(on) {   // na edição só nome e nota mudam (o contrato gerou lançamentos)
+    ['loanValor', 'loanTaxa', 'loanN', 'loanParcela', 'loanPrimeira'].forEach(id => { $(id).disabled = !on; });
+    $('loanGerarRow').style.display = on ? '' : 'none';
+}
+function abrirNovoLoan() {
+    $('loanModalTitle').textContent = 'Novo empréstimo';
+    $('loanEditId').value = '';
+    ['loanNome', 'loanValor', 'loanTaxa', 'loanN', 'loanParcela', 'loanNota'].forEach(id => { $(id).value = ''; });
+    $('loanPrimeira').value = addMonthsISO(todayLocalISO(), 1);
+    $('loanLancar').value = 'juros';
+    _loanCampos(true); loanPreview();
+    $('ovLoan').classList.add('open');
+}
+function abrirEditLoan(id) {
+    const l = loans.find(x => x.id === id); if (!l) return;
+    $('loanModalTitle').textContent = 'Editar empréstimo';
+    $('loanEditId').value = String(l.id);
+    $('loanNome').value = l.nome; $('loanNota').value = l.nota;
+    $('loanValor').value = fmtValorInput(l.valor); $('loanTaxa').value = l.taxa ? String(l.taxa).replace('.', ',') : '';
+    $('loanN').value = String(l.n); $('loanParcela').value = fmtValorInput(l.parcela); $('loanPrimeira').value = l.primeira;
+    _loanCampos(false); loanPreview();
+    $('ovLoan').classList.add('open');
+}
+function closeLoan(e) { closeOverlay('ovLoan', e); }
+// Prévia do contrato: parcela (a estimada pela tabela Price quando o campo está vazio), total e juros
+function loanPreview() {
+    const el = $('loanPreview'), v = numInput($('loanValor')), taxa = numInput($('loanTaxa')) || 0, n = Math.round(+$('loanN').value) || 0;
+    const pTxt = $('loanParcela').value.trim(), p = pTxt ? numInput($('loanParcela')) : loanPmt(v, taxa, n);
+    if (!(v > 0) || !(n >= 2) || !(p > 0)) { el.style.display = 'none'; return; }
+    const total = roundMoney(p * n), juros = Math.max(0, roundMoney(total - v));
+    el.innerHTML = `Parcela <b>${escHtml(fmt(p))}</b>${pTxt ? '' : ' (estimada pela tabela Price)'} · total <b>${escHtml(fmt(total))}</b> · juros <b>${escHtml(fmt(juros))}</b> (${escHtml(fmtPct(juros / v * 100))} do valor)`;
+    el.style.display = '';
+}
+function salvarLoan() {
+    const nome = $('loanNome').value.trim(), nota = $('loanNota').value.trim(), editId = $('loanEditId').value;
+    if (!nome) return toast('⚠️ Digite um nome.', '#b45309');
+    if (editId) {   // só nome e nota
+        const l = loans.find(x => x.id === toId(editId));
+        if (!l) return toast('⚠️ Empréstimo não encontrado.', '#b45309');
+        pushUndo(`Edição do empréstimo "${nome}"`);
+        loans = loans.map(x => x.id === l.id ? { ...x, nome: nome.slice(0, DESC_MAX), nota: nota.slice(0, 500) } : x);
+        // parcelas já lançadas acompanham o novo nome
+        tx = tx.map(t => {
+            if (!t.parcela || t.parcela.serie !== l.serie) return t;
+            const suf = _sufixoParcela(t.parcela.k, t.parcela.n), rot = / - Juros - Parcela \d+\/\d+$/i.test(t.desc) ? ' - Juros' : '';
+            return { ...t, desc: nome.slice(0, DESC_MAX - suf.length - rot.length) + rot + suf };
+        });
+        commitAll(); closeLoan(); toast('✓ Empréstimo atualizado!');
+        return;
+    }
+    const valor = numInput($('loanValor')), taxa = numInput($('loanTaxa')) || 0, n = Math.round(+$('loanN').value) || 0, primeira = $('loanPrimeira').value;
+    const pTxt = $('loanParcela').value.trim(), parcela = pTxt ? numInput($('loanParcela')) : loanPmt(valor, taxa, n);
+    if (!(valor > 0) || !_valorOk(valor)) return toast('⚠️ Valor emprestado inválido.', '#b45309');
+    if (!Number.isFinite(taxa) || taxa < 0 || taxa > 100) return toast('⚠️ Taxa inválida (0 a 100% ao mês).', '#b45309');
+    if (!(n >= 2 && n <= LOAN_N_MAX)) return toast(`⚠️ Informe de 2 a ${LOAN_N_MAX} parcelas.`, '#b45309');
+    if (!(parcela > 0) || !_valorOk(parcela)) return toast('⚠️ Valor da parcela inválido.', '#b45309');
+    if (!isValidISODate(primeira)) return toast('⚠️ Informe a data da 1ª parcela.', '#b45309');
+    const id = newId(), l = { id, nome: nome.slice(0, DESC_MAX), valor: roundMoney(valor), taxa: +taxa.toFixed(4), n, parcela: roundMoney(parcela), primeira, serie: 'E' + id, nota: nota.slice(0, 500) };
+    const modo = $('loanLancar').value, gerar = modo === 'juros' || modo === 'parcela';
+    pushUndo(`Novo empréstimo "${nome}"`);
+    loans = loans.concat(l);
+    let lancados = [];
+    if (gerar) { ensureCat('saida', LOAN_CAT); saveCats(); lancados = loanTx(l, modo); tx = tx.concat(lancados); }
+    commitAll(); closeLoan();
+    toast(!gerar ? '🏦 Empréstimo criado (nada lançado nos lançamentos).'
+        : `🏦 Empréstimo criado: ${lancados.length} lançamento${lancados.length !== 1 ? 's' : ''} ${modo === 'juros' ? 'de juros' : `de ${fmt(l.parcela)}`}.`);
+}
+function removerLoan(id) {
+    const l = loans.find(x => x.id === id); if (!l) return;
+    if (!confirm(`Remover o empréstimo "${l.nome}"?`)) return;
+    const hoje = todayLocalISO(), futuras = tx.filter(t => t.parcela && t.parcela.serie === l.serie && t.data > hoje);
+    // Parcelas já vencidas ficam no histórico; as que ainda vão vencer podem sair junto
+    const tirar = futuras.length && confirm(`Remover também as ${futuras.length} parcela${futuras.length !== 1 ? 's' : ''} que ainda vão vencer, dos lançamentos?\n\nOK = remover as futuras (as já vencidas ficam no histórico) · Cancelar = manter todos os lançamentos`)
+        ? new Set(futuras.map(t => t.id)) : new Set();
+    pushUndo(`Remoção do empréstimo "${l.nome}"`);
+    loans = loans.filter(x => x.id !== id);
+    if (tirar.size) tx = tx.filter(t => !tirar.has(t.id));
+    commitAll();
+    toast('Empréstimo removido.', '#52525b');
+}
+
+// Caixa "Parcelas do mês" (Orçamento): o que vence no mês, quantas faltam e o quanto
+function renderBudgetParcelas(m, a) {
+    const box = $('parcBox'); if (!box) return;
+    const doMes = txMes(m, a).filter(t => t.parcela);
+    box.style.display = doMes.length ? '' : 'none';
+    if (!doMes.length) return;
+    $('parcTotal').textContent = fmt(roundMoney(doMes.reduce((s, t) => s + t.valor, 0)));
+    $('parcList').innerHTML = [...doMes].sort((x, y) => y.valor - x.valor).map(t => {
+        const serie = parcelasDaSerie(t.parcela.serie), depois = serie.filter(x => x.parcela.k > t.parcela.k), fim = serie[serie.length - 1];
+        const resta = depois.length ? `restam ${depois.length} · ${fmt(roundMoney(depois.reduce((s, x) => s + x.valor, 0)))} · termina ${_mesAno(fim.data)}` : 'última parcela';
+        return `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:1px solid var(--border-light);font-size:12px">
+            <span style="min-width:0"><span style="font-weight:600;overflow-wrap:anywhere">${escHtml(_descSemParcela(t.desc) || t.desc)}</span><span class="tag-parc">${t.parcela.k}/${t.parcela.n}</span>${t.juros ? `<span class="tag-juros">juros ${escHtml(fmt(t.juros))}</span>` : ''}
+                <br><span style="color:var(--text-3);font-size:11px">${escHtml(resta)}</span></span>
+            <span style="font-weight:700;color:var(--danger);white-space:nowrap">${fmt(t.valor)}</span></div>`;
+    }).join('');
+}
+
 // ── PATRIMÔNIO (net-worth trend) + PROJEÇÃO (phase 4) ─────────────────────────
 function renderPatrimonio() {
     const card = $('patrimonioCard');
@@ -8578,7 +9140,7 @@ function runSelfTests() {
     eq('sanitize: categoria usada existe', s1.cats.entrada.includes('Nova'), true);
     eq('sanitize: orçamento completo', Object.keys(s1.budget).sort(), ['allocs', 'locks', 'monthTotals', 'needsWants', 'off', 'total']);
     eq('sanitize: cor segura', s1.cards[0].cor, '#6d28d9');
-    const asRaw = s => ({ t: s.tx, c: s.cats, g: s.goals, k: s.cards, b: s.budget });
+    const asRaw = s => ({ t: s.tx, c: s.cats, g: s.goals, k: s.cards, b: s.budget, l: s.loans });
     const s2 = sanitizeState(asRaw(s1));
     eq('sanitize idempotente (hash estável)', _stateHash(s2), _stateHash(s1));
     // Ida e volta pelo Firebase: chaves codificadas, vazios removidos, chaves reordenadas
@@ -8709,6 +9271,48 @@ function runSelfTests() {
             eq('fora do orçamento: merge leva a mudança de um lado', mergeStates(sB, sL, sB).merged.budget.off, { A: [{ de: '2026-03' }] });
         } finally { budget = guarda; }
     }
+    // Parcelas automáticas, juros embutidos e empréstimos
+    {
+        const soma = a => roundMoney(a.reduce((x, y) => x + y, 0));
+        eq('parcelas: centavos exatos (o resto vai para as primeiras)', [parcelasDividir(100, 3), soma(parcelasDividir(100, 3)), parcelasDividir(10, 4)], [[33.34, 33.33, 33.33], 100, [2.5, 2.5, 2.5, 2.5]]);
+        eq('parcelas: nome sem o sufixo "Parcela k/n"', ['Geladeira - Parcela 2/6', 'Amazon Prime – parcela 3/12', 'Mercado'].map(_descSemParcela), ['Geladeira', 'Amazon Prime', 'Mercado']);
+        const f0 = { desc: 'Geladeira', valor: 1000, data: '2026-01-31', tipo: 'saida', cat: '🏠 Casa', pagamento: 'debito', cartaoId: null, juros: 30 };
+        const ps = gerarParcelas(f0, 3);
+        eq('parcelas: datas (fim de mês), nomes e série', [ps.map(t => t.data), ps.map(t => t.desc), new Set(ps.map(t => t.parcela.serie)).size, ps.map(t => t.parcela.k + '/' + t.parcela.n)],
+           [['2026-01-31', '2026-02-28', '2026-03-31'], ['Geladeira - Parcela 1/3', 'Geladeira - Parcela 2/3', 'Geladeira - Parcela 3/3'], 1, ['1/3', '2/3', '3/3']]);
+        eq('parcelas: soma do total e dos juros embutidos', [soma(ps.map(t => t.valor)), soma(ps.map(t => t.juros)), ps.every(t => t.cat === '🏠 Casa' && !t.fixo)], [1000, 30, true]);
+        eq('parcelas: valor informado é o da parcela', gerarParcelas({ ...f0, valor: 150, juros: 0 }, 4, 'parcela').map(t => t.valor), [150, 150, 150, 150]);
+        // Edição aplicada às parcelas seguintes (valor, categoria e nome); as anteriores não mudam
+        const alvo = { ...ps[0], valor: 400, cat: '📦 Outros', desc: 'Geladeira nova - Parcela 1/3' };
+        const pr = _propagarParcelas([alvo, ps[1], ps[2]], ps[0], alvo);
+        eq('parcelas: editar aplica às seguintes', pr.map(t => [t.desc, t.valor, t.cat]), [['Geladeira nova - Parcela 1/3', 400, '📦 Outros'], ['Geladeira nova - Parcela 2/3', 400, '📦 Outros'], ['Geladeira nova - Parcela 3/3', 400, '📦 Outros']]);
+        eq('parcelas: editar sem "seguintes" não mexe nas outras', _propagarParcelas([ps[0], ps[1]], ps[1], { ...ps[1], valor: 1 }).map(t => t.valor), [ps[0].valor, ps[1].valor]);
+        const sn = sanitizeState({ t: [
+            { id: 1, desc: 'a', valor: 10, data: '2026-01-01', tipo: 'saida', juros: 50, parcela: { serie: 'P1', k: 5, n: 3 } },
+            { id: 2, desc: 'b', valor: 10, data: '2026-01-01', tipo: 'entrada', juros: 5, parcela: { serie: 'P2', k: 1, n: 2 } },
+            { id: 3, desc: 'c', valor: 10, data: '2026-01-01', tipo: 'saida', juros: '4,5', parcela: { serie: 'P3', k: 1, n: 2 } }] }).tx;
+        eq('sanitize: juros limitados ao valor, parcela inválida e entrada sem eles', [sn[0].juros, sn[0].parcela, sn[1].juros, sn[1].parcela, sn[2].juros, sn[2].parcela], [10, undefined, undefined, undefined, 4.5, { serie: 'P3', k: 1, n: 2 }]);
+        eq('mensal: juros embutidos somam com os lançamentos de juros', _mesJuros([{ desc: 'Juros do cartão', valor: 20 }, { desc: 'Condomínio', valor: 108, juros: 8 }, { desc: 'Uber', valor: 10 }]), { v: 28, n: 2 });
+        // Empréstimos
+        eq('empréstimo: parcela pela tabela Price', [loanPmt(1200, 0, 12), loanPmt(10000, 1.99, 12), loanPmt(0, 1, 12)], [100, 945.02, 0]);
+        const lo = { valor: 10000, taxa: 1.99, n: 12, parcela: 945.02, primeira: '2026-01-31' }, cr = loanCronograma(lo);
+        eq('empréstimo: datas e soma dos juros = parcelas − emprestado', [cr.slice(0, 3).map(x => x.data), soma(cr.map(x => x.juros)), cr.every(x => x.juros >= 0 && x.juros <= x.valor)],
+           [['2026-01-31', '2026-02-28', '2026-03-31'], roundMoney(945.02 * 12 - 10000), true]);
+        const rs = loanResumo(lo, '2026-03-31');
+        eq('empréstimo: pago/falta pela data', [rs.pagas, rs.faltam, rs.falta, rs.pago, rs.fim], [3, 9, roundMoney(945.02 * 9), roundMoney(945.02 * 3), '2026-12-31']);
+        eq('empréstimo sem taxa: juros rateados', soma(loanCronograma({ valor: 1000, taxa: 0, n: 4, parcela: 300, primeira: '2026-01-10' }).map(x => x.juros)), 200);
+        const lt = loanTx({ ...lo, id: 7, nome: 'Carro', serie: 'E7' }, 'parcela');
+        eq('empréstimo: parcela inteira com os juros embutidos', [lt.length, lt[0].desc, lt[0].cat, lt[0].parcela, soma(lt.map(t => t.juros))], [12, 'Carro - Parcela 1/12', LOAN_CAT, { serie: 'E7', k: 1, n: 12 }, roundMoney(945.02 * 12 - 10000)]);
+        const lj = loanTx({ ...lo, id: 7, nome: 'Carro', serie: 'E7' });
+        eq('empréstimo: só os juros (o principal não é gasto) e contam como juros no Mensal', [lj[0].desc, soma(lj.map(t => t.valor)), lj.every(t => _mesTipoGasto(t) === 'juros' && !t.juros)], ['Carro - Juros - Parcela 1/12', roundMoney(945.02 * 12 - 10000), true]);
+        eq('empréstimo sem juros e "só juros" não lança nada', loanTx({ valor: 1200, taxa: 0, n: 12, parcela: 100, primeira: '2026-01-10', nome: 'X', serie: 'E1' }).length, 0);
+        const sl = _sanLoans([{ id: 5, nome: ' ', valor: '1.000,00', taxa: 'abc', n: 'x', parcela: 0, primeira: 'x' }])[0];
+        eq('sanitize: empréstimo com dados ruins', [sl.nome, sl.valor, sl.taxa, sl.n, sl.parcela, sl.primeira, sl.serie], ['Empréstimo', 1000, 0, 1, 0, '', 'E5']);
+        const L = (id, nome) => ({ id, nome, valor: 1000, n: 4, parcela: 300, primeira: '2026-01-10' });
+        const lb = sanitizeState({ l: [] }), ll = sanitizeState({ l: [L(1, 'A')] }), lr = sanitizeState({ l: [L(2, 'B')] });
+        eq('merge: empréstimos criados nos dois lados', mergeStates(lb, ll, lr).merged.loans.map(l => l.nome).sort(), ['A', 'B']);
+        eq('hash do estado inclui os empréstimos', _stateHash(lb) !== _stateHash(ll), true);
+    }
     // Análise mensal: tipo de gasto na cascata (juros vencem parcela e fixo)
     eq('mensal: tipo de gasto da cascata', [
         { desc: 'Juros/encargos - parcelamento fatura (Parcela 2/3)' }, { desc: 'Story Curso', fixo: true }, { desc: 'Multa/atraso - Story Curso', fixo: true },
@@ -8763,8 +9367,18 @@ async function _runFuzzImpl(seeds = [11, 23, 97, 1234], steps = 400) {
             const closeRep = () => { if ($('ovFixoRep').classList.contains('open')) closeFixoRep(pick(['sim', 'nao'])); };
             const actions = {
                 add() { const tipo = pick(TIPOS); $('tipo').value = tipo; onTipoChange(); $('desc').value = pick(['Café', "Mc'Do", 'Ágape "x"']); $('valor').value = pick(['10', '1.234,56', '0,99', '-5', 'abc']); $('data').value = pick([date(), '']); $('fixo').checked = rnd() < 0.2; if (tipo === 'saida') { $('pagamento').value = pick(['debito', 'credito']); onPagChange(); } adicionar(); closeRep(); },
-                edit() { if (!tx.length) return; const t = pick(tx); openInlineEdit(t.id); if (!$('ie-valor-' + t.id)) return; $('ie-valor-' + t.id).value = pick([String(ri(1, 999)), 'x']); $('ie-tipo-' + t.id).value = pick(TIPOS); ieUpdateCats(t.id); $('ie-fixo-' + t.id).checked = rnd() < 0.3; saveInlineEdit(t.id); closeRep(); closeInlineEdit(); },
-                remove() { if (tx.length) remover(pick(tx).id); },
+                edit() { if (!tx.length) return; const t = pick(tx); openInlineEdit(t.id); if (!$('ie-valor-' + t.id)) return; $('ie-valor-' + t.id).value = pick([String(ri(1, 999)), 'x']); $('ie-tipo-' + t.id).value = pick(TIPOS); ieUpdateCats(t.id); $('ie-fixo-' + t.id).checked = rnd() < 0.3; const ij = $('ie-juros-' + t.id); if (ij) ij.value = pick(['', '3', 'x', '99999']); const ip = $('ie-prox-' + t.id); if (ip) ip.checked = rnd() < 0.5; saveInlineEdit(t.id); closeRep(); closeInlineEdit(); },
+                remove() { if (tx.length) remover(pick(tx).id); if ($('ovParcRemover').classList.contains('open')) closeParcRemover(); },
+                // Compra parcelada (com/sem juros, débito/crédito) pelo formulário e remoção de parcelas por escopo
+                parcelado() { $('tipo').value = 'saida'; onTipoChange(); $('desc').value = pick(['Parc', 'Geladeira - Parcela 2/6']); $('valor').value = pick(['100', '1.234,56', '0,99', '7']);
+                    $('data').value = date(); $('parcelas').value = pick(['2', '3', '12', '1', '0', 'x', '121']); $('parcelasModo').value = pick(['total', 'parcela']);
+                    $('juros').value = pick(['', '5', '0', '999999', 'x']); $('fixo').checked = rnd() < 0.1;
+                    if (rnd() < 0.5) { $('pagamento').value = 'credito'; onPagChange(); } adicionar(); closeRep(); $('fixo').checked = false; $('parcelas').value = '1'; $('juros').value = ''; },
+                remParc() { const l = tx.filter(x => x.parcela); if (!l.length) return; remover(pick(l).id);
+                    if ($('ovParcRemover').classList.contains('open')) { document.querySelector(`input[name="parcRemEscopo"][value="${pick(['esta', 'proximas', 'todas'])}"]`).checked = true; if (rnd() < 0.8) confirmarRemoverParcela(); else closeParcRemover(); } },
+                loan() { if (rnd() < 0.6) { abrirNovoLoan(); $('loanNome').value = 'L'; $('loanValor').value = pick(['1000', '5.000,50', 'x']); $('loanTaxa').value = pick(['', '1,5', '0', '200']);
+                        $('loanN').value = pick(['2', '12', '1', '601', 'x']); $('loanParcela').value = pick(['', '100', '0']); $('loanPrimeira').value = pick([date(), '']); $('loanLancar').value = pick(['juros', 'parcela', 'nada']); salvarLoan(); closeLoan(); }
+                    else if (loans.length) removerLoan(pick(loans).id); },
                 undo() { undo(); },
                 nav() { setFiltro(ri(-1, 12), pick([2025, 2026])); navTo(pick(['dashboard', 'anual', 'mensal', 'metas'])); },
                 renameCat() { const tp = pick(TIPOS); if (cats[tp].length) renameCategory(tp, pick(cats[tp]), pick(['Nova', '🍕 Pizza', "Mc'Do", ''])); },
@@ -8795,7 +9409,16 @@ async function _runFuzzImpl(seeds = [11, 23, 97, 1234], steps = 400) {
                 const bad = tx.find(t => (t.cat && !(cats[t.tipo] || []).includes(t.cat)) || (t.faturaData && t.faturaData < t.data)
                     || !(t.valor > 0) || !isValidISODate(t.data) || (t.fixo && !t.serie));
                 if (bad) v('lançamento inválido ' + JSON.stringify(bad));
-                if (_stateHash() !== _stateHash(sanitizeState({ t: tx, c: cats, g: goals, k: cards, b: budget }))) v('estado não-sanitizado');
+                // Parcelas e juros embutidos: k dentro de n, série coerente, juros ≤ valor; empréstimos válidos
+                const badP = tx.find(t => t.parcela && !(t.tipo === 'saida' && t.parcela.n >= 2 && t.parcela.k >= 1 && t.parcela.k <= t.parcela.n));
+                if (badP) v('parcela inválida ' + JSON.stringify(badP));
+                const badJ = tx.find(t => t.juros !== undefined && !(t.tipo === 'saida' && t.juros > 0 && t.juros <= t.valor));
+                if (badJ) v('juros inválidos ' + JSON.stringify(badJ));
+                const series = new Map(); tx.forEach(t => { if (t.parcela) { const a = series.get(t.parcela.serie) || []; a.push(t.parcela); series.set(t.parcela.serie, a); } });
+                for (const [sr, a] of series) if (new Set(a.map(q => q.n)).size > 1 || new Set(a.map(q => q.k)).size !== a.length) v('série de parcelas incoerente ' + sr);
+                const badL = loans.find(l => !(l.valor > 0 && l.parcela > 0 && l.n >= 2 && l.serie && l.nome));
+                if (badL) v('empréstimo inválido ' + JSON.stringify(badL));
+                if (_stateHash() !== _stateHash(sanitizeState({ t: tx, c: cats, g: goals, k: cards, b: budget, l: loans }))) v('estado não-sanitizado');
             }
         }
     } finally {
@@ -8847,7 +9470,7 @@ async function _runSyncFuzzImpl(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120) {
             const A = { n: 'A', state: sanitizeState({ t: SEED }) }, B = { n: 'B', state: sanitizeState({}) };
             // Lançamento criado nunca está em conflito (id único): só pode sumir se alguém o
             // apagou — nenhuma escolha no diálogo de conflito pode descartá-lo
-            const criados = new Set(), apagados = new Set();
+            const criados = new Set(), apagados = new Set(), lCriados = new Set(), lApagados = new Set();   // l* = empréstimos
             // Edição feita por UM só dispositivo (o outro nunca tocou no item) não tem como
             // conflitar: se ninguém apagou o item, o valor final tem de ser a última edição dele
             const editores = new Map();   // id → Map(dispositivo → último valor)
@@ -8865,13 +9488,17 @@ async function _runSyncFuzzImpl(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120) {
                 () => { if (tx.length) { const t = pick(tx); tx = tx.filter(x => x.id !== t.id); apagados.add(t.id); } },
                 d => { ensureCat(pick(TIPOS), 'Cat' + d.n + ri(1, 5)); },
                 () => { if (cats.saida.length) { budget.allocs[pick(cats.saida)] = ri(1, 40); } },
+                d => { const l = _sanLoans([{ id: newId(), nome: d.n + ri(1, 99), valor: ri(1000, 9000), n: ri(2, 24), parcela: ri(100, 900), primeira: `2026-0${ri(1, 9)}-10` }])[0]; loans = loans.concat(l); lCriados.add(l.id); },
+                () => { if (loans.length) { const l = pick(loans); loans = loans.filter(x => x.id !== l.id); lApagados.add(l.id); } },
+                d => { if (loans.length) { const l = pick(loans), nota = d.n + ri(1, 99); loans = loans.map(x => x.id === l.id ? { ...x, nota } : x); } },
+                () => { if (cats.saida.length) { const c = pick(cats.saida), de = `2026-0${ri(1, 9)}`; if (rnd() < 0.5) ocultarCategoriaNoOrcamento(c, de, rnd() < 0.5 ? de : null); else mostrarCategoriaNoOrcamento(c, de, null); } },
             ];
             await sync(A); await sync(B);
             for (let step = 0; step < steps; step++) {
                 const d = rnd() < 0.5 ? A : B;
                 if (rnd() < 0.35) await sync(d);
                 else { use(d); pick(ops)(d); _invalidateTxCache(); keep(d); }
-                if (_stateHash(d.state) !== _stateHash(sanitizeState({ t: d.state.tx, c: d.state.cats, g: d.state.goals, k: d.state.cards, b: d.state.budget })))
+                if (_stateHash(d.state) !== _stateHash(sanitizeState({ t: d.state.tx, c: d.state.cats, g: d.state.goals, k: d.state.cards, b: d.state.budget, l: d.state.loans })))
                     problems.push(`seed ${S} passo ${step}: estado inválido em ${d.n}`);
             }
             for (let k = 0; k < 4; k++) { await sync(A); await sync(B); }
@@ -8881,6 +9508,9 @@ async function _runSyncFuzzImpl(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120) {
             const finais = new Map(server.data ? sanitizeState(_mapKeys(server.data, _fbKeyDec)).tx.map(t => [t.id, t.valor]) : []);
             const edicoesPerdidas = [...editores].filter(([id, porDisp]) => !apagados.has(id) && porDisp.size === 1 && finais.get(id) !== [...porDisp.values()][0]);
             if (edicoesPerdidas.length) problems.push(`seed ${S}: ${edicoesPerdidas.length} edição(ões) feita(s) por um só dispositivo não prevaleceram`);
+            const lNoServidor = new Set(server.data ? sanitizeState(_mapKeys(server.data, _fbKeyDec)).loans.map(l => l.id) : []);
+            const lPerdidos = [...lCriados].filter(id => !lApagados.has(id) && !lNoServidor.has(id));
+            if (lPerdidos.length) problems.push(`seed ${S}: ${lPerdidos.length} empréstimo(s) criado(s) e nunca apagado(s) sumiram`);
             const perdidos = [...criados].filter(id => !apagados.has(id) && !noServidor.has(id));
             if (perdidos.length) problems.push(`seed ${S}: ${perdidos.length} lançamento(s) criado(s) e nunca apagado(s) sumiram (conflito descartou mudança não conflitante)`);
         }
