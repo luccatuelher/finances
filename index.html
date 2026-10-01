@@ -594,9 +594,30 @@
         .card-color-opt { width: 22px; height: 22px; border-radius: 50%; cursor: pointer; border: 3px solid transparent; transition: border-color .15s; flex-shrink: 0; }
         .card-color-opt.sel { border-color: var(--text); }
 
-        /* GROUP HEADERS */
-        .tx-group-header td { background: var(--bg) !important; padding: 8px 14px 5px; cursor: default !important; border-bottom: 1px solid var(--border); }
-        .tx-group-header:hover td { background: var(--bg) !important; }
+        /* AGRUPAR POR CATEGORIA: cada categoria vira uma caixinha com seus lançamentos */
+        .tx-boxes { padding: 0 16px 16px; }
+        .tx-sec-h { margin: 18px 0 10px; padding-top: 14px; border-top: 2px solid var(--border); }
+        .tx-sec-h:first-child { border-top: 0; padding-top: 4px; margin-top: 8px; }
+        .tx-sec-h .gh-label { font-size: 11.5px; }
+        .tx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); gap: 12px; align-items: start; }
+        .tx-box { background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--cor, var(--border)); border-radius: 12px; overflow: hidden; min-width: 0; }
+        .tx-box.wide { grid-column: 1 / -1; }
+        .tx-box-h { display: flex; align-items: center; gap: 10px; padding: 11px 14px 4px; }
+        .tx-box-ico { font-size: 20px; line-height: 1; flex: none; }
+        .tx-box-name { flex: 1; min-width: 0; font-weight: 700; font-size: 13.5px; overflow-wrap: anywhere; }
+        .tx-box-total { font-weight: 800; font-size: 14px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .tx-box-total.red { color: var(--danger); } .tx-box-total.green { color: var(--success); } .tx-box-total.purple { color: var(--invest); }
+        .tx-box-meta { padding: 0 14px 6px; font-size: 11.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+        .tx-box-bar { height: 4px; margin: 0 14px 6px; border-radius: 2px; background: var(--border-light); overflow: hidden; }
+        .tx-box-bar i { display: block; height: 100%; border-radius: 2px; background: var(--cor, var(--accent)); }
+        .tx-box-table { table-layout: fixed; font-size: 12.5px; border-top: 1px solid var(--border-light); }
+        .tx-box-table td { padding: 8px 14px; }
+        .tx-box-table td:nth-child(1) { width: 58px; }
+        .tx-box-table td:nth-child(3) { display: none; }
+        .tx-box-table td:nth-child(4) { width: 112px; }
+        .tx-box-table td:nth-child(5) { width: 76px; }
+        .tx-box-table tr:last-child td { border-bottom: 0; }
+        .group-sort { padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); font-family: inherit; font-size: 11px; font-weight: 600; color: var(--text-2); }
         .gh-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .7px; color: var(--text-2); display: flex; align-items: center; gap: 8px; }
         .gh-count { font-size: 10px; color: var(--text-3); font-weight: 500; }
         .gh-total { font-size: 12px; font-weight: 700; margin-left: auto; }
@@ -1052,12 +1073,6 @@
         .kpi-val { font-size: 22px; }
         /* Month/year nav → rounded */
         .month-nav-bar { border-radius: 10px; }
-        /* Collapsible sidebar */
-        .sidebar-toggle { border: 1px solid var(--border); background: var(--surface); width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: 700; color: var(--text-2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background .12s, color .12s; }
-        .sidebar-toggle:hover { background: var(--bg); color: var(--accent); }
-        body.sidebar-collapsed #view-dashboard.app { grid-template-columns: 1fr; }
-        body.sidebar-collapsed .sidebar { display: none; }
-        body.mobile .sidebar-toggle { display: none; }
 
         /* ═══════════════ SAFE-TO-SPEND HERO (phase 2) ═══════════════ */
         .hero-card { background: var(--accent-grad); border-radius: var(--radius-lg); padding: 22px 24px; color: #fff;
@@ -1178,6 +1193,9 @@
         .mes-li b.pos { color: var(--success); }
         /* O que mudou por categoria */
         .mes-mudou-title { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .mes-sortbox { display: flex; align-items: center; gap: 6px 14px; flex-wrap: wrap; }
+        .mes-sort { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: none; letter-spacing: 0; }
+        .mes-sort select { padding: 4px 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); font: inherit; font-size: 12px; color: var(--text); }
         .mes-mudou { padding: 2px 16px 8px; }
         .mes-mrow { display: grid; grid-template-columns: minmax(140px, 1.4fr) 120px 120px 150px minmax(100px, 1fr); gap: 0 16px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--border-light); font-size: 13px; }
         .mes-mhead { font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--text-3); padding: 10px 0 6px; }
@@ -1211,10 +1229,8 @@
         body.mobile .mes-row-a, body.mobile .mes-row-b { grid-template-columns: minmax(0, 1fr); gap: 12px; margin-bottom: 12px; }
 
         /* ═══════════════ ORÇAMENTO: CARTÃO AZUL, RODA E TABELA (it. 55) ═══════════════ */
-        .orc-tabs { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 2px; flex-shrink: 0; }
-        .orc-tabs button { border: 0; background: none; padding: 6px 14px; border-radius: 7px; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text-3); cursor: pointer; }
-        .orc-tabs button[aria-selected="true"] { background: var(--accent); color: #fff; }
         .orc-hero { margin-bottom: 16px; }
+        .orc-metas { margin-top: 28px; }
         .orc-hero-nav { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700; margin-bottom: 10px; }
         .orc-hero-nav button { background: rgba(255,255,255,.18); border: 0; color: #fff; width: 28px; height: 28px; border-radius: 8px; cursor: pointer; font-size: 16px; line-height: 1; font-family: inherit; }
         .orc-hero-nav button:hover { background: rgba(255,255,255,.3); }
@@ -1292,10 +1308,19 @@
         .orc-soft { border: 1px solid var(--border); background: var(--surface); border-radius: 9px; padding: 6px 10px; font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; font-family: inherit; }
 
         .orc-cats-title { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
-        .orc-thead, .orc-row { display: grid; grid-template-columns: 28px minmax(110px, 1.3fr) 112px 104px minmax(64px, 1fr) 156px; gap: 0 14px; align-items: center; }
+        /* Faixa no topo das categorias: quanto falta (ou passou) para completar o total do mês */
+        .orc-falta { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 12px; margin: 12px 16px 0; padding: 10px 12px; border-radius: 12px; background: var(--bg); font-size: 13px; color: var(--text-2); }
+        .orc-falta:empty { display: none; }
+        .orc-falta b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+        .orc-falta .n { margin-left: auto; font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+        .orc-falta .bar { flex: 1 0 100%; height: 6px; border-radius: 4px; background: var(--border-light); overflow: hidden; }
+        .orc-falta .bar i { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+        .orc-falta.ok b { color: var(--success); } .orc-falta.ok .bar i { background: #16a34a; }
+        .orc-falta.over b { color: var(--danger); } .orc-falta.over .bar i { background: #dc2626; }
+        .orc-thead, .orc-row { display: grid; grid-template-columns: 28px minmax(110px, 1.3fr) 30px 112px 104px minmax(64px, 1fr) 156px; gap: 0 14px; align-items: center; }
         .orc-thead { font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--text-3); padding: 12px 16px 2px; }
-        .orc-thead span:nth-child(n+3) { text-align: right; }
-        .orc-thead span:nth-child(5) { text-align: left; }
+        .orc-thead span:nth-child(n+4) { text-align: right; }
+        .orc-thead span:nth-child(6) { text-align: left; }
         #budgetCatList { padding: 0 12px 8px; }
         .orc-grp-h { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text-2); padding: 14px 4px 6px; border-bottom: 1px solid var(--border); }
         .orc-grp-h .s { margin-left: auto; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--text-3); font-variant-numeric: tabular-nums; }
@@ -1306,6 +1331,28 @@
         .orc-r-name { font-weight: 600; font-size: 13.5px; min-width: 0; overflow-wrap: anywhere; }
         .orc-r-plan input { width: 100%; height: 32px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); text-align: right; padding: 0 10px; font-weight: 700; font-size: 14px; font-family: inherit; color: var(--text); font-variant-numeric: tabular-nums; outline: none; }
         .orc-r-plan input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+        /* Resumo das categorias no painel "Orçamento do Mês" (Visão Geral) */
+        .bm-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 12px 0 4px; padding-top: 10px; border-top: 1px solid var(--border-light); font-size: 11px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: .5px; }
+        .bm-row { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; padding: 5px 0; font-size: 12px; }
+        .bm-ico { font-size: 14px; text-align: center; }
+        .bm-name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+        .bm-val { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .bm-val small { font-weight: 400; color: var(--text-3); }
+        .bm-bar { grid-column: 2 / 4; height: 5px; border-radius: 3px; background: var(--border-light); overflow: hidden; }
+        .bm-bar i { display: block; height: 100%; border-radius: 3px; }
+        .orc-r-lock { width: 30px; height: 30px; border: 1px solid var(--border); background: var(--bg); border-radius: 8px; font-size: 14px; line-height: 1; cursor: pointer; padding: 0; font-family: inherit; }
+        .orc-r-lock:hover { background: var(--border-light); }
+        .orc-r-lock[aria-pressed="true"] { background: var(--text); border-color: var(--text); }
+        .orc-oc-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; padding: 0 0 8px; font-size: 13px; font-weight: 600; }
+        .orc-oc-n { flex: 1 1 140px; min-width: 0; overflow-wrap: anywhere; }
+        .cat-del-escopo { display: grid; gap: 8px; }
+        .cat-del-escopo label { display: flex; align-items: flex-start; gap: 10px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--text); }
+        .cat-del-escopo label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+        .cat-del-escopo input { margin-top: 3px; accent-color: var(--accent); }
+        .cat-del-escopo b { display: block; font-weight: 600; }
+        .cat-del-escopo small { display: block; color: var(--text-3); font-size: 11.5px; font-weight: 400; margin-top: 1px; }
+        .orc-off { font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: #fff7ed; color: #b45309; white-space: nowrap; margin-left: 4px; }
+        .orc-lk { display: none; }   /* o cadeado na linha só aparece onde a coluna do cadeado some (compacto) */
         .orc-r-spent { text-align: right; font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
         .orc-r-bar { height: 7px; border-radius: 4px; background: var(--border-light); overflow: hidden; }
         .orc-r-bar i { display: block; height: 100%; border-radius: 4px; }
@@ -1347,7 +1394,8 @@
             .orc-r-st { grid-row: 1 / 3; grid-column: 3; }
             .orc-r-st .v { display: block; font-size: 15px; margin: 0; }
             .orc-r-bar { grid-row: 3; grid-column: 2 / 4; height: 5px; margin-top: 3px; }
-            .orc-r-plan, .orc-r-spent { display: none; }
+            .orc-r-plan, .orc-r-spent, .orc-r-lockc { display: none; }
+            .orc-lk { display: inline; }
         }
         body.mobile .orc-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
         body.mobile .orc-col { gap: 12px; }
@@ -1359,7 +1407,8 @@
         body.mobile .orc-r-st { grid-row: 1 / 3; grid-column: 3; }
         body.mobile .orc-r-st .v { display: block; font-size: 15px; margin: 0; }
         body.mobile .orc-r-bar { grid-row: 3; grid-column: 2 / 4; height: 5px; margin-top: 3px; }
-        body.mobile .orc-r-plan, body.mobile .orc-r-spent { display: none; }
+        body.mobile .orc-r-plan, body.mobile .orc-r-spent, body.mobile .orc-r-lockc { display: none; }
+        body.mobile .orc-lk { display: inline; }
         body.mobile .orc-contas { grid-template-columns: minmax(0, 1fr); gap: 12px; }
         body.mobile .orc-hero-groups { gap: 10px; }
     /* Cabeçalho em larguras intermediárias (tablet / janela estreita, sem UA mobile):
@@ -1378,11 +1427,11 @@
             @page { margin: 12mm; }
             html, body { background: #fff !important; min-height: 0 !important; height: auto !important; }
             body { -webkit-print-color-adjust: exact; print-color-adjust: exact; font-size: 12px; }
-            .sidebar, .sidebar-toggle, .nav-pills, .btn-undo, .sync-btn, .user-chip, .month-nav-btn,
+            .sidebar, .nav-pills, .btn-undo, .sync-btn, .user-chip, .month-nav-btn,
             .mob-month-bar, .mob-bottom-nav, .mob-form-sheet, .mob-edit-sheet, .overlay, .toast, #toast,
             .tabs, .search-row, .group-toggle, #offlineBanner { display: none !important; }
             .topbar { position: static; height: auto; padding: 0 0 8px; margin-bottom: 8px; border-bottom: 1px solid #999; background: none; }
-            .app, body.sidebar-collapsed #view-dashboard.app { display: block; min-height: 0; }
+            .app { display: block; min-height: 0; }
             .view { min-height: 0; }
             .main, .view-inner { padding: 0; overflow: visible; }
             .kpis, .annual-kpis { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)) !important; }
@@ -1406,7 +1455,6 @@
 <!-- TOP BAR -->
 <div class="topbar">
     <div class="topbar-left">
-        <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" title="Ocultar/mostrar painel lateral">«</button>
         <div class="logo">Finances <span>/ Lucca</span></div>
         <nav class="nav-pills">
             <button class="nav-pill active" onclick="navTo('dashboard',this)">Visão Geral</button>
@@ -1736,17 +1784,6 @@
                 <div id="wrapBudgetRemaining"><div class="chart-empty"><span style="font-size:24px;opacity:.3">💰</span>Defina um orçamento</div></div>
             </div>
         </div>
-        <div class="patrimonio-card" id="patrimonioCard" style="display:none">
-            <div class="patrimonio-head">
-                <div>
-                    <div class="chart-box-label" style="margin-bottom:2px">Patrimônio</div>
-                    <div class="patrimonio-val" id="patrimonioVal">—</div>
-                    <div class="patrimonio-sub" id="patrimonioSub"></div>
-                </div>
-                <span class="patrimonio-delta" id="patrimonioDelta"></span>
-            </div>
-            <div class="patrimonio-chart"><canvas id="grafPatrimonio"></canvas></div>
-        </div>
         <div class="history-box">
             <div class="history-header">
                 <div class="tabs">
@@ -1757,7 +1794,14 @@
                 </div>
                 <div class="search-row" style="display:flex;gap:8px;align-items:center">
                     <input type="text" id="busca" placeholder="Buscar..." style="flex:1">
-                    <button class="group-toggle" id="btnGroupCat" onclick="toggleGroupMode()" title="Agrupar por categoria">⊞ Categoria</button>
+                    <button class="group-toggle" id="btnGroupCat" onclick="toggleGroupMode()" title="Agrupar por categoria em caixinhas">⊞ Categoria</button>
+                    <select id="groupSort" class="group-sort" onchange="setGroupSort(this.value)" style="display:none" aria-label="Ordenar as caixinhas de categoria" title="Ordenar as caixinhas">
+                        <option value="valor_desc">Maior valor</option>
+                        <option value="valor_asc">Menor valor</option>
+                        <option value="itens">Mais lançamentos</option>
+                        <option value="recente">Mais recentes</option>
+                        <option value="nome">Nome (A–Z)</option>
+                    </select>
                 </div>
             </div>
             <div class="fatura-section" id="faturaSection" style="display:none">
@@ -1773,7 +1817,7 @@
                 <div class="fixos-table-body" id="debitoBody"></div>
             </div>
             <div id="txSectionDivider" style="display:none;height:12px;background:var(--bg);border-top:1px solid var(--border);border-bottom:1px solid var(--border);"></div>
-            <table>
+            <table id="txTable">
                 <thead>
                     <tr>
                         <th class="sortable" onclick="sortBy('data')">Data <i class="si" id="si-data">↕</i></th>
@@ -1785,6 +1829,7 @@
                 </thead>
                 <tbody id="tbody"></tbody>
             </table>
+            <div id="txBoxes" class="tx-boxes" style="display:none"></div>
             <div id="emptyState" style="display:none" class="empty-state">Nenhum lançamento encontrado.</div>
             <div class="mob-tx-list" id="mobTxList"></div>
         </div>
@@ -1827,6 +1872,18 @@
             <div class="kpi al-purple"> <div class="kpi-label">Investido</div> <div class="kpi-val purple" id="aKpiInv">—</div></div>
             <div class="kpi al-dark">   <div class="kpi-label">Saldo Anual</div><div class="kpi-val" id="aKpiSaldo">—</div><div class="kpi-sub">Jan → Dez (projeção)</div></div>
             <div class="kpi al-amber">  <div class="kpi-label">Saldo Até Agora</div><div class="kpi-val" id="aKpiSaldoNow">—</div><div class="kpi-sub" id="aKpiSaldoNowSub"></div></div>
+        </div>
+        <!-- Patrimônio: o acumulado do ano (para cima = poupou, para baixo = gastou mais do que entrou) -->
+        <div class="patrimonio-card" id="patrimonioCard" style="display:none;margin-bottom:16px">
+            <div class="patrimonio-head">
+                <div>
+                    <div class="chart-box-label" style="margin-bottom:2px">Patrimônio</div>
+                    <div class="patrimonio-val" id="patrimonioVal">—</div>
+                    <div class="patrimonio-sub" id="patrimonioSub"></div>
+                </div>
+                <span class="patrimonio-delta" id="patrimonioDelta"></span>
+            </div>
+            <div class="patrimonio-chart"><canvas id="grafPatrimonio"></canvas></div>
         </div>
         <div class="annual-charts-row">
             <div class="chart-box">
@@ -1908,7 +1965,19 @@
         </div>
 
         <div class="data-table-box">
-            <div class="data-table-title mes-mudou-title"><span>O que mudou por categoria</span><span class="mes-hint" id="mMudouBase"></span></div>
+            <div class="data-table-title mes-mudou-title"><span>O que mudou por categoria</span>
+                <span class="mes-sortbox"><span class="mes-hint" id="mMudouBase"></span>
+                    <label class="mes-sort">Ordenar
+                        <select id="mMudouSort" onchange="setMudouSort(this.value)" aria-label="Ordenar categorias">
+                            <option value="mudanca">Maior mudança</option>
+                            <option value="valor">Maior gasto no mês</option>
+                            <option value="alta">Maior alta</option>
+                            <option value="queda">Maior queda</option>
+                            <option value="nome">Nome (A–Z)</option>
+                        </select>
+                    </label>
+                </span>
+            </div>
             <div class="mes-mudou" id="mMudou"></div>
         </div>
     </div>
@@ -1917,15 +1986,11 @@
 <!-- ORÇAMENTO + METAS -->
 <div id="view-metas" class="view">
     <div class="view-inner">
-        <!-- HEADER: abas Orçamento | Metas (as metas saíram do topo) -->
+        <!-- HEADER: o orçamento do mês; as metas ficam sempre à vista no fim da página -->
         <div class="view-header">
             <div>
                 <div class="view-title">Orçamento</div>
                 <div class="view-subtitle">Planeje o mês na roda e acompanhe quanto resta</div>
-            </div>
-            <div class="orc-tabs" role="tablist" aria-label="Seções do orçamento">
-                <button role="tab" id="orcTabBud" aria-selected="true" aria-controls="orcPanBud" onclick="orcTab('bud')">Orçamento</button>
-                <button role="tab" id="orcTabMeta" aria-selected="false" aria-controls="orcPanMeta" onclick="orcTab('metas')">Metas</button>
             </div>
         </div>
 
@@ -1944,10 +2009,10 @@
             <div class="orc-hero-groups" id="orcHeroGroups"></div>
         </div>
 
-        <div id="orcPanBud" role="tabpanel" aria-labelledby="orcTabBud" class="orc-grid">
+        <div id="orcPanBud" class="orc-grid">
             <!-- Roda: anel interno = grupos, externo = categorias; alças arrastáveis -->
             <div class="chart-box orc-ring-card" id="orcRingCard" tabindex="0" aria-label="Distribuição do mês. Setas ajustam a fatia selecionada em R$ 10 (Shift: R$ 50)">
-                <div class="orc-card-h"><span class="orc-card-t">Distribuição do mês</span><span class="orc-hint">arraste as alças · setas ajustam</span></div>
+                <div class="orc-card-h"><span class="orc-card-t">Distribuição do mês</span><span class="orc-hint">arraste as alças das duas pontas · setas ajustam</span></div>
                 <div class="orc-total">
                     <label for="budgetTotal">Total do mês</label>
                     <input type="text" id="budgetTotal" inputmode="decimal" placeholder="R$ 5.000" oninput="onBudgetTotalChange()" onchange="onBudgetTotalChange(true)">
@@ -1961,6 +2026,11 @@
                         <g id="orcSlices"></g>
                         <g id="orcLabels"></g>
                         <g id="orcGHandles"></g>
+                        <g class="orc-handle" id="orcCatHandleIni" style="display:none">
+                            <circle r="20" fill="transparent"></circle>
+                            <circle class="knob" r="10"></circle>
+                            <text class="grip" text-anchor="middle" dy="3.5">⇄</text>
+                        </g>
                         <g class="orc-handle" id="orcCatHandle" style="display:none">
                             <circle r="20" fill="transparent"></circle>
                             <circle class="knob" r="10"></circle>
@@ -1984,8 +2054,13 @@
                             <button id="btnBudgetSort" class="orc-mini" onclick="toggleBudgetCatSort()" title="Ordenar categorias">↕ Ordem da roda</button>
                         </div>
                     </div>
-                    <div class="orc-thead" aria-hidden="true"><span></span><span>Categoria</span><span>Planejado</span><span>Gasto</span><span>Progresso</span><span>Situação</span></div>
+                    <div class="orc-falta" id="orcFalta" role="status" aria-live="polite"></div>
+                    <div class="orc-thead" aria-hidden="true"><span></span><span>Categoria</span><span></span><span>Planejado</span><span>Gasto</span><span>Progresso</span><span>Situação</span></div>
                     <div id="budgetCatList"></div>
+                    <details class="orc-entradas" id="orcOcultas" style="display:none">
+                        <summary id="orcOcultasSum">Categorias fora deste mês</summary>
+                        <div id="orcOcultasList"></div>
+                    </details>
                     <details class="orc-entradas" id="orcEntradas">
                         <summary id="orcEntradasSum">Categorias de entrada</summary>
                         <div id="orcEntradasList"></div>
@@ -2029,8 +2104,8 @@
             </div>
         </div>
 
-        <!-- METAS (aba ao lado do orçamento) -->
-        <div id="orcPanMeta" role="tabpanel" aria-labelledby="orcTabMeta" hidden>
+        <!-- METAS (sempre visíveis, no fim da página) -->
+        <div id="orcPanMeta" class="orc-metas">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap">
                 <div>
                     <div style="font-size:16px;font-weight:700">🎯 Metas de Poupança</div>
@@ -2134,10 +2209,15 @@
 
 <!-- MODAL REMOVER CATEGORIA (reassign transactions) -->
 <div class="overlay" id="ovCatDelete" onclick="if(event.target===this)closeCatDelete()">
-    <div class="modal" style="width:400px">
+    <div class="modal" style="width:420px">
         <div class="modal-title">🗑️ Remover categoria</div>
         <div class="modal-sub" id="catDeleteSub"></div>
-        <div class="field">
+        <div class="field cat-del-escopo" id="catDeleteScopes" role="radiogroup" aria-label="Onde remover a categoria">
+            <label><input type="radio" name="catDeleteEscopo" value="mes" checked onchange="catDeleteRefresh()"><span><b id="catDeleteLblMes">Só neste mês</b><small id="catDeleteNotaMes"></small></span></label>
+            <label><input type="radio" name="catDeleteEscopo" value="desde" onchange="catDeleteRefresh()"><span><b id="catDeleteLblDesde">Daqui pra frente</b><small id="catDeleteNotaDesde"></small></span></label>
+            <label><input type="radio" name="catDeleteEscopo" value="tudo" onchange="catDeleteRefresh()"><span><b>Excluir tudo</b><small>Apaga a categoria de todos os meses, inclusive os passados.</small></span></label>
+        </div>
+        <div class="field" id="catDeleteMoveBox">
             <label>Mover lançamentos para</label>
             <select id="catDeleteTarget" style="width:100%"></select>
         </div>
@@ -3032,12 +3112,20 @@ function _sanGoals(list, report) {
 function _sanBudget(b) {
     b = b && typeof b === 'object' ? b : {};
     const nonNeg = v => { const n = parseValor(v); return Number.isFinite(n) && n >= 0 ? n : null; };
-    const out = { total: nonNeg(b.total) || 0, allocs: {}, monthTotals: {}, needsWants: {}, locks: {} };
+    const out = { total: nonNeg(b.total) || 0, allocs: {}, monthTotals: {}, needsWants: {}, locks: {}, off: {} };
     _asList(b.categorias).forEach(c => { if (c && c.nome && c.pct) out.allocs[c.nome] = c.pct; });  // formato antigo
     Object.entries(b.allocs || {}).forEach(([k, v]) => { const p = nonNeg(v); if (p) out.allocs[k] = Math.min(100, p); });
     Object.entries(b.monthTotals || {}).forEach(([k, v]) => { const n = nonNeg(v); if (/^\d{4}-\d{2}$/.test(k) && n !== null) out.monthTotals[k] = n; });
     Object.entries(b.needsWants || {}).forEach(([k, v]) => { if (v === 'needs' || v === 'wants') out.needsWants[k] = v; });
     Object.entries(b.locks || {}).forEach(([k, v]) => { if (v === true) out.locks[k] = true; });   // "valor fixo" na roda
+    // Categoria fora do orçamento em certos meses: faixas { de: 'AAAA-MM', ate?: 'AAAA-MM' } (sem `ate` = daí em diante)
+    const ym = s => typeof s === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(s);
+    Object.entries(b.off || {}).forEach(([k, v]) => {
+        const faixas = _asList(v).filter(r => r && ym(r.de) && (!r.ate || (ym(r.ate) && r.ate >= r.de)))
+            .map(r => (r.ate ? { de: r.de, ate: r.ate } : { de: r.de }))
+            .sort((x, y) => x.de.localeCompare(y.de) || String(x.ate || '').localeCompare(String(y.ate || '')));
+        if (faixas.length) out.off[k] = faixas;
+    });
     return out;
 }
 // raw usa as chaves curtas do payload/backup: t=tx, c=cats, g=goals, k=cards, b=budget
@@ -3888,7 +3976,7 @@ function removerFixo(i) {
 // planejado no nome antigo e a categoria renomeada aparecia com R$ 0.
 function _moveBudgetKeys(oldName, newName) {
     if (_allBudgetCats().includes(oldName)) return;
-    ['allocs', 'needsWants', 'locks'].forEach(k => {
+    ['allocs', 'needsWants', 'locks', 'off'].forEach(k => {
         const o = budget[k];
         if (!o || o[oldName] === undefined) return;
         if (newName && o[newName] === undefined) o[newName] = o[oldName];
@@ -3915,23 +4003,52 @@ function renameCategory(tipo, oldName, newName) {
     return true;
 }
 
+// Remover uma categoria de gasto/investimento pergunta ONDE: só no mês do orçamento, dali em
+// diante (os meses anteriores continuam com ela) ou de vez. As duas primeiras só tiram a
+// categoria do orçamento (budget.off); a categoria e os outros meses ficam intactos.
+// Entradas não têm orçamento mensal: só "excluir tudo".
 let _catDeletePending = null;   // { tipo, name }
+const _catEscopo = () => { const r = document.querySelector('input[name="catDeleteEscopo"]:checked'); return r ? r.value : 'tudo'; };
+// Lançamentos da categoria dentro do escopo (ym = mês do orçamento)
+function _catLancamentosNoEscopo(tipo, nome, escopo, ym) {
+    return tx.filter(t => t.tipo === tipo && t.cat === nome
+        && (escopo === 'tudo' || (escopo === 'mes' ? t.data.slice(0, 7) === ym : t.data.slice(0, 7) >= ym)));
+}
 function deleteCategoryFlow(tipo, catName) {
     if (!catName || !(cats[tipo] || []).includes(catName)) return;
-    const count = tx.filter(t => t.tipo === tipo && t.cat === catName).length;
-    if (count === 0) {
+    const comEscopo = tipo !== 'entrada';
+    if (!comEscopo && !tx.some(t => t.tipo === tipo && t.cat === catName)) {
         if (confirm(`Remover a categoria "${catName}"?`)) _performCatDelete(tipo, catName, null);
         return;
     }
     _catDeletePending = { tipo, name: catName };
-    const targets = cats[tipo].filter(c => c !== catName);
-    const sel = $('catDeleteTarget');
-    if (sel) sel.innerHTML = targets.map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('')
-                           + '<option value="__none__">— Deixar sem categoria —</option>';
-    const sub = $('catDeleteSub');
-    if (sub) sub.innerHTML = `<strong>${count}</strong> lançamento(s) usam "${escHtml(catName)}". Para onde movê-los antes de remover?`;
+    const mesTxt = `${MESES[_budgetMonth]} de ${_budgetYear}`;
+    $('catDeleteScopes').style.display = comEscopo ? '' : 'none';
+    $('catDeleteLblMes').textContent = `Só em ${mesTxt}`;
+    $('catDeleteNotaMes').textContent = 'Sai do orçamento deste mês; continua nos outros meses.';
+    $('catDeleteLblDesde').textContent = `De ${mesTxt} em diante`;
+    $('catDeleteNotaDesde').textContent = 'Os meses anteriores continuam com ela.';
+    const radio = document.querySelector(`input[name="catDeleteEscopo"][value="${comEscopo ? 'mes' : 'tudo'}"]`);
+    if (radio) radio.checked = true;
+    catDeleteRefresh();
     const ov = $('ovCatDelete');
     if (ov) ov.classList.add('open');
+}
+// Texto, contagem de lançamentos e destinos possíveis conforme o escopo escolhido
+function catDeleteRefresh() {
+    const p = _catDeletePending; if (!p) return;
+    const escopo = _catEscopo(), ym = ymKey(_budgetMonth, _budgetYear);
+    const count = _catLancamentosNoEscopo(p.tipo, p.name, escopo, ym).length;
+    const onde = escopo === 'mes' ? ` em ${MESES[_budgetMonth]} de ${_budgetYear}` : escopo === 'desde' ? ` de ${MESES[_budgetMonth]} de ${_budgetYear} em diante` : '';
+    $('catDeleteSub').innerHTML = count
+        ? `<strong>${count}</strong> lançamento(s)${onde} usam "${escHtml(p.name)}". Para onde movê-los antes de remover?`
+        : `"${escHtml(p.name)}" não tem lançamentos${onde}.`;
+    $('catDeleteMoveBox').style.display = count ? '' : 'none';
+    const sel = $('catDeleteTarget'), antes = sel.value;
+    // Destino não pode ser outra categoria que também esteja fora do orçamento naquele mês
+    const alvos = cats[p.tipo].filter(c => c !== p.name && (escopo === 'tudo' || !_catOff(c, ym)));
+    sel.innerHTML = alvos.map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('') + '<option value="__none__">— Deixar sem categoria —</option>';
+    if ([...sel.options].some(o => o.value === antes)) sel.value = antes;
 }
 function closeCatDelete() {
     const ov = $('ovCatDelete'); if (ov) ov.classList.remove('open');
@@ -3940,8 +4057,10 @@ function closeCatDelete() {
 function confirmCatDelete() {
     const p = _catDeletePending;
     if (!p) { closeCatDelete(); return; }
-    const v = $('catDeleteTarget') ? $('catDeleteTarget').value : '__none__';
-    _performCatDelete(p.tipo, p.name, v === '__none__' ? null : v);
+    const escopo = p.tipo === 'entrada' ? 'tudo' : _catEscopo();
+    const box = $('catDeleteMoveBox'), v = box && box.style.display !== 'none' && $('catDeleteTarget') ? $('catDeleteTarget').value : '__none__';
+    const alvo = v === '__none__' ? null : v;
+    if (escopo === 'tudo') _performCatDelete(p.tipo, p.name, alvo); else _performCatHide(p.tipo, p.name, escopo, alvo);
     closeCatDelete();
 }
 function _performCatDelete(tipo, catName, target) {
@@ -3952,6 +4071,17 @@ function _performCatDelete(tipo, catName, target) {
     _moveBudgetKeys(catName, null);
     commitAll();
     toast(target ? `Categoria removida. Lançamentos movidos para "${target}".` : 'Categoria removida.', '#52525b');
+}
+// "Só neste mês" / "daqui pra frente": a categoria sai do orçamento a partir do mês aberto
+function _performCatHide(tipo, catName, escopo, target) {
+    const ym = ymKey(_budgetMonth, _budgetYear), onde = escopo === 'mes' ? `${MESES[_budgetMonth]}/${_budgetYear}` : `${MESES[_budgetMonth]}/${_budgetYear} em diante`;
+    pushUndo(`Tirar "${catName}" do orçamento (${onde})`);
+    const movidos = _catLancamentosNoEscopo(tipo, catName, escopo, ym);
+    const ids = new Set(movidos.map(t => t.id));
+    tx = tx.map(t => ids.has(t.id) ? { ...t, cat: target || '' } : t);
+    ocultarCategoriaNoOrcamento(catName, ym, escopo === 'mes' ? ym : null);
+    commitAll();
+    toast(`"${catName}" saiu do orçamento ${escopo === 'mes' ? 'de ' + MESES[_budgetMonth] : 'daqui pra frente'}.${movidos.length ? (target ? ` Lançamentos movidos para "${target}".` : ' Lançamentos ficaram sem categoria.') : ''} Desfazer volta tudo.`, '#52525b');
 }
 
 // ── NOVA CATEGORIA (linha "adicionar" do Orçamento) ──────────────────────────
@@ -4384,7 +4514,12 @@ function _inlineEditorHtml(t) {
 function renderTabela() {
     const { m, a } = filtro();
     const lista = txFiltrados(m, a);
-    const tbody = $('tbody'), empty = $('emptyState');
+    const tbody = $('tbody'), empty = $('emptyState'), caixas = $('txBoxes'), tabela = $('txTable');
+    // Agrupado por categoria (só no computador): a tabela única dá lugar às caixinhas
+    const agrupado = groupMode === 'cat' && !IS_MOBILE && lista.length > 0;
+    tabela.style.display = agrupado ? 'none' : '';
+    caixas.style.display = agrupado ? '' : 'none';
+    if (!agrupado) caixas.innerHTML = '';
     if (!lista.length) { tbody.innerHTML = ''; _openInlineId = null; if (IS_MOBILE) { empty.style.display = 'none'; renderMobList(); } else { empty.style.display = 'block'; } return; }
     empty.style.display = 'none';
     if (IS_MOBILE) { renderMobList(); return; }
@@ -4412,78 +4547,65 @@ function renderTabela() {
         <tr id="ie-${t.id}" class="ie-row ${isEditing ? 'open' : ''}">${isEditing ? _inlineEditorHtml(t) : ''}</tr>`;
     }
 
-    if (groupMode === 'cat') {
-        // Group by tipo, then by category within each tipo
-        const tipoOrder = ['entrada', 'saida', 'investimento'];
-        const tipoLabel = { entrada: '📈 Entradas', saida: '📉 Saídas', investimento: '💼 Investimentos' };
-        const tipoClass = { entrada: 'green', saida: 'red', investimento: 'purple' };
-        const tipoPre   = { entrada: '+', saida: '−', investimento: '−' };
-
-        const byTipo = {};
-        lista.forEach(t => {
-            if (!byTipo[t.tipo]) byTipo[t.tipo] = {};
-            const key = catLabel(t);
-            if (!byTipo[t.tipo][key]) byTipo[t.tipo][key] = [];
-            byTipo[t.tipo][key].push(t);
-        });
-
-        let html = '';
-        tipoOrder.forEach(tipo => {
-            if (!byTipo[tipo]) return;
-            const catMap = byTipo[tipo];
-            // (não chamar de "cats": sombreava o estado global de categorias)
-            const sum = items => items.reduce((s, t) => s + t.valor, 0);
-            const catEntries = Object.entries(catMap).sort((a, b) => sum(b[1]) - sum(a[1]));
-            const tipoTotal = catEntries.reduce((s, [, items]) => s + sum(items), 0);
-            const tipoCount = catEntries.reduce((s, [, items]) => s + items.length, 0);
-
-            // Tipo section header
-            html += `<tr class="tx-group-header" style="border-top:2px solid var(--border)">
-                <td colspan="5">
-                    <div class="gh-label" style="font-size:11px;font-weight:700;color:var(--text-2)">
-                        <span>${tipoLabel[tipo]}</span>
-                        <span class="gh-count">${tipoCount} ${tipoCount === 1 ? 'item' : 'itens'}</span>
-                        <span class="gh-total ${tipoClass[tipo]}" style="font-size:13px">${tipoPre[tipo]} ${fmt(tipoTotal)}</span>
-                    </div>
-                </td>
-            </tr>`;
-
-            catEntries.forEach(([cat, items]) => {
-                const total = sum(items);
-                // Category sub-header
-                html += `<tr class="tx-group-header">
-                    <td colspan="5" style="padding-left:28px">
-                        <div class="gh-label">
-                            <span style="color:var(--text-3);font-size:10px">▸</span>
-                            <span>${escHtml(cat)}</span>
-                            <span class="gh-count">${items.length} ${items.length === 1 ? 'item' : 'itens'}</span>
-                            <span class="gh-total ${tipoClass[tipo]}">${tipoPre[tipo]} ${fmt(total)}</span>
-                        </div>
-                    </td>
-                </tr>`;
-                html += items.map(_rowHtml).join('');
-                // Category subtotal row
-                html += `<tr style="background:var(--border-light)">
-                    <td colspan="4" style="text-align:right;font-size:11px;font-weight:600;color:var(--text-3);padding:5px 14px">
-                        Subtotal — ${escHtml(cat)}
-                    </td>
-                    <td style="font-weight:700;color:${txCor({ tipo })};font-size:12px;white-space:nowrap;padding:5px 14px">
-                        ${tipoPre[tipo]} ${fmt(total)}
-                    </td>
-                </tr>`;
-            });
-        });
-
-        tbody.innerHTML = html;
+    if (agrupado) {
+        tbody.innerHTML = '';
+        caixas.innerHTML = _caixinhasHtml(lista, _rowHtml);
     } else {
         tbody.innerHTML = lista.map(_rowHtml).join('');
     }
+}
+
+// ── AGRUPAR POR CATEGORIA: caixinhas ─────────────────────────────────────────
+// Cada categoria vira uma caixinha (cor estável da categoria, total, % do tipo e os lançamentos),
+// separadas por Entradas / Saídas / Investimentos. A ordem das caixinhas fica guardada neste aparelho.
+const GROUP_ORDENS = ['valor_desc', 'valor_asc', 'itens', 'recente', 'nome'];
+let _groupSort = GROUP_ORDENS.includes(lsGet('fin5_groupSort')) ? lsGet('fin5_groupSort') : 'valor_desc';
+function setGroupSort(v) {
+    if (!GROUP_ORDENS.includes(v)) return;
+    _groupSort = v; lsSet('fin5_groupSort', v);
+    renderTabela();
+}
+const _GRUPO_TIPOS = [
+    { tipo: 'entrada', label: '📈 Entradas', cls: 'green', pre: '+', de: 'das entradas' },
+    { tipo: 'saida', label: '📉 Saídas', cls: 'red', pre: '−', de: 'das saídas' },
+    { tipo: 'investimento', label: '💼 Investimentos', cls: 'purple', pre: '−', de: 'dos investimentos' },
+];
+function _caixinhasHtml(lista, rowHtml) {
+    const soma = items => roundMoney(items.reduce((s, t) => s + t.valor, 0));
+    const ordem = {
+        valor_desc: (x, y) => y.total - x.total, valor_asc: (x, y) => x.total - y.total,
+        itens: (x, y) => y.items.length - x.items.length,
+        recente: (x, y) => (y.ult > x.ult) - (y.ult < x.ult),
+        nome: (x, y) => cmpText(x.nome, y.nome),
+    }[_groupSort];
+    return _GRUPO_TIPOS.map(({ tipo, label, cls, pre, de }) => {
+        const doTipo = lista.filter(t => t.tipo === tipo);
+        if (!doTipo.length) return '';
+        const porCat = new Map();
+        doTipo.forEach(t => { const k = catLabel(t); if (!porCat.has(k)) porCat.set(k, []); porCat.get(k).push(t); });
+        const caixas = [...porCat].map(([cat, items]) => ({ cat, nome: splitCatName(cat).label || cat, items, total: soma(items),
+            ult: items.reduce((u, t) => (t.data > u ? t.data : u), '') }));
+        caixas.sort((x, y) => ordem(x, y) || y.total - x.total || cmpText(x.nome, y.nome));
+        const totalTipo = soma(doTipo), cores = coresCategorias(caixas.map(c => c.cat));
+        return `<div class="tx-sec-h"><div class="gh-label"><span>${label}</span><span class="gh-count">${doTipo.length} ${doTipo.length === 1 ? 'item' : 'itens'} · ${caixas.length} categoria${caixas.length === 1 ? '' : 's'}</span><span class="gh-total ${cls}" style="font-size:13px">${pre} ${fmt(totalTipo)}</span></div></div>
+        <div class="tx-grid">${caixas.map((c, i) => {
+            const pct = totalTipo > 0 ? c.total / totalTipo * 100 : 0;
+            return `<section class="tx-box${c.items.some(t => t.id === _openInlineId) ? ' wide' : ''}" style="--cor:${cores[i]}">
+                <div class="tx-box-h"><span class="tx-box-ico" aria-hidden="true">${escHtml(splitCatName(c.cat).icon || '📦')}</span><span class="tx-box-name">${escHtml(c.nome)}</span><span class="tx-box-total ${cls}">${pre} ${fmt(c.total)}</span></div>
+                <div class="tx-box-meta">${c.items.length} ${c.items.length === 1 ? 'lançamento' : 'lançamentos'} · ${escHtml(fmtPct(pct))} ${de}</div>
+                <div class="tx-box-bar" aria-hidden="true"><i style="width:${Math.min(100, pct).toFixed(1)}%"></i></div>
+                <table class="tx-box-table"><tbody>${c.items.map(rowHtml).join('')}</tbody></table>
+            </section>`;
+        }).join('')}</div>`;
+    }).join('');
 }
 
 function toggleGroupMode() {
     groupMode = groupMode === 'cat' ? 'none' : 'cat';
     const btn = $('btnGroupCat');
     if (btn) btn.classList.toggle('active', groupMode === 'cat');
+    const ord = $('groupSort');
+    if (ord) { ord.value = _groupSort; ord.style.display = groupMode === 'cat' ? '' : 'none'; }
     renderTabela();
 }
 
@@ -4502,6 +4624,7 @@ function openInlineEdit(id) {
     _openInlineId = id;
     row.innerHTML = _inlineEditorHtml(t);
     row.classList.add('open');
+    row.closest('.tx-box')?.classList.add('wide');   // caixinha com o editor aberto ocupa a linha toda
     $('tr-' + id).classList.add('editing');
     $('tr-' + id).scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     $('ie-desc-' + id).focus({ preventScroll: true });
@@ -4512,6 +4635,7 @@ function closeInlineEdit() {
     const row = $('ie-' + _openInlineId);
     if (row) { row.classList.remove('open'); row.innerHTML = ''; }   // libera o editor do DOM
     $('tr-'  + _openInlineId)?.classList.remove('editing');
+    document.querySelectorAll('.tx-box.wide').forEach(b => b.classList.remove('wide'));
     _openInlineId = null;
 }
 
@@ -4888,7 +5012,6 @@ function atualizar() {
         safeRender(renderDistribution, catD);
         safeRender(renderDonut, catI, 'grafInv', 'wrapInvest', '💼', ['#6d28d9','#7c3aed','#a78bfa','#c4b5fd']);
         safeRender(renderBudgetRemaining);
-        safeRender(renderPatrimonio);
         safeRender(renderOverlapBanner, m, a);
         safeRender(renderVencimentos);
         safeRender(renderFaturas);
@@ -4902,11 +5025,12 @@ function atualizar() {
 
 // Limite de gastos do mês = orçamento total menos a fatia alocada a investimentos
 // (investir não é "gastar"). Compartilhado por dashboard, hero e orçamento.
-function investAllocPct() {
-    return (cats.investimento || []).reduce((s, c) => s + (budget.allocs[c] || 0), 0);
+// ym ('AAAA-MM'): investimentos fora do orçamento naquele mês não entram na conta
+function investAllocPct(ym = null) {
+    return (cats.investimento || []).filter(c => !ym || !_catOff(c, ym)).reduce((s, c) => s + (budget.allocs[c] || 0), 0);
 }
-function spendBudgetOf(totalBudget) {
-    return totalBudget * (Math.max(0, 100 - investAllocPct()) / 100);
+function spendBudgetOf(totalBudget, ym = null) {
+    return totalBudget * (Math.max(0, 100 - investAllocPct(ym)) / 100);
 }
 
 // ── BUDGET REMAINING (dashboard panel) ───────────────────────────────────────
@@ -4925,7 +5049,7 @@ function renderBudgetRemaining() {
     }
 
     // Carve out investment allocations — they're not money to spend
-    const spendBudget    = spendBudgetOf(totalBudget);
+    const spendBudget    = spendBudgetOf(totalBudget, ymKey(m, a));
 
     const remaining  = roundMoney(spendBudget - totalSpent);
     const pctRaw     = spendBudget > 0 ? (totalSpent / spendBudget) * 100 : 0;
@@ -4968,7 +5092,35 @@ function renderBudgetRemaining() {
                 <span>💸 ${fmt(totalSpent)} gasto</span>
                 <span>de ${fmt(spendBudget)}</span>
             </div>
+        </div>${_budgetMiniCats(m, a)}`;
+}
+
+// Resumo da página Orçamento dentro do painel da Visão Geral: as categorias que mais apertam
+// primeiro (gastos antes dos investimentos), no máximo BUDGET_MINI_MAX; "Ver tudo" abre o Orçamento
+const BUDGET_MINI_MAX = 6;
+function _budgetMiniCats(m, a) {
+    const mod = _orcModelo(m, a);
+    const usado = c => c.vc ? c.spent / (c.vc / 100) : (c.spent ? Infinity : 0);
+    const lista = mod.cats.filter(c => c.vc || c.spent)
+        .sort((x, y) => (x.grupo === 'invest') - (y.grupo === 'invest') || usado(y) - usado(x) || y.vc - x.vc);
+    if (!lista.length) return '';
+    const linhas = lista.slice(0, BUDGET_MINI_MAX).map(c => {
+        const st = _orcStatus(c), p = splitCatName(c.nome), r = c.vc ? Math.min(1, c.spent / (c.vc / 100)) : (c.spent ? 1 : 0);
+        return `<div class="bm-row" title="${escHtml(st.lbl + (st.v === '—' ? '' : ' ' + st.v))}">
+            <span class="bm-ico" aria-hidden="true">${escHtml(p.icon || '📦')}</span>
+            <span class="bm-name">${escHtml(p.label || c.nome)}</span>
+            <span class="bm-val orc-st-${st.cls}">${fmt(c.spent)} <small>de ${escHtml(_orcR0(c.vc))}</small></span>
+            <span class="bm-bar"><i class="orc-fill-${st.cls === 'muted' ? 'good' : st.cls}" style="width:${(r * 100).toFixed(1)}%"></i></span>
         </div>`;
+    }).join('');
+    const mais = lista.length - BUDGET_MINI_MAX;
+    return `<div class="bm-head"><span>Categorias</span><button class="link-btn" onclick="irParaOrcamento()">${mais > 0 ? `Ver todas (${lista.length})` : 'Abrir orçamento'} →</button></div>${linhas}`;
+}
+function irParaOrcamento() {
+    const { m, a } = filtro();
+    _budgetMonth = m; _budgetYear = a;
+    const tabs = IS_MOBILE ? '.mob-nav-tab' : '.nav-pill', btn = [...document.querySelectorAll(tabs)].find(b => (b.getAttribute('onclick') || '').includes("'metas'")) || null;
+    if (IS_MOBILE) mobNavTo('metas', btn); else navTo('metas', btn);
 }
 
 // ── ANNUAL VIEW ───────────────────────────────────────────────────────────────
@@ -5038,6 +5190,7 @@ function renderAnual() {
 
     renderDonut(catAnual, 'grafAnualCat', 'wrapAnualCat', '📉', CAT_COLORS, 240);
     renderHeroAnual();
+    safeRender(renderPatrimonio);
 
     let accumulated = 0;
     $('anualTbody').innerHTML = rows.map(r => {
@@ -5285,6 +5438,14 @@ function _mesListas(saidas) {
         : '<div class="mes-vazio">Nenhum lugar se repetiu neste mês.</div>';
 }
 
+// Ordem de "O que mudou por categoria": guardada neste aparelho
+const MUDOU_ORDENS = ['mudanca', 'valor', 'alta', 'queda', 'nome'];
+let _mudouSort = MUDOU_ORDENS.includes(lsGet('fin5_mudouSort')) ? lsGet('fin5_mudouSort') : 'mudanca';
+function setMudouSort(v) {
+    if (!MUDOU_ORDENS.includes(v)) return;
+    _mudouSort = v; lsSet('fin5_mudouSort', v);
+    safeRender(renderMensal);
+}
 function _mesMudou(porCat, base, m, a, gas, mGas, fase, ateTxt) {
     const meses = [-5, -4, -3, -2, -1, 0].map(k => _mesRel(m, a, k));
     const hist = new Map(meses.map(([mm, aa]) => [ymKey(mm, aa), _mesResumo(mm, aa).cat]));
@@ -5292,8 +5453,16 @@ function _mesMudou(porCat, base, m, a, gas, mGas, fase, ateTxt) {
     $('mMudouBase').textContent = base.length
         ? `este mês × média de ${base.length === 1 ? MES_ABREV[base[0].m] : `${MES_ABREV[ultimo.m]}–${MES_ABREV[base[0].m]}`}${ateTxt}`
         : fase === 'futuro' ? 'mês futuro: só o que já foi lançado' : 'sem meses anteriores para comparar';
+    // Sem meses para comparar não há "mudança": alta/queda/mudança caem para o maior gasto
+    const dd = x => x.d == null ? 0 : x.d, cmp = base.length ? {
+        mudanca: (x, y) => Math.abs(dd(y)) - Math.abs(dd(x)),
+        alta:    (x, y) => dd(y) - dd(x),
+        queda:   (x, y) => dd(x) - dd(y),
+    } : {};
+    const ordem = cmp[_mudouSort] || (_mudouSort === 'nome' ? (x, y) => cmpText(_mesNomeCat(x.c), _mesNomeCat(y.c)) : (x, y) => 0);
+    const sel = $('mMudouSort'); if (sel) sel.value = _mudouSort;
     const linhas = porCat.filter(x => x.cur > 0 || (x.med || 0) >= 1)
-        .sort((x, y) => base.length ? Math.abs(y.d) - Math.abs(x.d) : y.cur - x.cur);
+        .sort((x, y) => ordem(x, y) || y.cur - x.cur || cmpText(_mesNomeCat(x.c), _mesNomeCat(y.c)));
     if (!linhas.length) { $('mMudou').innerHTML = '<div class="mes-vazio" style="padding:16px">Sem gastos neste mês nem nos anteriores.</div>'; return; }
     const spark = x => {
         const vals = meses.map(([mm, aa], i) => i === 5 ? x.cur : (hist.get(ymKey(mm, aa)).get(x.c) || 0)), mx = Math.max(...vals) || 1;
@@ -5587,6 +5756,32 @@ function _allBudgetCats() {
     return [...(cats.saida || []), ...(cats.investimento || [])];
 }
 
+// ── CATEGORIA FORA DO ORÇAMENTO (só neste mês / daqui pra frente) ────────────
+// budget.off[nome] = [{ de: 'AAAA-MM', ate?: 'AAAA-MM' }]: meses em que a categoria não entra no
+// orçamento (sem `ate` = daí em diante). A categoria continua existindo: lançamentos, outros meses
+// e o valor planejado (budget.allocs, que vale para todos os meses) ficam como estavam.
+const _ymMais = (ym, n) => addMonthsISO(ym + '-01', n).slice(0, 7);
+function _catOff(nome, ym) {
+    return ((budget.off || {})[nome] || []).some(r => r.de <= ym && (!r.ate || ym <= r.ate));
+}
+// As faixas de `nome` sem o período [de..ate] (ate null = para sempre)
+function _offSubtrair(nome, de, ate) {
+    const out = [];
+    ((budget.off || {})[nome] || []).forEach(r => {
+        if ((r.ate && r.ate < de) || (ate && r.de > ate)) { out.push(r); return; }              // sem sobreposição
+        if (r.de < de) out.push({ de: r.de, ate: _ymMais(de, -1) });                              // sobra à esquerda
+        if (ate && (!r.ate || r.ate > ate)) out.push(r.ate ? { de: _ymMais(ate, 1), ate: r.ate } : { de: _ymMais(ate, 1) });   // à direita
+    });
+    return out;
+}
+function _offGravar(nome, faixas) {
+    if (!budget.off) budget.off = {};
+    faixas.sort((x, y) => x.de.localeCompare(y.de) || String(x.ate || '').localeCompare(String(y.ate || '')));
+    if (faixas.length) budget.off[nome] = faixas; else delete budget.off[nome];
+}
+const ocultarCategoriaNoOrcamento = (nome, de, ate = null) => _offGravar(nome, [..._offSubtrair(nome, de, ate), ate ? { de, ate } : { de }]);
+const mostrarCategoriaNoOrcamento = (nome, de, ate = null) => _offGravar(nome, _offSubtrair(nome, de, ate));
+
 function _isBudgetCatInvest(catName) {
     // accepts both old {nome} object and plain string
     const name = typeof catName === 'string' ? catName : catName.nome;
@@ -5748,7 +5943,7 @@ const ORC_SEM_COR = '#d5d8df', ORC_PASSO = 1000;            // passo do arraste/
 const ORC_CX = 160, ORC_CY = 160, ORC_EXT = [114, 150], ORC_INT = [88, 108], ORC_TONS = [.9, .66, .78];
 let _orcSel = null;             // { type: 'cat' | 'group', id }
 let _orcMov = null;             // "de onde veio": { antes: Map(nome → centavos), livre, alvo: [nomes], titulo }
-let _orcDrag = null, _orcHover = null, _orcNomes = [], _orcLigado = false, _orcGesto = 0, _orcAba = 'bud';
+let _orcDrag = null, _orcHover = null, _orcNomes = [], _orcLigado = false, _orcGesto = 0;
 const _orcGrupo = k => ORC_GRUPOS.find(g => g.key === k);
 const _orcSoma = (arr, f = c => c.vc) => arr.reduce((s, c) => s + f(c), 0);
 const _orcR0 = c => fmt(c / 100).replace(/,00$/, '');        // centavos → "R$ 1.234" (sem ",00")
@@ -5759,13 +5954,20 @@ function _orcTom(hex, p) {
 }
 function _orcTipo(nome) { return _isBudgetCatInvest(nome) ? 'investimento' : 'saida'; }
 
-function _orcModelo() {
-    const m = _budgetMonth, a = _budgetYear, T = getBudgetTotal(m, a), lista = txMes(m, a);
+function _orcModelo(m = _budgetMonth, a = _budgetYear) {
+    const T = getBudgetTotal(m, a), lista = txMes(m, a);
     const saidas = lista.filter(t => t.tipo === 'saida'), invs = lista.filter(t => t.tipo === 'investimento');
-    const locks = budget.locks || {};
-    const cs = _allBudgetCats().map(nome => ({ nome, grupo: _budgetGroup(nome), vc: Math.round(T * (budget.allocs[nome] || 0)),
-        spent: _getSpentForBudgetCat(nome, saidas, invs), locked: !!locks[nome] }));
-    return { m, a, T, Tc: Math.round(T * 100), cats: cs, saidas, invs };
+    const locks = budget.locks || {}, ym = ymKey(m, a), cs = [], fora = [];
+    _allBudgetCats().forEach(nome => {
+        const off = _catOff(nome, ym), spent = _getSpentForBudgetCat(nome, saidas, invs);
+        if (off) fora.push(nome);
+        if (off && !spent) return;   // fora do orçamento neste mês (com gasto ela continua à vista, "sem plano")
+        // `locked` vale para as contas da roda: categoria fora do mês não recebe nem cede dinheiro.
+        // `fixa` é o valor fixo escolhido pelo dono (é o que a tela mostra)
+        cs.push({ nome, grupo: _budgetGroup(nome), vc: off ? 0 : Math.round(T * (budget.allocs[nome] || 0)),
+            spent, locked: off || !!locks[nome], fixa: !!locks[nome], off });
+    });
+    return { m, a, T, Tc: Math.round(T * 100), cats: cs, fora, saidas, invs };
 }
 const _orcLivre = mod => Math.max(0, mod.Tc - _orcSoma(mod.cats));
 const _orcDoGrupo = (mod, g) => mod.cats.filter(c => c.grupo === g);
@@ -5795,6 +5997,7 @@ function _orcDar(pool, quanto) {
     return quanto;
 }
 function _orcMudaCat(mod, c, delta) {
+    if (c.off) return 0;   // fora do orçamento neste mês: nada a ajustar
     const irmas = mod.cats.filter(x => x.grupo === c.grupo && x !== c && !x.locked);
     if (delta > 0) {
         const tirou = _orcTirar(irmas, delta), livre = Math.min(delta - tirou, _orcLivre(mod));
@@ -5804,6 +6007,23 @@ function _orcMudaCat(mod, c, delta) {
     const d = Math.min(-delta, c.vc);
     c.vc -= d;
     if (irmas.length) _orcDar(irmas, d);
+    return -d;
+}
+// Alça de uma PONTA da fatia: a fronteira com o vizinho daquele lado do anel anda e só os dois
+// mudam (a categoria cresce o que o vizinho perde, e vice-versa). Vizinho = o mais próximo
+// do mesmo grupo, sem valor fixo; sem ele (ponta do grupo), vale a regra de sempre.
+function _orcMudaBorda(mod, c, lado, delta) {
+    if (c.off) return 0;
+    const grupo = _orcDoGrupo(mod, c.grupo), i = grupo.indexOf(c);
+    const viz = (lado === 'ini' ? grupo.slice(0, i).reverse() : grupo.slice(i + 1)).find(x => !x.locked);
+    if (!viz) return _orcMudaCat(mod, c, delta);
+    if (delta > 0) {
+        const tirou = Math.min(delta, viz.vc), livre = Math.min(delta - tirou, _orcLivre(mod));
+        viz.vc -= tirou; c.vc += tirou + livre;
+        return tirou + livre;
+    }
+    const d = Math.min(-delta, c.vc);
+    c.vc -= d; viz.vc += d;
     return -d;
 }
 function _orcMudaGrupo(mod, g, delta) {
@@ -5830,6 +6050,7 @@ function _orc503020(mod) {
 // Grava o modelo em budget.allocs (% com 6 casas: ida e volta exata em centavos)
 function _orcGravar(mod) {
     mod.cats.forEach(c => {
+        if (c.off) return;   // fora do mês: o planejado dela (que vale para os outros meses) não se mexe
         const p = mod.T > 0 ? Math.min(100, +(c.vc / mod.T).toFixed(6)) : 0;
         if (p > 0) budget.allocs[c.nome] = p; else delete budget.allocs[c.nome];
     });
@@ -5867,6 +6088,25 @@ function _orcDefinir(valorTxt, alvo = _orcSel) {
     const atual = c ? c.vc : _orcSoma(_orcDoGrupo(mod, alvo.id));
     if (!_orcAjustar(quer - atual, alvo)) renderBudget();
 }
+// Digitar o planejado na tabela muda SÓ aquela categoria: nada é tirado nem dado às outras.
+// O que falta (ou passa) do total do mês aparece na faixa do topo (_orcRenderFalta).
+function _orcDefinirSolto(valorTxt, nome) {
+    const v = parseValor(valorTxt);
+    if (!Number.isFinite(v) || v < 0) { renderBudget(); return; }
+    const quer = Math.round(roundMoney(v) * 100), cat = _orcModelo().cats.find(x => x.nome === nome), atual = cat && cat.vc;
+    if (cat && cat.off) { toast('⚠️ Esta categoria está fora do orçamento deste mês. Use "Voltar" em "Categorias fora deste mês".', '#b45309'); renderBudget(); return; }
+    if (atual === undefined || quer === atual) { renderBudget(); return; }
+    _orcMudar(mod => { mod.cats.find(x => x.nome === nome).vc = quer; return quer - atual; },
+        { alvo: [nome], label: `Planejado de "${nome}"` });
+}
+// Valor fixo: a categoria não muda quando se mexe nas outras (roda, setas, 50/30/20)
+function _orcTravar(nome) {
+    const travar = !(budget.locks && budget.locks[nome]);
+    pushUndo(travar ? `Fixar valor de "${nome}"` : `Soltar valor de "${nome}"`);
+    if (!budget.locks) budget.locks = {};
+    if (travar) budget.locks[nome] = true; else delete budget.locks[nome];
+    saveBudget(); renderBudget();
+}
 
 // ── Desenho ──
 function _orcPt(r, a) { const t = (a - 90) * Math.PI / 180; return [ORC_CX + r * Math.cos(t), ORC_CY + r * Math.sin(t)]; }
@@ -5896,10 +6136,10 @@ function _orcLayout(mod) {
 }
 function _orcRenderRoda(mod) {
     const svgSl = $('orcSlices'); if (!svgSl) return;
-    const ch = $('orcCatHandle'), gh = $('orcGHandles');
+    const ch = $('orcCatHandle'), ci = $('orcCatHandleIni'), gh = $('orcGHandles');
     if (!(mod.T > 0) || !mod.cats.length) {
         svgSl.innerHTML = `<path d="${_orcArco(ORC_INT[0], ORC_EXT[1], 0, 360, 0)}" fill="${ORC_SEM_COR}" opacity=".55"></path>`;
-        $('orcLabels').innerHTML = ''; gh.innerHTML = ''; ch.style.display = 'none';
+        $('orcLabels').innerHTML = ''; gh.innerHTML = ''; ch.style.display = 'none'; ci.style.display = 'none';
         return;
     }
     const { segs, grupos, fim } = _orcLayout(mod), sel = _orcSel || {};
@@ -5930,12 +6170,15 @@ function _orcRenderRoda(mod) {
         el.style.display = n ? '' : 'none';
     });
     const s = sel.type === 'cat' && segs.find(x => x.c.nome === sel.id);
+    // A categoria selecionada tem alça nas DUAS pontas: cada uma move a fronteira com o vizinho do seu lado
     if (s) {
-        const [x, y] = _orcPt((ORC_EXT[0] + ORC_EXT[1]) / 2 + 3, s.a1);
-        ch.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
-        ch.querySelector('.knob').style.stroke = _orcGrupo(s.c.grupo).cor;
-        ch.style.display = '';
-    } else ch.style.display = 'none';
+        [[ch, s.a1], [ci, s.a0]].forEach(([el, ang]) => {
+            const [x, y] = _orcPt((ORC_EXT[0] + ORC_EXT[1]) / 2 + 3, ang);
+            el.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
+            el.querySelector('.knob').style.stroke = _orcGrupo(s.c.grupo).cor;
+            el.style.display = '';
+        });
+    } else { ch.style.display = 'none'; ci.style.display = 'none'; }
 }
 function _orcRenderCentro(mod) {
     const el = $('orcCenter'); if (!el) return;
@@ -5974,7 +6217,8 @@ function _orcRenderSel(mod) {
         el.innerHTML = `
         <div class="orc-sel-head"><div class="orc-sel-ico">${escHtml(p.icon || '📦')}</div>
             <div style="min-width:0"><div class="orc-sel-name">${escHtml(p.label || c.nome)}</div><div class="orc-sel-kind"><span class="orc-dot" style="background:${g.cor}"></span>${g.one}</div></div>
-            <button class="orc-lock" data-act="lock" aria-pressed="${c.locked}" title="Valor fixo não muda quando você mexe nas outras categorias">${c.locked ? '🔒 Valor fixo' : '🔓 Fixar valor'}</button></div>
+            ${c.off ? '<span class="orc-off" title="Tirada do orçamento deste mês (veja \'Categorias fora deste mês\')">fora do mês</span>'
+                : `<button class="orc-lock" data-act="lock" aria-pressed="${c.fixa}" title="Valor fixo não muda quando você mexe nas outras categorias">${c.fixa ? '🔒 Valor fixo' : '🔓 Fixar valor'}</button>`}</div>
         <div class="orc-step"><button data-act="menos" aria-label="Diminuir R$ 10">−</button>
             <input id="orcValIn" inputmode="decimal" value="${_orcValTxt(c.vc)}" aria-label="Valor planejado para ${escHtml(p.label || c.nome)} em reais">
             <button data-act="mais" aria-label="Aumentar R$ 10">+</button><span class="pct">${pc(c.vc)}</span></div>
@@ -5985,7 +6229,7 @@ function _orcRenderSel(mod) {
             <button class="btd-save" data-act="renomear">✓</button><button class="btd-del" data-act="excluir" title="Excluir categoria">🗑️</button></div>
         </details>`;
     } else {
-        const g = _orcGrupo(_orcSel.id), cs = _orcDoGrupo(mod, g.key), fixas = cs.filter(c => c.locked).length, v = _orcSoma(cs);
+        const g = _orcGrupo(_orcSel.id), cs = _orcDoGrupo(mod, g.key), fixas = cs.filter(c => c.fixa).length, v = _orcSoma(cs);
         el.innerHTML = `
         <div class="orc-sel-head"><div class="orc-sel-ico"><span class="orc-dot" style="width:16px;height:16px;background:${g.cor}"></span></div>
             <div><div class="orc-sel-name">${g.label}</div><div class="orc-sel-kind">${cs.length} categoria${cs.length !== 1 ? 's' : ''}${fixas ? ` · ${fixas} com valor fixo` : ''}</div></div></div>
@@ -6028,7 +6272,7 @@ function _orcRenderHero(mod) {
         num.textContent = '—'; num.classList.remove('neg');
         $('orcHeroSub').textContent = `Digite o total do mês na roda para ver quanto ainda pode gastar · gastou ${fmt(gasto)}`;
     } else {
-        const limite = roundMoney(spendBudgetOf(mod.T)), resta = roundMoney(limite - gasto), passou = resta < 0;
+        const limite = roundMoney(spendBudgetOf(mod.T, ymKey(mod.m, mod.a))), resta = roundMoney(limite - gasto), passou = resta < 0;
         $('orcHeroLabel').textContent = passou ? 'Você passou do limite em'
             : { passado: 'Sobrou do limite', futuro: 'Você poderá gastar', atual: 'Você ainda pode gastar' }[periodoFase(mod.a, mod.m)];
         num.textContent = fmt(Math.abs(resta)); num.classList.toggle('neg', passou);
@@ -6042,8 +6286,9 @@ function _orcRenderHero(mod) {
 }
 
 // 'ordem' (padrão) = a mesma ordem das fatias da roda; não muda enquanto se digita os valores
-let _budgetCatSort = 'ordem'; // 'ordem' | 'alloc_desc' | 'alloc_asc' | 'used_desc' | 'used_asc' | 'name_asc' | 'name_desc'
+// A escolha fica guardada neste aparelho (valor desconhecido/antigo volta para 'ordem')
 const _BUDGET_SORT_CYCLE = ['ordem','alloc_desc','alloc_asc','used_desc','used_asc','name_asc','name_desc'];
+let _budgetCatSort = _BUDGET_SORT_CYCLE.includes(lsGet('fin5_catSort')) ? lsGet('fin5_catSort') : 'ordem';
 const _BUDGET_SORT_LABELS = {
     ordem: '↕ Ordem da roda',
     alloc_desc: '↓ Planejado', alloc_asc: '↑ Planejado',
@@ -6053,6 +6298,7 @@ const _BUDGET_SORT_LABELS = {
 function toggleBudgetCatSort() {
     const idx = _BUDGET_SORT_CYCLE.indexOf(_budgetCatSort);
     _budgetCatSort = _BUDGET_SORT_CYCLE[(idx + 1) % _BUDGET_SORT_CYCLE.length];
+    lsSet('fin5_catSort', _budgetCatSort);
     renderBudget();
 }
 function _orcOrdenar(lista) {
@@ -6069,9 +6315,12 @@ function _orcRenderLista(mod) {
     const sortBtn = $('btnBudgetSort');
     if (sortBtn) sortBtn.textContent = _BUDGET_SORT_LABELS[_budgetCatSort] || _budgetCatSort;
     const hint = $('orcListHint');
-    if (hint) hint.textContent = _orcCompacto() ? 'toque para ajustar' : 'digite o planejado e aperte Enter';
+    if (hint) hint.textContent = _orcCompacto() ? 'toque para ajustar' : 'digite o valor e aperte Enter · as outras não mudam';
     if (!mod.cats.length) { el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-3);font-size:12px">Nenhuma categoria. Crie uma na linha abaixo.</div>'; return; }
-    const foco = document.activeElement && document.activeElement.classList.contains('orc-plan') ? _orcNomes[+document.activeElement.dataset.i] : null;
+    // O redesenho recria a tabela: devolve o foco ao campo (ou ao cadeado) que o tinha
+    const ativo = document.activeElement, emFoco = ativo && ativo.closest && ativo.closest('#budgetCatList');
+    const foco = emFoco && ativo.classList.contains('orc-plan') ? _orcNomes[+ativo.dataset.i] : null;
+    const focoLock = emFoco && ativo.classList.contains('orc-r-lock') ? _orcNomes[+ativo.dataset.i] : null;
     const idx = new Map(_orcNomes.map((n, i) => [n, i])), sel = _orcSel || {};
     // Durante o arraste a ordem fica congelada (linhas pulando enquanto o valor muda)
     const ordem = _orcDrag && _orcDrag.ordem ? _orcDrag.ordem : null;
@@ -6086,8 +6335,9 @@ function _orcRenderLista(mod) {
                 const r = c.vc ? Math.min(1, c.spent / (c.vc / 100)) : (c.spent ? 1 : 0);
                 return `<div class="orc-row" data-i="${i}" aria-current="${sel.type === 'cat' && sel.id === c.nome}">
                     <span class="orc-r-ico">${escHtml(p.icon || '📦')}</span>
-                    <span class="orc-r-name">${escHtml(p.label || c.nome)}${c.locked ? ' <span title="Valor fixo">🔒</span>' : ''}</span>
-                    <span class="orc-r-plan"><input class="orc-plan" data-i="${i}" inputmode="decimal" value="${_orcValTxt(c.vc)}" aria-label="Planejado para ${escHtml(p.label || c.nome)} em reais"${mod.T > 0 ? '' : ' disabled title="Defina o total do mês primeiro"'}></span>
+                    <span class="orc-r-name">${escHtml(p.label || c.nome)}${c.fixa ? ' <span class="orc-lk" title="Valor fixo">🔒</span>' : ''}${c.off ? ' <span class="orc-off" title="Tirada do orçamento deste mês">fora do mês</span>' : ''}</span>
+                    <span class="orc-r-lockc"><button type="button" class="orc-r-lock" data-i="${i}" aria-pressed="${c.fixa}" aria-label="Valor fixo de ${escHtml(p.label || c.nome)}"${c.off ? ' disabled' : ''} title="${c.fixa ? 'Valor fixo: não muda quando você mexe nas outras. Clique para soltar' : 'Fixar o valor: não muda quando você mexe nas outras categorias'}">${c.fixa ? '🔒' : '🔓'}</button></span>
+                    <span class="orc-r-plan"><input class="orc-plan" data-i="${i}" inputmode="decimal" value="${_orcValTxt(c.vc)}" aria-label="Planejado para ${escHtml(p.label || c.nome)} em reais"${mod.T > 0 ? (c.off ? ' disabled title="Fora do orçamento deste mês"' : '') : ' disabled title="Defina o total do mês primeiro"'}></span>
                     <span class="orc-r-spent">${fmt(c.spent)}</span>
                     <span class="orc-r-bar"><i class="orc-fill-${st.cls === 'muted' ? 'good' : st.cls}" style="width:${(r * 100).toFixed(1)}%"></i></span>
                     <span class="orc-r-st orc-st-${st.cls}"><span class="v">${st.v}</span>${st.lbl}</span>
@@ -6096,6 +6346,35 @@ function _orcRenderLista(mod) {
             }).join('');
     }).join('');
     if (foco != null) { const inp = el.querySelector(`.orc-plan[data-i="${idx.get(foco)}"]`); if (inp) { inp.focus(); inp.select(); } }
+    if (focoLock != null) { const b = el.querySelector(`.orc-r-lock[data-i="${idx.get(focoLock)}"]`); if (b) b.focus(); }
+}
+// Faixa no topo das categorias: quanto falta (ou passou) para completar o total do mês.
+// `prev` = { nome, vc }: valor que está sendo digitado numa linha (ainda não confirmado)
+function _orcRenderFalta(mod, prev = null) {
+    const el = $('orcFalta'); if (!el) return;
+    if (!(mod.T > 0) || !mod.cats.length) { el.className = 'orc-falta'; el.innerHTML = ''; return; }
+    const soma = _orcSoma(mod.cats) + (prev ? prev.vc - (mod.cats.find(c => c.nome === prev.nome) || { vc: 0 }).vc : 0);
+    const dif = mod.Tc - soma, pct = Math.max(0, Math.min(100, soma / mod.Tc * 100));
+    el.className = 'orc-falta ' + (dif > 0 ? '' : dif < 0 ? 'over' : 'ok');
+    el.innerHTML = (dif > 0 ? `<b>Falta ${escHtml(_orcR0(dif))}</b><span>para completar o orçamento</span>`
+        : dif < 0 ? `<b>Passou ${escHtml(_orcR0(-dif))}</b><span>do total do mês</span>` : '<b>Orçamento completo ✓</b>')
+        + `<span class="n">planejado ${escHtml(_orcR0(soma))} de ${escHtml(_orcR0(mod.Tc))}</span>`
+        + `<span class="bar"><i style="width:${pct.toFixed(1)}%"></i></span>`;
+}
+// Categorias tiradas do orçamento deste mês (só neste mês / daqui pra frente): dá para voltar
+let _orcOcultas = [];
+function _orcRenderOcultas(mod) {
+    const box = $('orcOcultas'); if (!box) return;
+    const ym = ymKey(mod.m, mod.a);
+    _orcOcultas = mod.fora;
+    box.style.display = _orcOcultas.length ? '' : 'none';
+    $('orcOcultasSum').textContent = `Categorias fora deste mês (${_orcOcultas.length})`;
+    $('orcOcultasList').innerHTML = _orcOcultas.map((nome, i) => {
+        const daquiPraFrente = ((budget.off || {})[nome] || []).some(r => !r.ate && r.de <= ym);
+        return `<div class="orc-oc-row"><span class="orc-oc-n">${escHtml(nome)}</span>
+            <button class="orc-mini" data-oc="mes" data-i="${i}">↩ Voltar neste mês</button>
+            ${daquiPraFrente ? `<button class="orc-mini" data-oc="desde" data-i="${i}">↩ Voltar daqui pra frente</button>` : ''}</div>`;
+    }).join('');
 }
 // Categorias de entrada não têm valor planejado: ficam recolhidas, só para renomear/excluir
 function _orcRenderEntradas() {
@@ -6112,7 +6391,7 @@ function _orcRenderEntradas() {
 // ── BUDGET RENDERING ─────────────────────────────────────────────────────────
 function _orcRenderTudo(mod) {
     _orcRenderHero(mod); _orcRenderRoda(mod); _orcRenderCentro(mod); _orcRenderChips(mod);
-    _orcRenderMov(mod); _orcRenderSel(mod); _orcRenderGuia(mod); _orcRenderLista(mod);
+    _orcRenderMov(mod); _orcRenderSel(mod); _orcRenderGuia(mod); _orcRenderFalta(mod); _orcRenderLista(mod);
 }
 function renderBudget() {
     if (currentView === 'dashboard') renderBudgetRemaining();
@@ -6137,17 +6416,10 @@ function renderBudget() {
     if (_orcSel && (_orcSel.type === 'cat' ? !_orcNomes.includes(_orcSel.id) : !_orcDoGrupo(mod, _orcSel.id).length)) _orcSel = null;
     if (!_orcSel && mod.cats.length) _orcSel = { type: 'cat', id: [...mod.cats].sort((x, y) => y.vc - x.vc)[0].nome };
     _orcRenderTudo(mod);
+    _orcRenderOcultas(mod);
     _orcRenderEntradas();
     renderBudgetFixos(m, a);
     renderVencimentos();
-}
-
-function orcTab(aba) {
-    _orcAba = aba === 'metas' ? 'metas' : 'bud';
-    const metas = _orcAba === 'metas';
-    $('orcTabBud').setAttribute('aria-selected', !metas); $('orcTabMeta').setAttribute('aria-selected', metas);
-    $('orcPanBud').hidden = metas; $('orcPanMeta').hidden = !metas;
-    $('orcHero').style.display = metas ? 'none' : '';
 }
 
 // ── Interação da roda (ligada uma vez, por delegação: nomes nunca vão para handlers inline) ──
@@ -6156,7 +6428,7 @@ function _orcAngulo(e) {
     const x = (e.clientX - r.left) * k - ORC_CX, y = (e.clientY - r.top) * k - ORC_CY;
     return (Math.atan2(y, x) * 180 / Math.PI + 90 + 360) % 360;
 }
-function _orcIniciaArraste(e, tipo, id) {
+function _orcIniciaArraste(e, tipo, id, lado = 'fim') {
     const mod = _orcModelo();
     if (!(mod.T > 0) || !id) return;
     e.preventDefault(); e.stopPropagation();
@@ -6164,7 +6436,7 @@ function _orcIniciaArraste(e, tipo, id) {
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
     const ordem = [];
     $('budgetCatList').querySelectorAll('.orc-row').forEach(r => ordem.push(_orcNomes[+r.dataset.i]));
-    _orcDrag = { tipo, id, ultimo: _orcAngulo(e), acc: 0, gesto: 'orc-arraste:' + (++_orcGesto), ordem, mudou: false };
+    _orcDrag = { tipo, id, lado, ultimo: _orcAngulo(e), acc: 0, gesto: 'orc-arraste:' + (++_orcGesto), ordem, mudou: false };
     _orcMov = null;
     _orcRenderTudo(mod);
 }
@@ -6173,12 +6445,13 @@ function _orcMoveArraste(e) {
     const a = _orcAngulo(e);
     let d = a - d0.ultimo; if (d > 180) d -= 360; if (d < -180) d += 360;
     d0.ultimo = a;
-    d0.acc += d / 360 * _orcEscala(_orcModelo());
+    // Na ponta de início, girar no sentido horário ENCOLHE a fatia (a fronteira entra nela)
+    d0.acc += (d0.lado === 'ini' ? -1 : 1) * d / 360 * _orcEscala(_orcModelo());
     const passo = Math.trunc(d0.acc / ORC_PASSO) * ORC_PASSO;
     if (!passo) return;
     d0.acc -= passo;
     const feito = _orcMudar(mod => {
-        if (d0.tipo === 'cat') { const c = mod.cats.find(x => x.nome === d0.id); return c ? _orcMudaCat(mod, c, passo) : 0; }
+        if (d0.tipo === 'cat') { const c = mod.cats.find(x => x.nome === d0.id); return c ? _orcMudaBorda(mod, c, d0.lado, passo) : 0; }
         return _orcMudaGrupo(mod, d0.id, passo);
     }, { alvo: d0.tipo === 'cat' ? [d0.id] : _orcDoGrupo(_orcModelo(), d0.id).map(c => c.nome), titulo: d0.tipo === 'group' ? _orcGrupo(d0.id).label : null, gesto: d0.gesto });
     if (feito) d0.mudou = true; else d0.acc = 0;
@@ -6193,10 +6466,12 @@ function _orcLigar() {
     if (_orcLigado || !$('orcRing')) return;
     _orcLigado = true;
     const nomeDe = el => _orcNomes[+el.dataset.i];
-    const ch = $('orcCatHandle'), gh = $('orcGHandles');
-    ch.addEventListener('pointerdown', e => _orcIniciaArraste(e, 'cat', _orcSel && _orcSel.type === 'cat' ? _orcSel.id : null));
+    const ch = $('orcCatHandle'), ci = $('orcCatHandleIni'), gh = $('orcGHandles');
+    const catSel = () => _orcSel && _orcSel.type === 'cat' ? _orcSel.id : null;
+    ch.addEventListener('pointerdown', e => _orcIniciaArraste(e, 'cat', catSel(), 'fim'));
+    ci.addEventListener('pointerdown', e => _orcIniciaArraste(e, 'cat', catSel(), 'ini'));
     gh.addEventListener('pointerdown', e => { const h = e.target.closest('[data-g]'); if (h) _orcIniciaArraste(e, 'group', h.dataset.g); });
-    [ch, gh].forEach(el => {
+    [ch, ci, gh].forEach(el => {
         el.addEventListener('pointermove', _orcMoveArraste);
         el.addEventListener('pointerup', _orcFimArraste);
         el.addEventListener('pointercancel', _orcFimArraste);
@@ -6220,6 +6495,7 @@ function _orcLigar() {
     lista.addEventListener('click', e => {
         const row = e.target.closest('.orc-row'); if (!row) return;
         const nome = nomeDe(row);
+        if (e.target.closest('.orc-r-lock')) { _orcTravar(nome); return; }
         if (e.target.closest('.orc-plan')) { selLeve(nome, row); return; }
         escolher({ type: 'cat', id: nome });
         if (_orcCompacto()) $('orcRingCard').scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
@@ -6229,7 +6505,13 @@ function _orcLigar() {
     lista.addEventListener('change', e => {
         const inp = e.target.closest('.orc-plan'); if (!inp) return;
         const nome = nomeDe(inp), txt = inp.value;
-        setTimeout(() => _orcDefinir(txt, { type: 'cat', id: nome }), 0);
+        setTimeout(() => _orcDefinirSolto(txt, nome), 0);
+    });
+    // Enquanto digita, a faixa do topo já mostra quanto falta com esse valor
+    lista.addEventListener('input', e => {
+        const inp = e.target.closest('.orc-plan'); if (!inp) return;
+        const v = parseValor(inp.value);
+        if (Number.isFinite(v) && v >= 0) _orcRenderFalta(_orcModelo(), { nome: nomeDe(inp), vc: Math.round(roundMoney(v) * 100) });
     });
     lista.addEventListener('keydown', e => {
         const inp = e.target.closest('.orc-plan'); if (!inp) return;
@@ -6248,13 +6530,8 @@ function _orcLigar() {
         const act = b.dataset.act, nome = _orcSel.id;
         if (act === 'menos') _orcAjustar(-ORC_PASSO);
         else if (act === 'mais') _orcAjustar(ORC_PASSO);
-        else if (act === 'lock') {
-            const travar = !(budget.locks && budget.locks[nome]);
-            pushUndo(travar ? `Fixar valor de "${nome}"` : `Soltar valor de "${nome}"`);
-            if (!budget.locks) budget.locks = {};
-            if (travar) budget.locks[nome] = true; else delete budget.locks[nome];
-            saveBudget(); renderBudget();
-        } else if (act === 'renomear') {
+        else if (act === 'lock') _orcTravar(nome);
+        else if (act === 'renomear') {
             const novo = ($('orcRenameIn').value || '').trim();
             if (novo && novo !== nome && renameCategory(_orcTipo(nome), nome, novo)) { _orcSel = { type: 'cat', id: novo }; toast(`✓ Renomeado para "${novo}"`, '#16a34a'); renderBudget(); }
         } else if (act === 'excluir') deleteCategoryFlow(_orcTipo(nome), nome);
@@ -6273,6 +6550,15 @@ function _orcLigar() {
         if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) || e.target.closest('input, select, textarea, summary')) return;
         e.preventDefault();
         _orcAjustar((e.key === 'ArrowUp' || e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 5 : 1) * ORC_PASSO);
+    });
+    $('orcOcultasList').addEventListener('click', e => {
+        const b = e.target.closest('[data-oc]'); if (!b) return;
+        const nome = _orcOcultas[+b.dataset.i]; if (nome == null) return;
+        const ym = ymKey(_budgetMonth, _budgetYear);
+        pushUndo(`Voltar "${nome}" ao orçamento`);
+        mostrarCategoriaNoOrcamento(nome, ym, b.dataset.oc === 'mes' ? ym : null);
+        saveBudget(); renderBudget();
+        toast(`✓ "${nome}" voltou ao orçamento ${b.dataset.oc === 'mes' ? 'deste mês' : 'daqui pra frente'}.`, '#16a34a');
     });
     $('orcEntradasList').addEventListener('click', e => {
         const b = e.target.closest('[data-ent-act]'); if (!b) return;
@@ -6721,6 +7007,7 @@ function mergeStates(base, local, remote, prefer = null) {
             monthTotals: _mergeKeyed(base.budget.monthTotals, local.budget.monthTotals, remote.budget.monthTotals, ctx, 'orçamento do mês'),
             needsWants:  _mergeKeyed(base.budget.needsWants, local.budget.needsWants, remote.budget.needsWants, ctx, 'grupo'),
             locks:       _mergeKeyed(base.budget.locks, local.budget.locks, remote.budget.locks, ctx, 'valor fixo'),
+            off:         _mergeKeyed(base.budget.off, local.budget.off, remote.budget.off, ctx, 'categoria fora do orçamento'),
         },
     };
     return { merged, conflicts, nomes };
@@ -7795,8 +8082,10 @@ function extConfirmImport() {
 function renderPatrimonio() {
     const card = $('patrimonioCard');
     if (!card) return;
-    const { m, a } = filtro();
-    const curYm = `${a}-${String(m + 1).padStart(2, '0')}`;
+    // Fica na Visão Anual: o ano escolhido, até dezembro (ou até o mês de hoje, no ano em curso).
+    // Ano futuro não tem o que mostrar — fixos agendados não são patrimônio.
+    const a = filtro().a, realYm = todayLocalISO().slice(0, 7);
+    const curYm = `${a}-12` < realYm ? `${a}-12` : realYm;
 
     // Monthly net delta (income − expenses; investments are transfers → net-worth neutral)
     const monthly = {};
@@ -7813,22 +8102,22 @@ function renderPatrimonio() {
     // entram com variação 0 — antes eram omitidos: o eixo pulava de Fev para Out e a
     // projeção fazia média só dos meses com dados (1 mês antigo virava "ritmo" eterno).
     const firstYm = Object.keys(monthly).sort()[0];
-    if (!firstYm || firstYm > curYm) { card.style.display = 'none'; destroyChart('grafPatrimonio'); return; }
+    if (!firstYm || firstYm > curYm || curYm < `${a}-01`) { card.style.display = 'none'; destroyChart('grafPatrimonio'); return; }
     card.style.display = '';
     const yms = [];
     for (let ym = firstYm; ym <= curYm; ym = addMonth(ym, 1)) yms.push(ym);
 
     let run = 0;
     const pts = yms.map(ym => { run = roundMoney(run + (monthly[ym] || 0)); return { ym, v: run }; });
-    const windowPts = pts.slice(-12);
+    const windowPts = pts.filter(p => p.ym.startsWith(a + '-'));   // acumulado desde o início, só os meses do ano
 
     const latest = windowPts[windowPts.length - 1].v;
-    const prev   = windowPts.length > 1 ? windowPts[windowPts.length - 2].v : 0;
+    const prev   = pts.length > 1 ? pts[pts.length - 2].v : 0;   // mês anterior (pode ser do ano passado)
     $('patrimonioVal').textContent = fmt(latest);
 
     const diff = roundMoney(latest - prev);
     const deltaEl = $('patrimonioDelta');
-    if (windowPts.length > 1 && prev !== 0) {
+    if (pts.length > 1 && prev !== 0) {
         const pctD = Math.round(diff / Math.abs(prev) * 100);
         deltaEl.textContent = (diff >= 0 ? '▲ +' : '▼ ') + fmt(Math.abs(diff)) + ` (${pctD >= 0 ? '+' : ''}${pctD}%)`;
     } else {
@@ -7842,12 +8131,13 @@ function renderPatrimonio() {
     const MIN_MESES_PROJECAO = 2;
     const mesAtualReal = todayLocalISO().slice(0, 7);
     const completos = yms.filter(ym => ym < mesAtualReal).slice(-6);
-    const temProjecao = completos.length >= MIN_MESES_PROJECAO;
+    const temProjecao = completos.length >= MIN_MESES_PROJECAO && curYm >= mesAtualReal;   // ano passado não projeta
     const avg = temProjecao ? roundMoney(completos.reduce((s, ym) => s + (monthly[ym] || 0), 0) / completos.length) : 0;
     const projLabels = temProjecao ? [addMonth(curYm, 1), addMonth(curYm, 2), addMonth(curYm, 3)] : [];
     const proj = projLabels.map((_, i) => latest + (i + 1) * avg);
     $('patrimonioSub').textContent = temProjecao
         ? `Projeção: ${fmt(proj[2])} em ${mlabel(projLabels[2])} · ritmo ${avg >= 0 ? '+' : ''}${fmt(avg)}/mês (média de ${completos.length} meses)`
+        : curYm < mesAtualReal ? `acumulado desde o início dos registros, até ${mlabel(curYm)}`
         : `acumulado desde o início dos registros · projeção após ${MIN_MESES_PROJECAO} meses completos de histórico`;
 
     const labels   = windowPts.map(p => mlabel(p.ym)).concat(projLabels.map(mlabel));
@@ -7861,8 +8151,11 @@ function renderPatrimonio() {
             labels,
             datasets: [
                 // 1 mês só = 1 ponto: sem raio o valor real ficava invisível
-                { data: actual, borderColor: '#16a34a', borderWidth: 3, pointRadius: windowPts.length === 1 ? 4 : 0, pointBackgroundColor: '#16a34a', tension: .35,
-                  fill: { target: 'origin', above: 'rgba(22,163,74,.10)' } },
+                // Verde acima de zero (poupou), vermelho abaixo (gastou mais do que entrou)
+                { data: actual, borderColor: '#16a34a', borderWidth: 3, pointRadius: windowPts.length === 1 ? 4 : 0, tension: .35,
+                  pointBackgroundColor: c => (c.parsed && c.parsed.y < 0 ? '#dc2626' : '#16a34a'),
+                  segment: { borderColor: c => (c.p1.parsed.y < 0 ? '#dc2626' : '#16a34a') },
+                  fill: { target: 'origin', above: 'rgba(22,163,74,.10)', below: 'rgba(220,38,38,.10)' } },
                 { data: projData, borderColor: '#94a3b8', borderDash: [5, 5], borderWidth: 2, pointRadius: 0, tension: .35, fill: false }
             ]
         },
@@ -7942,7 +8235,7 @@ function renderHero() {
     // Teto do mês: parte gastável do orçamento; sem orçamento, a renda menos o que foi
     // investido (antes ignorava investimentos e o "ainda pode gastar" passava do saldo)
     const totalBudget = getBudgetTotal(m, a);
-    const limit = roundMoney(totalBudget ? spendBudgetOf(totalBudget) : ent - inv);
+    const limit = roundMoney(totalBudget ? spendBudgetOf(totalBudget, ymKey(m, a)) : ent - inv);
     if (!limit || limit <= 0) { card.style.display = 'none'; destroyChart('heroPace'); return; }
     card.style.display = '';
 
@@ -7965,17 +8258,19 @@ function renderHero() {
     // cumulative actual (up to today) vs linear pace line
     // Ritmo compara só o gasto ATÉ HOJE — fixos já lançados para dias futuros do mês
     // não contam como gastos (antes contavam e o card acusava "acima do ritmo")
-    const cum = []; let run = 0, spentToDate = 0;
-    for (let i = 1; i <= daysInMonth; i++) { run += perDay[i]; if (i <= todayDay) spentToDate = run; cum.push(i <= todayDay ? run : null); }
-    const paceLine = [];
-    for (let i = 1; i <= daysInMonth; i++) paceLine.push(+(limit * i / daysInMonth).toFixed(2));
+    // O gráfico mostra a FOLGA: ritmo esperado − gasto acumulado. Linha tracejada em zero = no
+    // ritmo; acima = gastou menos (folga, como patrimônio crescendo); abaixo = gastou mais do
+    // que devia. Antes subia com o gasto acumulado, e subir parecia bom quando era o contrário.
+    const folga = []; let run = 0, spentToDate = 0;
+    for (let i = 1; i <= daysInMonth; i++) { run += perDay[i]; if (i <= todayDay) spentToDate = run; folga.push(i <= todayDay ? roundMoney(limit * i / daysInMonth - run) : null); }
+    const paceLine = Array(daysInMonth).fill(0);
     const expectedToday = limit * todayDay / daysInMonth;
-    const paceDiff = roundMoney(expectedToday - spentToDate); // >0 => below pace (on track)
+    const paceDiff = roundMoney(expectedToday - spentToDate); // >0 => gastou menos que o ritmo (folga)
 
     // Ritmo só existe com o mês em andamento (passado = o próprio saldo; futuro = R$ 0)
     const pill = $('heroPacePill');
-    if (paceDiff >= 0) { pill.textContent = `${fmt(paceDiff)} abaixo do ritmo`; pill.classList.remove('over'); }
-    else { pill.textContent = `${fmt(-paceDiff)} acima do ritmo`; pill.classList.add('over'); }
+    if (paceDiff >= 0) { pill.textContent = `▲ ${fmt(paceDiff)} de folga no ritmo`; pill.classList.remove('over'); }
+    else { pill.textContent = `▼ ${fmt(-paceDiff)} acima do ritmo`; pill.classList.add('over'); }
     pill.style.display = fase === 'atual' ? '' : 'none';
 
     // Local, rule-based tip (no LLM)
@@ -7997,18 +8292,27 @@ function renderHero() {
             labels,
             datasets: [
                 { data: paceLine, borderColor: 'rgba(255,255,255,.45)', borderDash: [6, 5], borderWidth: 1.5, pointRadius: 0, fill: false, tension: 0 },
-                { data: cum, borderColor: '#7CF5B4', borderWidth: 3, fill: { target: 'origin', above: 'rgba(124,245,180,.14)' }, tension: .35,
-                  pointRadius: ctx => ctx.dataIndex === todayDay - 1 ? 4 : 0, pointBackgroundColor: '#fff', pointBorderColor: '#7CF5B4', pointBorderWidth: 2 }
+                { data: folga, ...HERO_FOLGA_ESTILO, pointRadius: ctx => ctx.dataIndex === todayDay - 1 ? 4 : 0 }
             ]
         },
-        options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false }, tooltip: { enabled: false } },
-            scales: { x: { display: false }, y: { display: false, beginAtZero: true } },
-            animation: { duration: 400 }
-        }
+        options: HERO_FOLGA_OPCOES
     });
 }
+// Linha de folga: verde acima do ritmo (gastou menos), coral abaixo (gastou mais)
+const HERO_VERDE = '#7CF5B4', HERO_CORAL = '#FFB4A2';
+const HERO_FOLGA_ESTILO = {
+    borderColor: HERO_VERDE, borderWidth: 3, tension: .35,
+    fill: { target: 'origin', above: 'rgba(124,245,180,.14)', below: 'rgba(255,140,120,.26)' },
+    segment: { borderColor: c => (c.p1.parsed.y < 0 ? HERO_CORAL : HERO_VERDE) },
+    pointBackgroundColor: '#fff', pointBorderWidth: 2,
+    pointBorderColor: c => (c.parsed && c.parsed.y < 0 ? HERO_CORAL : HERO_VERDE),
+};
+const HERO_FOLGA_OPCOES = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { enabled: false } },
+    scales: { x: { display: false }, y: { display: false, beginAtZero: true, grace: '12%' } },
+    animation: { duration: 400 }
+};
 
 // ── SAFE-TO-SPEND HERO — YEARLY (Anual view) ──────────────────────────────────
 function renderHeroAnual() {
@@ -8030,7 +8334,7 @@ function renderHeroAnual() {
     let limit = 0, anyBudget = false;
     for (let mm = 0; mm < 12; mm++) {
         const tb = getBudgetTotal(mm, a);
-        if (tb) { anyBudget = true; limit += spendBudgetOf(tb); }
+        if (tb) { anyBudget = true; limit += spendBudgetOf(tb, ymKey(mm, a)); }
     }
     if (!anyBudget) limit = entYear - invYear;
     limit = roundMoney(limit);
@@ -8053,14 +8357,15 @@ function renderHeroAnual() {
     const monthsLeft = fase === 'atual' ? 12 - curMonthIdx : 12;   // inclui o mês atual
 
     // Só meses já decorridos entram no ritmo (fixos replicados para os próximos meses não)
-    const cum = []; let run = 0, spentToDate = 0;
-    for (let i = 0; i < 12; i++) { run += perMonth[i]; if (i <= curMonthIdx) spentToDate = run; cum.push(i <= curMonthIdx ? run : null); }
-    const paceLine = []; for (let i = 0; i < 12; i++) paceLine.push(+(limit * (i + 1) / 12).toFixed(2));
+    // Mesma leitura do hero mensal: folga = ritmo esperado − gasto acumulado (para cima = gastou menos)
+    const folga = []; let run = 0, spentToDate = 0;
+    for (let i = 0; i < 12; i++) { run += perMonth[i]; if (i <= curMonthIdx) spentToDate = run; folga.push(i <= curMonthIdx ? roundMoney(limit * (i + 1) / 12 - run) : null); }
+    const paceLine = Array(12).fill(0);
     const paceDiff = roundMoney((limit * monthsElapsed / 12) - spentToDate);
 
     const pill = $('heroPacePillAnual');
-    if (paceDiff >= 0) { pill.textContent = `${fmt(paceDiff)} abaixo do ritmo`; pill.classList.remove('over'); }
-    else { pill.textContent = `${fmt(-paceDiff)} acima do ritmo`; pill.classList.add('over'); }
+    if (paceDiff >= 0) { pill.textContent = `▲ ${fmt(paceDiff)} de folga no ritmo`; pill.classList.remove('over'); }
+    else { pill.textContent = `▼ ${fmt(-paceDiff)} acima do ritmo`; pill.classList.add('over'); }
     pill.style.display = fase === 'atual' ? '' : 'none';
 
     const usedPct = pctDoLimite(gasYear, limit);
@@ -8079,27 +8384,12 @@ function renderHeroAnual() {
             labels,
             datasets: [
                 { data: paceLine, borderColor: 'rgba(255,255,255,.45)', borderDash: [6, 5], borderWidth: 1.5, pointRadius: 0, fill: false, tension: 0 },
-                { data: cum, borderColor: '#7CF5B4', borderWidth: 3, fill: { target: 'origin', above: 'rgba(124,245,180,.14)' }, tension: .35,
-                  pointRadius: ctx => ctx.dataIndex === curMonthIdx ? 4 : 0, pointBackgroundColor: '#fff', pointBorderColor: '#7CF5B4', pointBorderWidth: 2 }
+                { data: folga, ...HERO_FOLGA_ESTILO, pointRadius: ctx => ctx.dataIndex === curMonthIdx ? 4 : 0 }
             ]
         },
-        options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false }, tooltip: { enabled: false } },
-            scales: { x: { display: false }, y: { display: false, beginAtZero: true } },
-            animation: { duration: 400 }
-        }
+        options: HERO_FOLGA_OPCOES
     });
 }
-
-// ── COLLAPSIBLE SIDEBAR ───────────────────────────────────────────────────────
-function toggleSidebar() {
-    const collapsed = document.body.classList.toggle('sidebar-collapsed');
-    lsSet('fin5_sidebar_collapsed', collapsed ? '1' : '0');
-    const btn = $('sidebarToggle'); if (btn) btn.textContent = collapsed ? '»' : '«';
-}
-if (lsGet('fin5_sidebar_collapsed') === '1') document.body.classList.add('sidebar-collapsed');
-{ const _sbt = $('sidebarToggle'); if (_sbt) _sbt.textContent = document.body.classList.contains('sidebar-collapsed') ? '»' : '«'; }
 
 // ── AUTOTESTE (?selftest) ────────────────────────────────────────────────────
 // Abra index.html?preview&selftest para verificar as funções puras depois de qualquer
@@ -8286,7 +8576,7 @@ function runSelfTests() {
     eq('sanitize: migra fatura v2', s1.tx[0].faturaData, '2026-02-05');
     eq('sanitize: série de fixo', s1.tx[0].serie, 'L:saida:A');
     eq('sanitize: categoria usada existe', s1.cats.entrada.includes('Nova'), true);
-    eq('sanitize: orçamento completo', Object.keys(s1.budget).sort(), ['allocs', 'locks', 'monthTotals', 'needsWants', 'total']);
+    eq('sanitize: orçamento completo', Object.keys(s1.budget).sort(), ['allocs', 'locks', 'monthTotals', 'needsWants', 'off', 'total']);
     eq('sanitize: cor segura', s1.cards[0].cor, '#6d28d9');
     const asRaw = s => ({ t: s.tx, c: s.cats, g: s.goals, k: s.cards, b: s.budget });
     const s2 = sanitizeState(asRaw(s1));
@@ -8376,6 +8666,48 @@ function runSelfTests() {
         _orc503020(mod);
         eq('roda: guia 50/30/20 (respeita o valor fixo)', [_orcSoma(mod.cats.filter(c => c.grupo === 'needs')), _orcSoma(mod.cats.filter(c => c.grupo === 'wants')), mod.cats[4].vc, mod.cats[2].vc], [50000, 30000, 20000, 10000]);
         eq('roda: % com 6 casas volta ao mesmo centavo', [56133, 1, 99999, 777700].map(vc => Math.round(7777 * +(vc / 7777).toFixed(6)) === vc), [true, true, true, true]);
+
+        // Alça de uma ponta: a fronteira com o vizinho daquele lado anda e só os dois mudam
+        mod = mk();
+        _orcMudaBorda(mod, mod.cats[1], 'ini', 5000);   // B cresce 50 pelo lado de A
+        eq('roda: ponta inicial cresce tirando só do vizinho de trás', vals(mod), [25000, 25000, 10000, 20000, 0]);
+        mod = mk();
+        _orcMudaBorda(mod, mod.cats[0], 'fim', 5000);   // A cresce 50 pelo lado de B (C é fixa, D é de outro grupo)
+        eq('roda: ponta final cresce tirando só do vizinho da frente', vals(mod), [35000, 15000, 10000, 20000, 0]);
+        _orcMudaBorda(mod, mod.cats[0], 'fim', -2000);
+        eq('roda: ponta final diminui devolvendo ao vizinho', vals(mod), [33000, 17000, 10000, 20000, 0]);
+        mod = mk();
+        _orcMudaBorda(mod, mod.cats[3], 'fim', 10000);  // D é a única do grupo: cai na regra de sempre (sem destino)
+        eq('roda: ponta sem vizinho livre usa a regra de sempre', [vals(mod), _orcLivre(mod)], [[30000, 20000, 10000, 30000, 0], 10000]);
+        mod = mk(); mod.cats[1].off = true; mod.cats[1].locked = true;
+        eq('roda: categoria fora do mês não se ajusta', [_orcMudaCat(mod, mod.cats[1], 1000), _orcMudaBorda(mod, mod.cats[1], 'fim', 1000)], [0, 0]);
+    }
+    // Categoria fora do orçamento (só neste mês / daqui pra frente): faixas de meses
+    {
+        const guarda = budget;
+        try {
+            budget = sanitizeState({ b: { off: { A: [{ de: '2026-05' }, { de: 'x' }, { de: '2026-03', ate: '2026-01' }], B: 'lixo' } } }).budget;
+            eq('fora do orçamento: sanitização descarta faixa inválida', budget.off, { A: [{ de: '2026-05' }] });
+            budget.off = {};
+            ocultarCategoriaNoOrcamento('A', '2026-03', '2026-03');
+            eq('fora do orçamento: só neste mês', ['2026-02', '2026-03', '2026-04'].map(ym => _catOff('A', ym)), [false, true, false]);
+            ocultarCategoriaNoOrcamento('A', '2026-06');
+            eq('fora do orçamento: daqui pra frente', ['2026-05', '2026-06', '2031-01'].map(ym => _catOff('A', ym)), [false, true, true]);
+            mostrarCategoriaNoOrcamento('A', '2026-08', '2026-08');
+            eq('fora do orçamento: voltar um mês no meio parte a faixa', ['2026-07', '2026-08', '2026-09'].map(ym => _catOff('A', ym)), [true, false, true]);
+            mostrarCategoriaNoOrcamento('A', '2026-09');
+            eq('fora do orçamento: voltar daqui pra frente corta a faixa aberta', [_catOff('A', '2026-07'), _catOff('A', '2026-09'), _catOff('A', '2030-01'), JSON.stringify(budget.off.A)],
+               [true, false, false, '[{"de":"2026-03","ate":"2026-03"},{"de":"2026-06","ate":"2026-07"}]']);
+            mostrarCategoriaNoOrcamento('A', '2000-01');
+            eq('fora do orçamento: sem faixas a chave some', Object.keys(budget.off), []);
+            // Investimento fora do mês não reduz o limite de gastos daquele mês
+            const catsGuarda = cats;
+            cats = { ...cats, investimento: ['I'] }; budget.allocs = { I: 20 };
+            eq('fora do orçamento: limite de gastos ignora investimento fora do mês', [spendBudgetOf(1000, '2026-03'), (ocultarCategoriaNoOrcamento('I', '2026-03', '2026-03'), spendBudgetOf(1000, '2026-03')), spendBudgetOf(1000, '2026-04')], [800, 1000, 800]);
+            cats = catsGuarda;
+            const sB = sanitizeState({ c: { saida: ['A'] }, b: { off: {} } }), sL = sanitizeState({ c: { saida: ['A'] }, b: { off: { A: [{ de: '2026-03' }] } } });
+            eq('fora do orçamento: merge leva a mudança de um lado', mergeStates(sB, sL, sB).merged.budget.off, { A: [{ de: '2026-03' }] });
+        } finally { budget = guarda; }
     }
     // Análise mensal: tipo de gasto na cascata (juros vencem parcela e fixo)
     eq('mensal: tipo de gasto da cascata', [
