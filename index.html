@@ -56,7 +56,7 @@
       • FIXOS: "Gastos Fixos" (orçamento, popup, sidebar) somava entradas fixas como
         gasto (salário inflava o total); agora só saídas somam e entradas aparecem em verde.
       • AUTOTESTE: abra index.html?preview&selftest (ou runSelfTests() no console) após
-        qualquer mudança — 111 verificações de parsers, datas, fatura, sanitização
+        qualquer mudança — 113 verificações de parsers, datas, fatura, sanitização
         (idempotência) e ida-e-volta pelo Firebase. Não altera dados.
       • METAS: goalProgress() — % truncado (99,6% não mostra "100%" com "Faltam"),
         ritmo necessário por mês até o prazo e aviso de prazo vencido; histórico por data
@@ -332,6 +332,16 @@
         margem. Regras do dono: aumentar tira do mesmo grupo; pode sobrar sem destino. Mensal
         ganhou o cartão azul (saldo, entrou/saiu, débito/crédito). Renomear um gasto com uma
         entrada de mesmo nome perdia o planejado (_moveBudgetKeys). Autoteste +7 (111).
+      • MENSAL COMO REVISÃO DO MÊS (it. 56, pedido do dono): a aba repetia a Visão Geral
+        (entradas/despesas, débito/crédito, gastos por categoria e listas de lançamentos).
+        Agora cada aba tem um uso: Visão Geral = dia a dia; Mensal = revisar o mês. Cartão
+        azul compara com a média dos 3 meses anteriores (mês em andamento: só até hoje, contra
+        os anteriores no mesmo dia; mês futuro: sem média); cascata entrou, fixos, parcelas,
+        juros e tarifas, dia a dia, investido, sobrou; destaques automáticos (maior alta e
+        queda, juros/IOF/multas, dia mais caro, dias sem gasto); calendário de gastos (azul
+        sequencial, clique mostra o dia); maiores gastos e lugares que se repetiram; o que
+        mudou por categoria com os últimos 6 meses. Tudo em HTML, sem depender do Chart.js.
+        Autoteste +2 (113).
       Ferramentas de manutenção (use após qualquer mudança, em index.html?preview):
         runSelfTests() · runFuzz() · runSyncFuzz()
     -->
@@ -711,33 +721,6 @@
         .purple-val { color: var(--invest);  font-weight: 600; }
 
         /* MONTHLY ANALYSIS VIEW */
-        .split-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 20px; }
-        .split-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-        .split-head { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-        .split-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
-        .split-title.debit { color: var(--debit); }
-        .split-title.credit { color: var(--credit); }
-        .split-total { font-size: 18px; font-weight: 700; }
-        .split-total.debit { color: var(--debit); }
-        .split-total.credit { color: var(--credit); }
-        .split-list { max-height: 300px; overflow-y: auto; }
-        .split-item { display: flex; justify-content: space-between; align-items: center; padding: 9px 22px; border-bottom: 1px solid var(--border-light); border-radius: 6px; margin: 0 -6px; transition: background .12s; }
-        .split-item:hover { background: var(--bg); }
-        .split-item > :first-child { min-width: 0; }
-        .split-item-desc { font-weight: 500; font-size: 13px; overflow-wrap: anywhere; }
-        .split-item-meta { font-size: 11px; color: var(--text-3); margin-top: 1px; overflow-wrap: anywhere; }
-        .split-item-val { font-weight: 600; color: var(--danger); font-size: 13px; white-space: nowrap; margin-left: 12px; }
-        .split-empty { padding: 28px; text-align: center; color: var(--text-3); font-size: 12px; }
-        .mensal-charts-row { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; margin-bottom: 20px; }
-        .chart-wrap-med { height: 200px; position: relative; }
-        .cat-bar-list { padding: 4px 0; }
-        .cat-bar-row { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-bottom: 1px solid var(--border-light); }
-        .cat-bar-row:last-child { border-bottom: none; }
-        .cat-bar-name { font-size: 12px; font-weight: 500; width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
-        .cat-bar-track { flex: 1; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
-        .cat-bar-fill { height: 5px; border-radius: 3px; transition: width .4s cubic-bezier(.4,0,.2,1); }
-        .cat-bar-pct { font-size: 11px; color: var(--text-3); width: 32px; text-align: right; flex-shrink: 0; }
-        .cat-bar-val { font-size: 12px; font-weight: 600; width: 90px; text-align: right; flex-shrink: 0; }
 
         /* GOALS VIEW */
         .goals-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 16px; }
@@ -824,7 +807,7 @@
 
         /* PERFORMANCE */
         .sidebar, .main, .view-inner { contain: layout style; }
-        .split-list, .fixos-popup-body { contain: layout style; }
+        .fixos-popup-body { contain: layout style; }
         .mob-form-content, .mob-edit-content { will-change: transform; }
         .overlay .modal { will-change: transform; }
         canvas { contain: strict; }
@@ -837,11 +820,10 @@
 
         @media (max-width: 1100px) {
             .app { grid-template-columns: 1fr; }
-            .charts, .annual-charts-row, .mensal-charts-row { grid-template-columns: 1fr; }
+            .charts, .annual-charts-row { grid-template-columns: 1fr; }
             .kpis, .annual-kpis { grid-template-columns: 1fr 1fr; }
         }
         @media (max-width: 768px) {
-            .split-grid { grid-template-columns: 1fr; }
             .nav-pill { padding: 4px 9px; font-size: 11px; }
             .topbar { padding: 0 14px; gap: 8px; }
         }
@@ -872,9 +854,8 @@
         body.mobile .kpis { grid-template-columns: 1fr 1fr; gap: 10px; }
         body.mobile .kpi { padding: 12px; }
         body.mobile .kpi-val { font-size: 17px; }
-        body.mobile .charts, body.mobile .annual-charts-row, body.mobile .mensal-charts-row { grid-template-columns: 1fr; gap: 10px; }
+        body.mobile .charts, body.mobile .annual-charts-row { grid-template-columns: 1fr; gap: 10px; }
         body.mobile .annual-kpis { grid-template-columns: 1fr 1fr !important; gap: 10px; }
-        body.mobile .split-grid { grid-template-columns: 1fr; gap: 10px; }
         body.mobile .view-inner { padding: 14px 14px 90px; }
         body.mobile .view-title { font-size: 17px; }
         body.mobile .view-header { flex-direction: column; gap: 10px; align-items: flex-start; }
@@ -948,7 +929,7 @@
         ═══════════════════════════════════════════════════ */
 
         /* ── DISPLAY FONT FOR NUMBERS & HEADINGS ── */
-        .logo, .kpi-val, .view-title, .goal-atual, .goal-target, .split-total, .fixos-total-pill, .fp-val, .fixos-table-total, .login-logo, .modal-title, .goal-name, .year-nav-label {
+        .logo, .kpi-val, .view-title, .goal-atual, .goal-target, .fixos-total-pill, .fp-val, .fixos-table-total, .login-logo, .modal-title, .goal-name, .year-nav-label {
             font-family: 'DM Sans', 'Inter', sans-serif;
         }
         /* ── SMOOTH SCROLLING ── */
@@ -1034,7 +1015,7 @@
         body.mobile .mob-bottom-nav { background: rgba(255,255,255,.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
 
         /* ── IMPROVED EMPTY STATES ── */
-        .chart-empty, .chart-empty-tall, .empty-state, .split-empty { opacity: .7; }
+        .chart-empty, .chart-empty-tall, .empty-state { opacity: .7; }
         .chart-empty span, .chart-empty-tall span { filter: grayscale(.5); }
 
         .ie-row.open { opacity: 1; }
@@ -1139,6 +1120,95 @@
         .mh-item small { font-size: 11px; opacity: .82; }
         .mh-item small:empty { display: none; }
         body.mobile .mh-item b { font-size: 16px; }
+        .mensal-hero .hero-tip { margin-top: 2px; }
+        .mes-row { display: grid; gap: 16px; margin-bottom: 16px; }
+        .mes-row > * { min-width: 0; }
+        .mes-row-a { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+        .mes-row-b { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; }
+        .mes-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+        .mes-t { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text-2); }
+        .mes-hint { font-size: 11.5px; color: var(--text-3); font-weight: 500; text-transform: none; letter-spacing: 0; }
+        .mes-vazio { font-size: 12px; color: var(--text-3); text-align: center; padding: 12px 0; list-style: none; }
+        /* Cascata: entrou → saiu (por tipo) → sobrou */
+        .mc-cols { --gap: 10px; display: flex; gap: var(--gap); height: 240px; }
+        .mc-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; text-align: center; }
+        .mc-val { font-size: 12px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; height: 18px; overflow: hidden; text-overflow: ellipsis; }
+        .mc-plot { position: relative; flex: 1; }
+        .mc-plot::after { content: ''; position: absolute; left: calc(var(--gap) / -2); right: calc(var(--gap) / -2); top: var(--zero); border-top: 1px solid var(--border); }
+        .mc-bar { position: absolute; left: 12%; right: 12%; border-radius: 4px; z-index: 1; }
+        .mc-link { position: absolute; left: 88%; width: calc(24% + var(--gap)); border-top: 1px dashed #aeb6c4; z-index: 2; }
+        .mc-nome { font-size: 11.5px; color: var(--text-2); font-weight: 600; margin-top: 6px; line-height: 1.2; min-height: 28px; overflow-wrap: anywhere; }
+        .mes-cascata-nota { font-size: 11.5px; color: var(--text-3); margin-top: 6px; line-height: 1.45; }
+        .mes-cascata-nota b { color: var(--text-2); font-weight: 600; }
+        /* Destaques */
+        .mes-destaques { list-style: none; display: grid; }
+        .mes-destaques li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--border-light); font-size: 13px; line-height: 1.45; color: var(--text-2); }
+        .mes-destaques li:last-child { border-bottom: 0; }
+        .mes-destaques b { color: var(--text); font-weight: 600; }
+        .mes-d-ico { font-size: 16px; line-height: 1.3; flex: none; width: 22px; text-align: center; }
+        /* Calendário (sequencial azul: mais escuro = gastou mais) */
+        .mes-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+        .mes-cal-sem { font-size: 10.5px; font-weight: 700; color: var(--text-3); text-align: center; padding-bottom: 2px; }
+        .mes-dia { position: relative; aspect-ratio: 1.3; border: 0; border-radius: 8px; background: var(--bg); color: var(--text); font-family: inherit; cursor: pointer; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; padding: 5px 6px; text-align: left; min-width: 0; }
+        .mes-dia b { font-size: 11.5px; font-weight: 700; }
+        .mes-dia span { font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums; align-self: flex-end; white-space: nowrap; max-width: 100%; overflow: hidden; }
+        .mes-dia.esc { color: #fff; }
+        .mes-dia.fut { opacity: .55; }
+        .mes-dia.hoje { box-shadow: inset 0 0 0 2px var(--text); }
+        .mes-dia[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
+        .mes-dia:hover { filter: brightness(.96); }
+        .mes-ent { position: absolute; top: 3px; right: 5px; font-style: normal; font-size: 11px; font-weight: 800; color: #15803d; line-height: 1; }
+        .mes-dia.esc .mes-ent { color: #b9f5d0; }
+        .mes-cal-leg { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-3); margin-top: 8px; flex-wrap: wrap; }
+        .mes-cal-leg > i { width: 14px; height: 10px; border-radius: 3px; display: inline-block; }
+        .mes-cal-leg-ent { margin-left: auto; display: inline-flex; gap: 4px; align-items: center; }
+        .mes-cal-leg-ent .mes-ent { position: static; }
+        .mes-cal-dia { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
+        .mes-dia-h { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 12.5px; margin-bottom: 2px; }
+        .mes-dia-h span { color: var(--text-2); }
+        .mes-mais { font-size: 11.5px; color: var(--text-3); padding-top: 6px; }
+        /* Listas (maiores gastos, lugares, lançamentos do dia) */
+        .mes-li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border-light); font-size: 13px; }
+        .mes-li:last-child { border-bottom: 0; }
+        .mes-li-d, .mes-li-x { font-size: 11px; font-weight: 700; color: var(--text-2); background: var(--bg); border-radius: 6px; padding: 3px 6px; flex: none; font-variant-numeric: tabular-nums; min-width: 40px; text-align: center; }
+        .mes-li-x { background: var(--accent-soft); color: var(--accent); }
+        .mes-li-n { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 500; display: flex; flex-direction: column; }
+        .mes-li-n small { font-size: 11px; color: var(--text-3); font-weight: 400; }
+        .mes-li b { font-weight: 700; color: var(--danger); white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .mes-li b.pos { color: var(--success); }
+        /* O que mudou por categoria */
+        .mes-mudou-title { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .mes-mudou { padding: 2px 16px 8px; }
+        .mes-mrow { display: grid; grid-template-columns: minmax(140px, 1.4fr) 120px 120px 150px minmax(100px, 1fr); gap: 0 16px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--border-light); font-size: 13px; }
+        .mes-mhead { font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--text-3); padding: 10px 0 6px; }
+        .mes-mhead span:nth-child(2), .mes-mhead span:nth-child(3) { text-align: right; }
+        .mes-m-cat { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+        .mes-m-v { text-align: right; font-variant-numeric: tabular-nums; }
+        .mes-m-med { color: var(--text-3); }
+        .mes-dif { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-3); white-space: nowrap; }
+        .mes-dif.up { color: var(--danger); }
+        .mes-dif.down { color: var(--success); }
+        .mes-dif small { font-weight: 600; opacity: .85; margin-left: 2px; }
+        .mes-spark { display: flex; align-items: flex-end; gap: 3px; height: 26px; }
+        .mes-spark i { flex: 1 1 0; max-width: 14px; background: #c9ced8; border-radius: 2px 2px 0 0; }
+        .mes-spark i.cur { background: #2a78d6; }
+        .mes-mtotal { border-bottom: 0; border-top: 1px solid var(--border); font-weight: 700; }
+        .mes-mtotal .mes-m-cat { font-weight: 800; }
+        @media (max-width: 1000px) { .mes-row-a, .mes-row-b { grid-template-columns: minmax(0, 1fr); } }
+        @media (max-width: 700px) {
+            .mc-cols { --gap: 6px; height: 210px; }
+            .mc-val { font-size: 11px; }
+            .mc-nome { font-size: 10.5px; }
+            .mes-mhead { display: none; }
+            .mes-mrow { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; }
+            .mes-m-cat { grid-column: 1; grid-row: 1; }
+            .mes-mrow > .mes-m-v:not(.mes-m-med) { grid-column: 2; grid-row: 1; font-weight: 600; }
+            .mes-m-med { display: none; }
+            .mes-dif { grid-column: 2; grid-row: 2; text-align: right; font-size: 12px; }
+            .mes-spark { grid-column: 1; grid-row: 2; height: 18px; }
+            .mes-dia { aspect-ratio: 1; }
+        }
+        body.mobile .mes-row-a, body.mobile .mes-row-b { grid-template-columns: minmax(0, 1fr); gap: 12px; margin-bottom: 12px; }
 
         /* ═══════════════ ORÇAMENTO: CARTÃO AZUL, RODA E TABELA (it. 55) ═══════════════ */
         .orc-tabs { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 2px; flex-shrink: 0; }
@@ -1318,7 +1388,7 @@
             .kpis, .annual-kpis { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)) !important; }
             .kpi { min-width: 0; padding: 10px; }
             /* listas com rolagem própria mostram tudo */
-            .dist-list, .split-list, .fatura-card-body { max-height: none !important; overflow: visible !important; }
+            .dist-list, .fatura-card-body { max-height: none !important; overflow: visible !important; }
             /* cartões inteiros numa página, sem sombra/animação */
             .kpi, .chart-box, .hero-card, .patrimonio-card, .history-box, .fatura-card { break-inside: avoid; box-shadow: none !important; transform: none !important; animation: none !important; }
             .history-box { break-inside: auto; }
@@ -1783,65 +1853,63 @@
     </div>
 </div>
 
-<!-- ANÁLISE MENSAL -->
+<!-- ANÁLISE MENSAL: revisão do mês (a Visão Geral é o dia a dia: lançar, quanto ainda pode gastar,
+     lista de lançamentos e faturas). Aqui: o que mudou, para onde foi o dinheiro, quando e onde. -->
 <div id="view-mensal" class="view">
     <div class="view-inner">
         <div class="view-header">
             <div>
                 <div class="view-title">Análise Mensal</div>
-                <div class="view-subtitle">Detalhamento crédito, débito e categorias</div>
+                <div class="view-subtitle">Revisão do mês: o que mudou, para onde foi o dinheiro e o que já vem por aí</div>
             </div>
         </div>
-        <!-- Cartão azul (como na Visão Geral): resultado do mês; débito e crédito como números menores -->
-        <div class="hero-card mensal-hero" style="margin-bottom:20px">
+
+        <!-- Cartão azul: resultado do mês comparado à média dos meses anteriores -->
+        <div class="hero-card mensal-hero" style="margin-bottom:16px">
             <div class="hero-left">
                 <div class="hero-label" id="mHeroLabel">Saldo do mês</div>
                 <div class="hero-num" id="mKpiSaldo">—</div>
                 <div class="hero-sub" id="mHeroSub"></div>
             </div>
             <div class="mh-grid">
-                <div class="mh-item"><span>Entrou</span><b id="mKpiEnt">—</b></div>
-                <div class="mh-item"><span>Saiu</span><b id="mKpiGas">—</b><small id="mKpiGasSub"></small></div>
-                <div class="mh-item"><span>No débito</span><b id="mKpiDeb">—</b></div>
-                <div class="mh-item"><span>No crédito</span><b id="mKpiCred">—</b></div>
+                <div class="mh-item"><span>Gastos</span><b id="mKpiGas">—</b><small id="mKpiGasSub"></small></div>
+                <div class="mh-item"><span>Entradas</span><b id="mKpiEnt">—</b><small id="mKpiEntSub"></small></div>
+                <div class="mh-item"><span>No crédito</span><b id="mKpiCred">—</b><small id="mKpiCredSub"></small></div>
+                <div class="mh-item"><span id="mKpiProxLbl">Já lançado no próximo mês</span><b id="mKpiProx">—</b><small id="mKpiProxSub"></small></div>
             </div>
+            <div class="hero-tip" id="mHeroTip" style="display:none"><span class="hero-tip-icon">✦</span><span id="mHeroTipText"></span></div>
         </div>
-        <div class="split-grid">
-            <div class="split-box">
-                <div class="split-head">
-                    <span class="split-title" style="color:var(--success)">📈 Entradas</span>
-                    <span class="split-total" style="color:var(--success)" id="mEntTotal">R$ 0</span>
-                </div>
-                <div class="split-list" id="mEntList"></div>
-            </div>
-            <div class="split-box">
-                <div class="split-head">
-                    <span class="split-title debit">🔵 Compras no Débito</span>
-                    <span class="split-total debit" id="mDebTotal">R$ 0</span>
-                </div>
-                <div class="split-list" id="mDebList"></div>
-            </div>
-            <div class="split-box">
-                <div class="split-head">
-                    <span class="split-title credit">🔵 Compras no Crédito</span>
-                    <span class="split-total credit" id="mCredTotal">R$ 0</span>
-                </div>
-                <div class="split-list" id="mCredList"></div>
-            </div>
-        </div>
-        <div class="mensal-charts-row">
+
+        <div class="mes-row mes-row-a">
             <div class="chart-box">
-                <div class="chart-box-label">Gastos por Dia</div>
-                <div class="chart-wrap-med"><canvas id="graficoDia"></canvas></div>
+                <div class="mes-h"><span class="mes-t">Para onde foi o dinheiro</span><span class="mes-hint">entrou → saiu → sobrou</span></div>
+                <div class="mes-cascata" id="mCascata" role="img"></div>
+                <div class="mes-cascata-nota" id="mCascataNota"></div>
             </div>
             <div class="chart-box">
-                <div class="chart-box-label">Débito vs Crédito</div>
-                <div class="chart-wrap-med"><canvas id="graficoCvD"></canvas></div>
+                <div class="mes-h"><span class="mes-t">Destaques do mês</span></div>
+                <ul class="mes-destaques" id="mDestaques"></ul>
             </div>
         </div>
+
+        <div class="mes-row mes-row-b">
+            <div class="chart-box">
+                <div class="mes-h"><span class="mes-t">Calendário de gastos</span><span class="mes-hint">clique num dia</span></div>
+                <div class="mes-cal" id="mCal"></div>
+                <div class="mes-cal-leg" id="mCalLeg"></div>
+                <div class="mes-cal-dia" id="mCalDia" aria-live="polite"></div>
+            </div>
+            <div class="chart-box">
+                <div class="mes-h"><span class="mes-t">Maiores gastos</span></div>
+                <div class="mes-lista" id="mTop"></div>
+                <div class="mes-h" style="margin-top:16px"><span class="mes-t">Onde você mais gastou</span><span class="mes-hint">mesmo lugar, mais de uma vez</span></div>
+                <div class="mes-lista" id="mLugares"></div>
+            </div>
+        </div>
+
         <div class="data-table-box">
-            <div class="data-table-title">Gastos por Categoria</div>
-            <div class="cat-bar-list" id="catBreakdownList"></div>
+            <div class="data-table-title mes-mudou-title"><span>O que mudou por categoria</span><span class="mes-hint" id="mMudouBase"></span></div>
+            <div class="mes-mudou" id="mMudou"></div>
         </div>
     </div>
 </div>
@@ -4989,111 +5057,278 @@ function renderAnual() {
 }
 
 // ── MONTHLY ANALYSIS VIEW ─────────────────────────────────────────────────────
+// ── ANÁLISE MENSAL: REVISÃO DO MÊS ──────────────────────────────────────────
+// A Visão Geral é o dia a dia (lançar, quanto ainda pode gastar, lançamentos, faturas).
+// Aqui o mês é revisto: comparação com a média dos 3 meses anteriores, a cascata
+// entrou → fixos → parcelas → juros → dia a dia → investido → sobrou, o calendário de
+// gastos, maiores gastos, lugares recorrentes e o que mudou por categoria.
+const MES_JUROS_RE = /\b(juros|encargos?|multas?|iof|atraso|mora|tarifas?|anuidade)\b/i;
+const MES_PARCELA_RE = /\bparcela\s*\d+\s*\/\s*\d+/i;
+const MES_RAMPA = ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95'];   // sequencial azul (menos → mais)
+const MES_CORES = { entrou: '#1baf7a', saiu: '#eb6834', invest: '#4a3aa7', sobrou: '#2a78d6', faltou: '#e34948' };
+const MES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const MES_SEMANA = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+const _fmtCompacto = new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: 1 });
+let _mesDia = null, _mesLigado = false;            // dia escolhido no calendário: { ym, dia }
+
+const _mesRel = (m, a, k) => { const d = new Date(a, m + k, 1); return [d.getMonth(), d.getFullYear()]; };
+// Tipo de gasto para a cascata (juros primeiro: "Juros - parcela 2/3" é juros)
+function _mesTipoGasto(t) {
+    const d = t.desc || '';
+    if (MES_JUROS_RE.test(d)) return 'juros';
+    if (t.fixo) return 'fixos';
+    if (MES_PARCELA_RE.test(d)) return 'parcelas';
+    return 'dia';
+}
+// ateDia: só lançamentos até esse dia (mês em andamento é comparado no mesmo ponto dos anteriores)
+function _mesResumo(m, a, ateDia = 31) {
+    const lista = txMes(m, a);
+    let ent = 0, gas = 0, inv = 0;
+    const cat = new Map();
+    for (const t of lista) {
+        if (+t.data.slice(8, 10) > ateDia) continue;
+        if (t.tipo === 'entrada') ent += t.valor;
+        else if (t.tipo === 'investimento') inv += t.valor;
+        else { gas += t.valor; const k = catLabel(t); cat.set(k, (cat.get(k) || 0) + t.valor); }
+    }
+    return { m, a, lista, ent: roundMoney(ent), gas: roundMoney(gas), inv: roundMoney(inv), cat };
+}
+const _mesNomeCat = c => { const p = splitCatName(c); return p.label || c; };
+const _mesIco = c => splitCatName(c).icon || '📦';
+const _mesR0 = v => fmt(Math.round(v)).replace(/,00$/, '');
+const _mesDelta = d => (d > 0 ? '▲ ' : '▼ ') + _mesR0(Math.abs(d));
+const _mesCompacto = () => IS_MOBILE || matchMedia('(max-width: 700px)').matches;
+
 function renderMensal() {
     const { m, a } = filtro();
-    const lista  = txMes(m, a);
-    // Single pass: partition saidas into debit/credit while aggregating
-    let ent = 0, gas = 0, cred = 0, deb = 0;
-    const saidasDeb = [], saidasCred = [], entradas = [];
-    lista.forEach(t => {
-        if (t.tipo === 'entrada') { ent += t.valor; entradas.push(t); }
-        else if (t.tipo !== 'investimento') {
-            gas += t.valor;
-            if (t.pagamento === 'credito') { cred += t.valor; saidasCred.push(t); }
-            else { deb += t.valor; saidasDeb.push(t); }
-        }
-    });
-    const saidas = saidasDeb.concat(saidasCred);
+    const r = _mesResumo(m, a), fase = periodoFase(a, m);
+    // Base de comparação: até 3 meses anteriores com uso real (≥ 5 lançamentos). Mês em andamento:
+    // compara só até hoje, com os anteriores no mesmo dia. Mês futuro só tem o que já foi lançado: sem média.
+    const ateDia = fase === 'atual' ? new Date().getDate() : 31;
+    const base = fase === 'futuro' ? [] : [1, 2, 3].map(k => _mesRel(m, a, -k)).filter(([mm, aa]) => txMes(mm, aa).length >= 5).map(([mm, aa]) => _mesResumo(mm, aa, ateDia));
+    const rc = fase === 'atual' ? _mesResumo(m, a, ateDia) : r;     // o que se compara com a base
+    const media = f => base.length ? base.reduce((s, x) => s + f(x), 0) / base.length : null;
+    const mGas = media(x => x.gas), mEnt = media(x => x.ent);
+    const ateTxt = fase === 'atual' ? ` até o dia ${ateDia}` : '';
+    const saidas = r.lista.filter(t => t.tipo === 'saida');
+    const cred = roundMoney(saidas.reduce((s, t) => s + (t.pagamento === 'credito' ? t.valor : 0), 0));
+    const deb = roundMoney(r.gas - cred);
+    const saldo = roundMoney(r.ent - r.gas - r.inv);
+    const baseTxt = base.length === 1 ? 'do mês anterior' : `dos ${base.length} meses anteriores`;
 
-    const inv = lista.reduce((s, t) => s + (t.tipo === 'investimento' ? t.valor : 0), 0);
-    const saldo = roundMoney(ent - gas - inv), fase = periodoFase(a, m);
+    // ── Cartão azul ──
     $('mHeroLabel').textContent = `${fase === 'futuro' ? 'Saldo previsto' : 'Saldo'} de ${MESES[m]} ${a}`;
     $('mKpiSaldo').textContent = fmt(saldo);
     $('mKpiSaldo').classList.toggle('neg', saldo < 0);
-    $('mHeroSub').textContent = `entrou ${fmt(ent)} − saiu ${fmt(gas)}${inv ? ` − investiu ${fmt(inv)}` : ''}`;
-    $('mKpiEnt').textContent  = fmt(ent);
-    $('mKpiGas').textContent  = fmt(gas);
+    $('mHeroSub').textContent = `entrou ${fmt(r.ent)} − saiu ${fmt(r.gas)}${r.inv ? ` − investiu ${fmt(r.inv)}` : ''}`;
+    $('mKpiGas').textContent = fmt(r.gas);
+    $('mKpiGasSub').textContent = mGas != null && Math.abs(rc.gas - mGas) >= 1 ? `${_mesDelta(rc.gas - mGas)} ${rc.gas > mGas ? 'acima' : 'abaixo'} da média${ateTxt}` : fase === 'futuro' ? 'só o que já foi lançado' : (r.ent > 0 ? `${Math.round(r.gas / r.ent * 100)}% do que entrou` : '');
+    $('mKpiEnt').textContent = fmt(r.ent);
+    $('mKpiEntSub').textContent = mEnt != null && Math.abs(rc.ent - mEnt) >= 1 ? `${_mesDelta(rc.ent - mEnt)} ${rc.ent > mEnt ? 'acima' : 'abaixo'} da média${ateTxt}` : '';
     $('mKpiCred').textContent = fmt(cred);
-    $('mKpiDeb').textContent  = fmt(deb);
-    $('mKpiGasSub').textContent = ent > 0 ? `${Math.round((gas / ent) * 100)}% da renda` : '';
-    $('mEntTotal').textContent  = fmt(ent);
-    $('mDebTotal').textContent  = fmt(deb);
-    $('mCredTotal').textContent = fmt(cred);
-
-    function renderSplitList(items, containerId, isEntrada) {
-        const el = $(containerId);
-        if (!items.length) { el.innerHTML = '<div class="split-empty">Nenhum lançamento.</div>'; return; }
-        el.innerHTML = [...items].sort((a, b) => b.valor - a.valor).map(t => {
-            const [y, mo, d] = t.data.split('-');
-            const pre = isEntrada ? '+' : '−';
-            const valColor = isEntrada ? 'color:var(--success)' : '';
-            return `<div class="split-item">
-                <div><div class="split-item-desc">${escHtml(t.desc)}${t.fixo ? '<span class="tag-fixo">FIXO</span>' : ''}</div>
-                <div class="split-item-meta">${d}/${mo} · ${escHtml(catLabel(t))}</div></div>
-                <div class="split-item-val" style="${valColor}">${pre} ${fmt(t.valor)}</div>
-            </div>`;
-        }).join('');
-    }
-
-    renderSplitList(entradas, 'mEntList', true);
-    renderSplitList(saidasDeb, 'mDebList', false);
-    renderSplitList(saidasCred, 'mCredList', false);
-
-    const daysInMonth = new Date(a, m + 1, 0).getDate();
-    const dayData = Array(daysInMonth).fill(0);
-    saidas.forEach(t => { dayData[parseInt(t.data.split('-')[2]) - 1] += t.valor; });
-    const dayLabels = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-    const mcc = _chartColors();
-    const dayDs = [{ label: 'Gastos', data: dayData, backgroundColor: '#dbeafe', borderColor: '#0b62f0', borderWidth: 1.5, borderRadius: 3 }];
-    upsertChart('dia', $('graficoDia'), {
-        type: 'bar',
-        data: { labels: dayLabels, datasets: dayDs },
-        options: { ...CHART_COMMON_OPTS, plugins: { legend: { display: false } },
-            scales: { x: { grid: { display: false }, ticks: { font: { size: 9 }, maxTicksLimit: 16 } }, y: AXIS_OPTS.y } }
-    });
-
-    if (gas > 0) {
-        // Ensure canvas is visible and placeholder hidden
-        const cvdCanvas = $('graficoCvD');
-        if (cvdCanvas) cvdCanvas.style.display = '';
-        const cvdPlaceholder = $('graficoCvD-empty');
-        if (cvdPlaceholder) cvdPlaceholder.style.display = 'none';
-
-        upsertChart('cvd', cvdCanvas, {
-            type: 'doughnut',
-            data: { labels: ['Débito','Crédito'], datasets: [{ data: [deb, cred], backgroundColor: [mcc.debBg, mcc.credBg], borderColor: [mcc.debBd, mcc.credBd], borderWidth: 2 }] },
-            options: { ...CHART_COMMON_OPTS, cutout: '65%' }
-        });
+    $('mKpiCredSub').textContent = r.gas > 0 ? `${Math.round(cred / r.gas * 100)}% dos gastos · débito ${fmt(deb)}` : '';
+    if (fase === 'passado') {
+        const pou = r.ent > 0 ? Math.round((r.ent - r.gas) / r.ent * 100) : null;
+        $('mKpiProxLbl').textContent = 'Taxa de poupança';
+        $('mKpiProx').textContent = pou == null ? '—' : `${pou}%`;
+        $('mKpiProxSub').textContent = pou == null ? 'sem entradas' : pou >= 0 ? 'do que entrou ficou' : 'gastou mais do que entrou';
     } else {
-        destroyChart('cvd');
-        // Hide canvas and show placeholder without destroying the element
-        const cvdCanvas = $('graficoCvD');
-        if (cvdCanvas) cvdCanvas.style.display = 'none';
-        let placeholder = $('graficoCvD-empty');
-        if (!placeholder) {
-            placeholder = document.createElement('div');
-            placeholder.id = 'graficoCvD-empty';
-            placeholder.style.cssText = 'height:200px;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:12px';
-            placeholder.textContent = 'Sem despesas';
-            cvdCanvas.parentElement.appendChild(placeholder);
-        }
-        placeholder.style.display = 'flex';
+        const [nm, na] = _mesRel(m, a, 1), prox = txMes(nm, na).filter(t => t.tipo === 'saida');
+        const nPar = prox.filter(t => MES_PARCELA_RE.test(t.desc || '')).length, nFix = prox.filter(t => t.fixo).length;
+        $('mKpiProxLbl').textContent = `Já lançado em ${MESES[nm].toLowerCase()}`;
+        $('mKpiProx').textContent = fmt(prox.reduce((s, t) => s + t.valor, 0));
+        $('mKpiProxSub').textContent = prox.length ? [nPar ? `${nPar} parcela${nPar !== 1 ? 's' : ''}` : '', nFix ? `${nFix} fixo${nFix !== 1 ? 's' : ''}` : '', prox.length - nPar - nFix > 0 ? `${prox.length - nPar - nFix} outro${prox.length - nPar - nFix !== 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ') : 'nada lançado ainda';
     }
+    // Por categoria: este mês x média (categorias sem gasto num mês contam como zero)
+    const nomes = new Set([...rc.cat.keys(), ...base.flatMap(x => [...x.cat.keys()])]);
+    const porCat = [...nomes].map(c => {
+        const cur = rc.cat.get(c) || 0, med = base.length ? base.reduce((s, x) => s + (x.cat.get(c) || 0), 0) / base.length : null;
+        return { c, cur, med, d: med == null ? null : cur - med };
+    });
+    const tip = $('mHeroTip');
+    if (mGas != null && rc.gas > 0) {
+        const d = rc.gas - mGas, altas = porCat.filter(x => x.d > 0).sort((x, y) => y.d - x.d), quedas = porCat.filter(x => x.d < 0).sort((x, y) => x.d - y.d);
+        const nomesTop = arr => arr.slice(0, 2).map(x => `${_mesNomeCat(x.c)} (${x.d > 0 ? '+' : '−'}${_mesR0(Math.abs(x.d))})`).join(' e ');
+        const quando = fase === 'atual' ? `Até hoje (dia ${ateDia}) você gastou ${_mesR0(rc.gas)}: ` : 'Você gastou ';
+        const ref = `média ${baseTxt}${ateTxt} (${_mesR0(mGas)})`;
+        $('mHeroTipText').textContent = Math.abs(d) < mGas * 0.03
+            ? `${fase === 'atual' ? quando + 'em' : 'Gastos em'} linha com a ${ref}.`
+            : d > 0 ? `${quando}${_mesR0(d)} a mais que a ${ref}${altas.length ? `, puxado por ${nomesTop(altas)}` : ''}.`
+            : `${quando}${_mesR0(-d)} a menos que a ${ref}${quedas.length ? `. Maior economia: ${nomesTop(quedas.slice(0, 1))}` : ''}.`;
+        tip.style.display = '';
+    } else tip.style.display = 'none';
 
-    const catMap = {};
-    saidas.forEach(t => { catMap[catLabel(t)] = (catMap[catLabel(t)] || 0) + t.valor; });
-    const sorted2 = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
-    const maxVal = sorted2[0]?.[1] || 1;
-    const cores = coresCategorias(sorted2.map(e => e[0])), pcts = pctPartes(sorted2.map(e => e[1]));
-    $('catBreakdownList').innerHTML = sorted2.length
-        ? sorted2.map(([cat, val], i) => `
-            <div class="cat-bar-row">
-                <div class="cat-bar-name" title="${escHtml(cat)}">${escHtml(cat)}</div>
-                <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${Math.round((val/maxVal)*100)}%;background:${cores[i]}"></div></div>
-                <div class="cat-bar-pct">${pcts[i]}%</div>
-                <div class="cat-bar-val">${fmt(val)}</div>
-            </div>`).join('')
-        : '<div class="split-empty">Sem gastos neste mês.</div>';
+    _mesCascata(r, saidas, saldo);
+    _mesDestaques(r, saidas, porCat, m, a, fase);
+    _mesCalendario(r, m, a);
+    _mesListas(saidas);
+    _mesMudou(porCat, base, m, a, rc.gas, mGas, fase, ateTxt);
+    _mesLigar();
+}
+
+function _mesCascata(r, saidas, saldo) {
+    const grupos = { fixos: [], parcelas: [], juros: [], dia: [] };
+    saidas.forEach(t => grupos[_mesTipoGasto(t)].push(t));
+    const soma = arr => roundMoney(arr.reduce((s, t) => s + t.valor, 0));
+    const detalhe = arr => [...arr].sort((x, y) => y.valor - x.valor).slice(0, 3).map(t => `${t.desc}: ${fmt(t.valor)}`).join('\n');
+    const passos = [{ nome: 'Entrou', v: r.ent, cor: MES_CORES.entrou, tipo: '+' }];
+    [['fixos', 'Fixos'], ['parcelas', 'Parcelas'], ['juros', 'Juros e tarifas'], ['dia', 'Dia a dia']].forEach(([k, nome]) => {
+        const v = soma(grupos[k]);
+        if (v > 0) passos.push({ nome, v, cor: MES_CORES.saiu, tipo: '-', n: grupos[k].length, det: detalhe(grupos[k]) });
+    });
+    if (r.inv > 0) passos.push({ nome: 'Investido', v: r.inv, cor: MES_CORES.invest, tipo: '-' });
+    passos.push({ nome: saldo >= 0 ? 'Sobrou' : 'Faltou', v: saldo, cor: saldo >= 0 ? MES_CORES.sobrou : MES_CORES.faltou, tipo: '=' });
+    // Posição de cada barra (de lo a hi) na escala [min, max]
+    let acc = 0;
+    passos.forEach(p => {
+        if (p.tipo === '+') { p.lo = 0; p.hi = p.v; acc = p.v; }
+        else if (p.tipo === '-') { p.hi = acc; p.lo = acc - p.v; acc = p.lo; }
+        else { p.lo = Math.min(0, p.v); p.hi = Math.max(0, p.v); }
+    });
+    const max = Math.max(0, ...passos.map(p => p.hi)), min = Math.min(0, ...passos.map(p => p.lo)), faixa = max - min || 1;
+    const y = v => ((max - v) / faixa * 100).toFixed(2);
+    const el = $('mCascata');
+    if (!r.ent && !r.gas && !r.inv) { el.innerHTML = '<div class="mes-vazio">Nenhum lançamento neste mês.</div>'; $('mCascataNota').textContent = ''; return; }
+    const curto = _mesCompacto(), val = v => curto ? _fmtCompacto.format(v) : _mesR0(v);
+    el.setAttribute('aria-label', passos.map(p => `${p.nome} ${fmt(p.tipo === '-' ? -p.v : p.v)}`).join(', '));
+    el.innerHTML = `<div class="mc-cols" style="--zero:${y(0)}%">${passos.map((p, i) => {
+        const prox = passos[i + 1], ligar = prox && p.tipo !== '=' ? (p.tipo === '+' ? p.hi : p.lo) : null;
+        const tit = `${p.nome}: ${fmt(p.tipo === '-' ? -p.v : p.v)}${p.n ? ` (${p.n} lançamento${p.n !== 1 ? 's' : ''})` : ''}${p.det ? '\n' + p.det : ''}`;
+        return `<div class="mc-col" title="${escHtml(tit)}">
+            <span class="mc-val">${p.tipo === '-' || p.v < 0 ? '−' : ''}${escHtml(val(Math.abs(p.v)))}</span>
+            <div class="mc-plot"><div class="mc-bar" style="top:${y(p.hi)}%;height:max(2px, ${(+y(p.lo) - +y(p.hi)).toFixed(2)}%);background:${p.cor}"></div>${ligar != null ? `<i class="mc-link" style="top:${y(ligar)}%"></i>` : ''}</div>
+            <span class="mc-nome">${escHtml(p.nome)}</span>
+        </div>`;
+    }).join('')}</div>`;
+    const notas = [];
+    if (grupos.parcelas.length) notas.push(`<b>Parcelas</b>: ${grupos.parcelas.length} compra${grupos.parcelas.length !== 1 ? 's' : ''} parcelada${grupos.parcelas.length !== 1 ? 's' : ''} que caíram neste mês`);
+    if (grupos.juros.length) notas.push(`<b>Juros e tarifas</b>: juros, IOF, multas e encargos`);
+    $('mCascataNota').innerHTML = notas.join(' · ');
+}
+
+function _mesDestaques(r, saidas, porCat, m, a, fase) {
+    const itens = [], cmp = porCat.filter(x => x.d != null && x.c !== '(sem categoria)');
+    const alta = cmp.filter(x => x.d >= 100 && (!x.med || x.d / x.med >= 0.2)).sort((x, y) => y.d - x.d)[0];
+    if (alta) itens.push(['📈', `<b>${escHtml(_mesIco(alta.c) + ' ' + _mesNomeCat(alta.c))}</b> subiu ${_mesR0(alta.d)} em relação à média (${_mesR0(alta.med)} → ${_mesR0(alta.cur)})`]);
+    const queda = cmp.filter(x => x.d <= -100).sort((x, y) => x.d - y.d)[0];
+    if (queda) itens.push(['📉', `<b>${escHtml(_mesIco(queda.c) + ' ' + _mesNomeCat(queda.c))}</b> caiu ${_mesR0(-queda.d)} (${_mesR0(queda.med)} → ${_mesR0(queda.cur)})`]);
+    const juros = saidas.filter(t => MES_JUROS_RE.test(t.desc || '')), vj = roundMoney(juros.reduce((s, t) => s + t.valor, 0));
+    if (vj > 0) itens.push(['⚠️', `<b>${fmt(vj)} em juros, IOF e multas</b> (${juros.length} lançamento${juros.length !== 1 ? 's' : ''}, ${Math.round(vj / (r.gas || 1) * 100)}% dos gastos): dinheiro que não comprou nada`]);
+    const dias = new Date(a, m + 1, 0).getDate(), porDia = Array(dias + 1).fill(0), qtd = Array(dias + 1).fill(0);
+    saidas.forEach(t => { const d = +t.data.slice(8, 10); porDia[d] += t.valor; qtd[d]++; });
+    const maior = porDia.reduce((b, v, d) => v > porDia[b] ? d : b, 1);
+    if (porDia[maior] > 0) itens.push(['📅', `<b>${pad2(maior)}/${pad2(m + 1)}</b> foi o dia mais caro: ${fmt(porDia[maior])} em ${qtd[maior]} gasto${qtd[maior] !== 1 ? 's' : ''}`]);
+    const ate = fase === 'atual' ? new Date().getDate() : fase === 'futuro' ? 0 : dias;
+    if (ate > 0) {
+        const sem = porDia.slice(1, ate + 1).filter(v => !v).length;
+        itens.push(['🌿', sem ? `<b>${sem} dia${sem !== 1 ? 's' : ''}</b> sem nenhum gasto${fase === 'atual' ? ' até hoje' : ''}` : `Teve gasto em <b>todos os dias</b>${fase === 'atual' ? ' até hoje' : ''}`]);
+    }
+    const fds = saidas.reduce((s, t) => { const w = new Date(t.data + 'T00:00:00').getDay(); return s + (w === 0 || w === 6 ? t.valor : 0); }, 0);
+    if (r.gas > 0 && itens.length < 5) itens.push(['🛋️', `<b>${Math.round(fds / r.gas * 100)}%</b> dos gastos foram no fim de semana`]);
+    $('mDestaques').innerHTML = itens.length ? itens.slice(0, 5).map(([ic, h]) => `<li><span class="mes-d-ico" aria-hidden="true">${ic}</span><span>${h}</span></li>`).join('')
+        : '<li class="mes-vazio">Sem gastos neste mês.</li>';
+}
+
+function _mesCalendario(r, m, a) {
+    const dias = new Date(a, m + 1, 0).getDate(), ini = new Date(a, m, 1).getDay(), ym = ymKey(m, a);
+    const gasto = Array(dias + 1).fill(0), entrou = Array(dias + 1).fill(0), n = Array(dias + 1).fill(0);
+    r.lista.forEach(t => {
+        const d = +t.data.slice(8, 10);
+        if (t.tipo === 'saida') { gasto[d] += t.valor; n[d]++; } else if (t.tipo === 'entrada') entrou[d] += t.valor;
+    });
+    const max = Math.max(0, ...gasto), hoje = todayLocalISO(), curto = _mesCompacto();
+    if (!_mesDia || _mesDia.ym !== ym) {
+        const top = gasto.reduce((b, v, d) => v > gasto[b] ? d : b, 1);
+        _mesDia = { ym, dia: gasto[top] > 0 ? top : null };
+    }
+    let h = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((x, i) => `<span class="mes-cal-sem" title="${MES_SEMANA[i]}">${x}</span>`).join('');
+    for (let i = 0; i < ini; i++) h += '<span></span>';
+    for (let d = 1; d <= dias; d++) {
+        const v = gasto[d], iso = `${ym}-${pad2(d)}`;
+        const k = v > 0 ? Math.min(MES_RAMPA.length - 1, Math.floor(Math.sqrt(v / max) * MES_RAMPA.length - 1e-9)) : -1;
+        const tit = `${pad2(d)}/${pad2(m + 1)}: ${v ? `${fmt(v)} em ${n[d]} gasto${n[d] !== 1 ? 's' : ''}` : 'sem gastos'}${entrou[d] ? ` · entrada ${fmt(entrou[d])}` : ''}`;
+        h += `<button class="mes-dia${k >= 3 ? ' esc' : ''}${iso === hoje ? ' hoje' : ''}${iso > hoje ? ' fut' : ''}" data-dia="${d}" aria-pressed="${_mesDia.dia === d}" title="${escHtml(tit)}" style="${k >= 0 ? `background:${MES_RAMPA[k]}` : ''}">
+            <b>${d}</b>${v && !curto ? `<span>${escHtml(v < 1000 ? String(Math.round(v)) : _fmtCompacto.format(v))}</span>` : ''}${entrou[d] ? '<i class="mes-ent" aria-label="teve entrada">+</i>' : ''}</button>`;
+    }
+    $('mCal').innerHTML = h;
+    $('mCalLeg').innerHTML = `<span>menos</span>${MES_RAMPA.map(c => `<i style="background:${c}"></i>`).join('')}<span>mais</span><span class="mes-cal-leg-ent"><i class="mes-ent">+</i> entrada</span>`;
+    _mesRenderDia(r, m);
+}
+function _mesRenderDia(r, m) {
+    const el = $('mCalDia'), d = _mesDia && _mesDia.dia;
+    if (!d) { el.innerHTML = '<div class="mes-vazio">Clique num dia para ver os lançamentos.</div>'; return; }
+    const doDia = r.lista.filter(t => +t.data.slice(8, 10) === d && t.tipo !== 'investimento').sort((x, y) => y.valor - x.valor);
+    const tot = roundMoney(doDia.reduce((s, t) => s + (t.tipo === 'saida' ? t.valor : 0), 0));
+    const w = new Date(r.a, r.m, d).getDay();
+    el.innerHTML = `<div class="mes-dia-h"><b>${MES_SEMANA[w]}, ${pad2(d)}/${pad2(m + 1)}</b><span>${tot ? `${fmt(tot)} em gastos` : 'sem gastos'}</span></div>`
+        + (doDia.length ? doDia.slice(0, 8).map(t => `<div class="mes-li"><span class="mes-li-n">${escHtml(t.desc)}<small>${escHtml(catLabel(t))}${t.pagamento === 'credito' ? ' · crédito' : ''}</small></span><b class="${t.tipo === 'entrada' ? 'pos' : ''}">${t.tipo === 'entrada' ? '+' : '−'} ${fmt(t.valor)}</b></div>`).join('')
+            + (doDia.length > 8 ? `<div class="mes-mais">+ ${doDia.length - 8} lançamento${doDia.length - 8 !== 1 ? 's' : ''} menores</div>` : '')
+            : '<div class="mes-vazio">Nenhum lançamento neste dia.</div>');
+}
+
+function _mesListas(saidas) {
+    const top = [...saidas].sort((x, y) => y.valor - x.valor).slice(0, 6);
+    $('mTop').innerHTML = top.length ? top.map(t => `<div class="mes-li"><span class="mes-li-d">${t.data.slice(8, 10)}/${t.data.slice(5, 7)}</span><span class="mes-li-n">${escHtml(t.desc)}<small>${escHtml(catLabel(t))}</small></span><b>${fmt(t.valor)}</b></div>`).join('')
+        : '<div class="mes-vazio">Sem gastos neste mês.</div>';
+    // Lugares: agrupa pelo nome antes de " - " (sem "Parcela n/m"); só o que se repetiu
+    const grupos = new Map();
+    saidas.forEach(t => {
+        if (MES_JUROS_RE.test(t.desc || '')) return;   // juros já aparecem nos destaques
+        const nome = (t.desc || '').replace(MES_PARCELA_RE, '').split(/\s+-\s+/)[0].replace(/\s+/g, ' ').trim();
+        if (!nome) return;
+        const k = nome.toLocaleLowerCase('pt-BR');
+        const g = grupos.get(k) || { nome, v: 0, n: 0 };
+        g.v += t.valor; g.n++; grupos.set(k, g);
+    });
+    const lug = [...grupos.values()].filter(g => g.n >= 2).sort((x, y) => y.v - x.v).slice(0, 6);
+    $('mLugares').innerHTML = lug.length ? lug.map(g => `<div class="mes-li"><span class="mes-li-x">${g.n}×</span><span class="mes-li-n">${escHtml(g.nome)}<small>média ${fmt(g.v / g.n)} por vez</small></span><b>${fmt(g.v)}</b></div>`).join('')
+        : '<div class="mes-vazio">Nenhum lugar se repetiu neste mês.</div>';
+}
+
+function _mesMudou(porCat, base, m, a, gas, mGas, fase, ateTxt) {
+    const meses = [-5, -4, -3, -2, -1, 0].map(k => _mesRel(m, a, k));
+    const hist = new Map(meses.map(([mm, aa]) => [ymKey(mm, aa), _mesResumo(mm, aa).cat]));
+    const ultimo = base.length ? base[base.length - 1] : null;
+    $('mMudouBase').textContent = base.length
+        ? `este mês × média de ${base.length === 1 ? MES_ABREV[base[0].m] : `${MES_ABREV[ultimo.m]}–${MES_ABREV[base[0].m]}`}${ateTxt}`
+        : fase === 'futuro' ? 'mês futuro: só o que já foi lançado' : 'sem meses anteriores para comparar';
+    const linhas = porCat.filter(x => x.cur > 0 || (x.med || 0) >= 1)
+        .sort((x, y) => base.length ? Math.abs(y.d) - Math.abs(x.d) : y.cur - x.cur);
+    if (!linhas.length) { $('mMudou').innerHTML = '<div class="mes-vazio" style="padding:16px">Sem gastos neste mês nem nos anteriores.</div>'; return; }
+    const spark = x => {
+        const vals = meses.map(([mm, aa], i) => i === 5 ? x.cur : (hist.get(ymKey(mm, aa)).get(x.c) || 0)), mx = Math.max(...vals) || 1;
+        return `<span class="mes-spark" aria-hidden="true">${vals.map((v, i) => `<i style="height:${Math.max(v ? 8 : 3, v / mx * 100).toFixed(0)}%" class="${i === 5 ? 'cur' : ''}" title="${MES_ABREV[meses[i][0]]}/${String(meses[i][1]).slice(2)}: ${escHtml(fmt(v))}"></i>`).join('')}</span>`;
+    };
+    const dif = x => {
+        if (x.med == null) return '<span class="mes-dif">—</span>';
+        if (!x.med && x.cur) return '<span class="mes-dif up">novo</span>';
+        const lim = Math.max(50, x.med * 0.1);
+        if (Math.abs(x.d) < lim) return `<span class="mes-dif">≈ igual</span>`;
+        return `<span class="mes-dif ${x.d > 0 ? 'up' : 'down'}">${_mesDelta(x.d)}${x.med ? ` <small>${x.d > 0 ? '+' : '−'}${Math.round(Math.abs(x.d) / x.med * 100)}%</small>` : ''}</span>`;
+    };
+    const linha = x => `<div class="mes-mrow">
+        <span class="mes-m-cat"><span aria-hidden="true">${escHtml(_mesIco(x.c))}</span> ${escHtml(_mesNomeCat(x.c))}</span>
+        <span class="mes-m-v">${fmt(x.cur)}</span>
+        <span class="mes-m-v mes-m-med">${x.med == null ? '—' : fmt(x.med)}</span>
+        ${dif(x)}
+        ${spark(x)}
+    </div>`;
+    const total = { c: 'Total de gastos', cur: gas, med: mGas, d: mGas == null ? null : gas - mGas };
+    $('mMudou').innerHTML = `<div class="mes-mrow mes-mhead" aria-hidden="true"><span>Categoria</span><span>Este mês</span><span>Média</span><span>Diferença</span><span>Últimos 6 meses</span></div>`
+        + linhas.map(linha).join('')
+        + `<div class="mes-mrow mes-mtotal"><span class="mes-m-cat">Total de gastos</span><span class="mes-m-v">${fmt(gas)}</span><span class="mes-m-v mes-m-med">${mGas == null ? '—' : fmt(mGas)}</span>${dif(total)}<span></span></div>`;
+}
+
+function _mesLigar() {
+    if (_mesLigado || !$('mCal')) return;
+    _mesLigado = true;
+    $('mCal').addEventListener('click', e => {
+        const b = e.target.closest('.mes-dia'); if (!b) return;
+        const { m, a } = filtro();
+        _mesDia = { ym: ymKey(m, a), dia: +b.dataset.dia };
+        $('mCal').querySelectorAll('.mes-dia').forEach(x => x.setAttribute('aria-pressed', x === b));
+        _mesRenderDia(_mesResumo(m, a), m);
+    });
 }
 
 // ── GOALS ─────────────────────────────────────────────────────────────────────
@@ -8142,6 +8377,12 @@ function runSelfTests() {
         eq('roda: guia 50/30/20 (respeita o valor fixo)', [_orcSoma(mod.cats.filter(c => c.grupo === 'needs')), _orcSoma(mod.cats.filter(c => c.grupo === 'wants')), mod.cats[4].vc, mod.cats[2].vc], [50000, 30000, 20000, 10000]);
         eq('roda: % com 6 casas volta ao mesmo centavo', [56133, 1, 99999, 777700].map(vc => Math.round(7777 * +(vc / 7777).toFixed(6)) === vc), [true, true, true, true]);
     }
+    // Análise mensal: tipo de gasto na cascata (juros vencem parcela e fixo)
+    eq('mensal: tipo de gasto da cascata', [
+        { desc: 'Juros/encargos - parcelamento fatura (Parcela 2/3)' }, { desc: 'Story Curso', fixo: true }, { desc: 'Multa/atraso - Story Curso', fixo: true },
+        { desc: 'Amazon Prime - Parcela 3/12' }, { desc: 'IOF - limite Itaú' }, { desc: 'Uber' }, { desc: 'Iofresh sabonete' },
+    ].map(_mesTipoGasto), ['juros', 'fixos', 'juros', 'parcelas', 'juros', 'dia', 'dia']);
+    eq('mensal: mês relativo atravessa o ano', [_mesRel(0, 2026, -1), _mesRel(11, 2026, 1), _mesRel(1, 2026, -5)], [[11, 2025], [0, 2027], [8, 2025]]);
 
     const fails = results.filter(r => !r.ok);
     console.table(results.map(r => ({ teste: r.name, ok: r.ok ? '✓' : '✗', obtido: JSON.stringify(r.got), esperado: JSON.stringify(r.exp) })));

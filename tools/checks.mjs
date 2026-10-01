@@ -57,7 +57,8 @@ if (chartjs) {
       return true;
     }).map(c => c.id));
     const total = await page.evaluate(() => [...document.querySelectorAll('canvas')].filter(c => c.offsetParent).length);
-    if (v !== 'metas' && (!total || vazios.length)) graficos.push(`${v}: ${total} canvas, vazios: ${vazios.join(',') || '(nenhum canvas)'}`);
+    // Orçamento (roda) e Mensal (cascata, calendário) são desenhados sem o Chart.js
+    if (v !== 'metas' && v !== 'mensal' && (!total || vazios.length)) graficos.push(`${v}: ${total} canvas, vazios: ${vazios.join(',') || '(nenhum canvas)'}`);
   }
 }
 

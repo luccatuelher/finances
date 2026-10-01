@@ -279,7 +279,7 @@ Se algum teste gravou no preview: remova as chaves com prefixo `preview:` e reca
 
 ## 8. Estado atual e próximos candidatos
 
-**Última iteração concluída: 55** (página de Orçamento com roda editável e cartão azul; cartão azul no Mensal) (01/10/2026). Detalhes de cada uma no changelog do `<head>`.
+**Última iteração concluída: 56** (aba Mensal como revisão do mês, distinta da Visão Geral) (01/10/2026). Detalhes de cada uma no changelog do `<head>`.
 Iterações 40–42 foram feitas após o commit `a50cd5c`.
 
 Resumo das mais recentes:
@@ -305,6 +305,7 @@ Resumo das mais recentes:
 - 53 — eixo dos gráficos: `fmtEixo` único, pt-BR compacto, sem rótulos repetidos (autoteste 100). Primeira iteração conferida com o Chart.js real.
 - 54 — caixa de entrada do Claude (pedido do dono): operações em `inbox.json` num repositório privado do GitHub, aplicadas pelo app com token fine-grained (`inboxAplicar`, `checkInbox`; ver `CAIXA-DE-ENTRADA.md`). Autoteste 104; `runSyncFuzz` inclui `_testeInbox` (GitHub simulado: gravação concorrente/409, reprocesso, cópia `estado.json`, token inválido).
 - 55 — Orçamento refeito (pedido do dono, estudo em artifact "Roda do Orçamento"): abas Orçamento/Metas, cartão azul, roda SVG editável (`_orcMudaCat`/`_orcMudaGrupo`/`_orc503020` em centavos, allocs continuam em %), tabela com planejado editável, valor fixo `budget.locks` (sanitização/merge/renomeação), entradas recolhidas. Mensal com cartão azul. `_moveBudgetKeys` só olha categorias orçáveis. Autoteste 111. O computador é a tela principal do dono: conferir 1440/1280/1024 px além do celular.
+- 56 — Mensal refeito como revisão do mês (Visão Geral = dia a dia): comparação com a média dos 3 meses anteriores com ≥ 5 lançamentos (`_mesResumo(m, a, ateDia)`; mês atual só até hoje), cascata por tipo de gasto (`_mesTipoGasto`: juros > fixos > parcelas > dia a dia), destaques, calendário, maiores gastos, lugares repetidos e "o que mudou" com sparklines. Sem Chart.js (a bateria agora só exige canvas no dashboard e no anual). Autoteste 113.
 
 Áreas já revisadas: importação (CSV/OFX), exportação, backup/restauração, hero e ritmo,
 orçamento, metas/aportes, cartões/faturas, fixos, categorias, análise mensal e anual,
