@@ -120,4 +120,7 @@ const xssFalhas = (xss.executou ? 1 : 0) + xss.injetados + xerros.length + (xss.
 
 const falhas = r.self.fails.length + r.sync.length + (r.fuzz || []).length + erros.length + graficos.length + fusoFalhas.length + mobilFalhas + xssFalhas;
 console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · sync ${r.sync.length} problema(s) · fuzz ${(r.fuzz || []).length} violação(ões) · console ${erros.length} erro(s) · segurança ${xssFalhas ? xssFalhas + ' problema(s)' : 'ok (' + xss.cliques + ' cliques)'} · celular ${mobilFalhas ? mobilFalhas + ' problema(s)' : 'ok'} · fusos ${fusoFalhas.length ? fusoFalhas.length + ' problema(s)' : fusos.length + ' ok'} · gráficos ${chartjs ? (graficos.length ? graficos.length + ' problema(s)' : 'ok') : 'não verificados (sem tools/.cache/chart.umd.min.js)'}`);
-if (falhas) { console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros, graficos, fusoFalhas, mobil: { ...mob, merros }, xss, xerros }, null, 2)); process.exit(1); }
+if (falhas) console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros, graficos, fusoFalhas, mobil: { ...mob, merros }, xss, xerros }, null, 2));
+// Sem fechar o navegador e o servidor o processo nunca terminava quando tudo passava (parecia travado)
+await browser.close(); server.close();
+process.exit(falhas ? 1 : 0);
