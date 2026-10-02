@@ -4691,6 +4691,8 @@ function _inboxOrcamento(b, o, txs) {
         mexeu = true;
     }
     if (o.grupos && typeof o.grupos === 'object') Object.entries(o.grupos).forEach(([c, g]) => { if (g === 'needs' || g === 'wants') { b.needsWants[c] = g; mexeu = true; } });
+    // fora = { cat: 'AAAA-MM' }: categoria sai do orçamento daquele mês em diante (lançamentos antigos ficam)
+    if (o.fora && typeof o.fora === 'object') Object.entries(o.fora).forEach(([c, de]) => { if (ymOk(de)) { b.off[c] = [{ de }]; mexeu = true; } });
     if (o.fixos && typeof o.fixos === 'object') Object.entries(o.fixos).forEach(([c, v]) => { if (v) b.locks[c] = true; else delete b.locks[c]; mexeu = true; });
     return mexeu ? 'aplicado' : 'ignorado: nada a mudar';
 }

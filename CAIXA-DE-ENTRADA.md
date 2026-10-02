@@ -70,7 +70,7 @@ por conta Google) e nunca vai para o Firebase nem para o chat.
   categoria, em `reais` (convertido pelo total do mês `de`) ou `pct`; com `de` vale daquele mês em
   diante (até o próximo planejamento) e **substitui** o que valia — categoria fora da lista fica com
   0; sem `de` troca o planejamento base (meses antes do primeiro período). `grupos` = Necessidade
-  (`needs`) ou Desejo (`wants`); `fixos` = trava o valor da categoria na roda (`false` destrava).
+  (`needs`) ou Desejo (`wants`); `fixos` = trava o valor da categoria na roda (`false` destrava). `fora: { "🐶 Pets": "2026-10" }` tira a categoria do orçamento daquele mês em diante.
 - `emprestimo`:
   ```json
   { "id": "2026-10-02-020", "op": "emprestimo", "acao": "add", "lancar": "juros",
