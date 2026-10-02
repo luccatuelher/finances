@@ -1518,6 +1518,7 @@
     </div>
     <div class="topbar-right">
         <button class="btn-undo" id="btnUndo" onclick="undo()" disabled style="display:none">↩ <span class="tb-lbl">Desfazer</span></button>
+        <button class="btn-undo" id="btnRedo" onclick="redo()" disabled style="display:none">↪ <span class="tb-lbl">Refazer</span></button>
         <button class="sync-btn" id="btnSync" onclick="syncNow()" title="Sincronizar com Firebase" style="display:none">
             <span class="sync-dot" id="syncDot"></span>
             <span id="syncLabel">Sync</span>
@@ -3368,7 +3369,32 @@ function sanitizeState(raw, fromVersion = SCHEMA_VERSION) {
     const txN    = _sanTx(raw.t, cardsN, fromVersion, report);
     // Invariante: toda categoria usada existe na lista do seu tipo (renomear/remover a alcançam)
     txN.forEach(t => { if (t.cat && !catsN[t.tipo].includes(t.cat)) catsN[t.tipo].push(t.cat); });
+    _ligarParcelasSoltas(txN);
     return { tx: txN, cats: catsN, goals: _sanGoals(raw.g, report), cards: cardsN, budget: _sanBudget(raw.b), loans: _sanLoans(raw.l), report };
+}
+// Lançamentos "Nome - Parcela k/N" feitos à mão ou importados entram na mesma série das parcelas
+// automáticas (remover/editar em grupo, caixa "Parcelas do mês"). Série = nome + n + cartão; só liga
+// quando cada k aparece uma vez — compras diferentes com o mesmo nome ficam soltas. Idempotente.
+function _ligarParcelasSoltas(lista) {
+    const re = /^(.*?)\s*[-–]\s*parcela\s*(\d+)\s*\/\s*(\d+)\s*$/i, grupos = new Map();
+    lista.forEach(t => {
+        if (t.tipo !== 'saida') return;
+        let chave, k;
+        if (t.parcela) { if (!t.parcela.serie.startsWith('D:')) return; chave = t.parcela.serie; k = t.parcela.k; }
+        else {
+            const m = re.exec(t.desc); if (!m) return;
+            const n = +m[3]; k = +m[2];
+            if (!(n >= 2 && n <= LOAN_N_MAX && k >= 1 && k <= n)) return;
+            chave = `D:${m[1].trim().toLowerCase()}|${n}|${t.cartaoId || ''}`;
+        }
+        if (!grupos.has(chave)) grupos.set(chave, []);
+        grupos.get(chave).push({ t, k });
+    });
+    grupos.forEach((itens, chave) => {
+        if (new Set(itens.map(x => x.k)).size !== itens.length) return;
+        const n = +chave.split('|')[1];
+        itens.forEach(({ t, k }) => { if (!t.parcela) t.parcela = { serie: chave, k, n }; });
+    });
 }
 // Registros irrecuperáveis (sem data/valor) não somem: vão para fin5_quarantine
 function _quarantine(report) {
@@ -3431,7 +3457,7 @@ function loadLocalState() {
     return fromVersion < SCHEMA_VERSION;
 }
 
-let undoStack = [];
+let undoStack = [], redoStack = [];
 // Ordem da tabela de lançamentos e modo "agrupar por categoria": lembrados neste aparelho
 const _SORT_COLS = ['data', 'desc', 'cat', 'valor'];
 let sortCol   = _SORT_COLS.includes(lsGet('fin5_sortCol')) ? lsGet('fin5_sortCol') : 'data';
@@ -3479,7 +3505,7 @@ const txFaturaMes = (m, a) => _txIndex().byFat.get(ymKey(m, a)) || _EMPTY;   // 
 // e limpa a marca). Antes, mudar orçamento na aba Orçamento e voltar mostrava hero e
 // painel "restante" calculados com o orçamento antigo.
 const _persist = (key, val) => { storeJSON(key, val); _dashDirty = true; };
-function save()       { _invalidateTxCache(); _persist('fin5_data', tx); }
+function save()       { _ligarParcelasSoltas(tx); _invalidateTxCache(); _persist('fin5_data', tx); }
 function saveGoals()  { _persist('fin5_goals', goals); }
 function saveLoans()  { _persist('fin5_loans', loans); }
 function saveCats()   { _persist('fin5_cats', cats); }
@@ -3564,11 +3590,12 @@ function init() {
         // descritor — antes era atributo por <input> e o de edição no celular ficou sem)
         [FORM_DESKTOP, FORM_MOBILE, FORM_MOB_EDIT].forEach(F => $(F.data)?.addEventListener('input', () => formFaturaInfo(F)));
         document.addEventListener('keydown', e => {
-            if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z' || e.shiftKey) return;
+            const k = e.key.toLowerCase(), refaz = k === 'y' || (k === 'z' && e.shiftKey);
+            if (!(e.ctrlKey || e.metaKey) || (k !== 'z' && k !== 'y')) return;
             // Dentro de campos de texto o Ctrl+Z é do navegador (desfazer digitação)
             const el = e.target;
             if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
-            e.preventDefault(); undo();
+            e.preventDefault(); if (refaz) redo(); else undo();
         });
         document.addEventListener('keydown', _onGlobalKey);
         _setupModalFocus();
@@ -3578,7 +3605,7 @@ function init() {
         window.addEventListener('storage', e => {
             if (!e.key || !e.key.startsWith(LS_PREFIX) || !/^fin5_(data|cats|goals|cards|budget|loans)$/.test(e.key.slice(LS_PREFIX.length))) return;
             loadLocalState();
-            undoStack = []; _updateUndoBtn();   // snapshots antigos desfariam a mudança da outra aba
+            undoStack = []; redoStack = []; _updateUndoBtn();   // snapshots antigos desfariam a mudança da outra aba
             renderAll();
         });
         if (IS_MOBILE) mobOnTipoChange();
@@ -3833,6 +3860,7 @@ const UNDO_GRUPO_MS = 10000;
 function pushUndo(label, grupo = null) {
     const top = undoStack[undoStack.length - 1], agora = Date.now();
     if (grupo && top && top.grupo === grupo && agora - top.at < UNDO_GRUPO_MS) { top.at = agora; return; }
+    redoStack = [];   // uma ação nova encerra o "refazer"
     undoStack.push({ snap: snapshotState(), label, grupo, at: agora });
     if (undoStack.length > 30) undoStack.shift();
     _updateUndoBtn();
@@ -3842,14 +3870,27 @@ function _updateUndoBtn() {
     if (!b) return;
     b.disabled = !undoStack.length;
     b.title = undoStack.length ? `Desfazer: ${undoStack[undoStack.length - 1].label}` : 'Nada para desfazer';
+    const r = $('btnRedo');
+    if (r) { r.disabled = !redoStack.length; r.title = redoStack.length ? `Refazer: ${redoStack[redoStack.length - 1].label}` : 'Nada para refazer'; }
 }
 function undo() {
     if (!undoStack.length) return;
     const { snap, label } = undoStack.pop();
+    redoStack.push({ snap: snapshotState(), label });   // estado de agora, para poder refazer
     restoreState(snap);
     commitAll();
     renderGoals(); renderCartoesMini();
     toast(`↩ Desfeito: ${label}`, '#6d28d9');
+    _updateUndoBtn();
+}
+function redo() {
+    if (!redoStack.length) return;
+    const { snap, label } = redoStack.pop();
+    undoStack.push({ snap: snapshotState(), label, grupo: null, at: 0 });
+    restoreState(snap);
+    commitAll();
+    renderGoals(); renderCartoesMini();
+    toast(`↪ Refeito: ${label}`, '#6d28d9');
     _updateUndoBtn();
 }
 
@@ -7245,7 +7286,7 @@ function _claimLocalData(uid) {
         restoreState(s);
         persistAll();
         lsDel(_pendKey(uid));
-        undoStack = []; _updateUndoBtn();
+        undoStack = []; redoStack = []; _updateUndoBtn();
     } else if (!owner) {
         _migrateLegacySyncMeta(uid);              // instalação anterior: dados são deste usuário
     }
@@ -7259,14 +7300,14 @@ function showLoginScreen() {
     ['anual','mensal','metas'].forEach(v => $('view-' + v).classList.remove('active'));
     $('userChip').style.display  = 'none';
     $('btnSync').style.display   = 'none';
-    $('btnUndo').style.display   = 'none';
+    $('btnUndo').style.display   = 'none'; $('btnRedo').style.display = 'none';
     setSyncState('', 'Sync');
 }
 
 function showApp(user) {
     $('loginScreen').classList.add('hidden');
     $('btnSync').style.display  = SYNC_ENABLED ? '' : 'none';
-    $('btnUndo').style.display  = '';
+    $('btnUndo').style.display  = ''; $('btnRedo').style.display = '';
     _updateUndoBtn();
 
     const chip = $('userChip');
@@ -7364,7 +7405,7 @@ function wipeLocalData(uid = null) {
     }
     keys.forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
     restoreState(sanitizeState({}));
-    undoStack = []; _updateUndoBtn();
+    undoStack = []; redoStack = []; _updateUndoBtn();
 }
 
 // ── SYNC UI ───────────────────────────────────────────────────────────────────
@@ -7647,7 +7688,7 @@ async function _mergeOrConflict(remote, attempt = 0) {
         }
         restoreState(sanitizeState({ t: merged.tx, c: merged.cats, g: merged.goals, k: merged.cards, b: merged.budget, l: merged.loans }));
         persistAll();
-        undoStack = []; _updateUndoBtn();   // snapshots antigos desfariam o que veio do outro dispositivo
+        undoStack = []; redoStack = []; _updateUndoBtn();   // snapshots antigos desfariam o que veio do outro dispositivo
         renderAll(); renderGoals(); renderCartoesMini();
         const r = await _pushCAS(remote.ts || 0, attempt + 1);
         if (r === 'pushed') { toast('🔀 Alterações deste e de outro dispositivo foram combinadas.', '#0b62f0'); return 'merged'; }
@@ -7685,7 +7726,7 @@ function _applyRemote(remote, { keepUndo = false } = {}) {
     restoreState(s);
     persistAll();
     // Snapshots antigos desfariam mudanças feitas em outro dispositivo
-    if (!keepUndo) { undoStack = []; _updateUndoBtn(); }
+    if (!keepUndo) { undoStack = []; redoStack = []; _updateUndoBtn(); }
     renderAll(); renderGoals(); renderCartoesMini();
     // Se a migração de esquema alterou algo, marca como sujo para subir a versão nova
     _setSyncMeta({ ts: remote.ts || 0, hash: v < SCHEMA_VERSION ? 'migrated' : _stateHash() });
@@ -9154,7 +9195,7 @@ function runSelfTests() {
     eq('roundMoney simétrico', [roundMoney(12.345), roundMoney(-12.345)], [12.35, -12.35]);
     eq('roundMoney -0', Object.is(roundMoney(-1e-17), 0), true);
     {   // pilha de desfazer: agrupa edições seguidas do mesmo campo (usa pilha temporária)
-        const pilhaReal = undoStack; undoStack = [];
+        const pilhaReal = undoStack; undoStack = []; redoStack = [];
         try {
             pushUndo('a', 'g1'); pushUndo('b', 'g1'); pushUndo('c', 'g2'); pushUndo('d'); pushUndo('e');
             pushUndo('x', 'g3'); undoStack[undoStack.length - 1].at -= UNDO_GRUPO_MS + 1; pushUndo('y', 'g3');
@@ -9379,8 +9420,8 @@ function runSelfTests() {
         eq('caixa de entrada: base64 UTF-8 ida e volta', _utf8B64(_b64Utf8(txt)), txt);
         // Orçamento, empréstimo e ligação de parcelas pela caixa
         const b0 = sanitizeState({ t: [{ id: 701, desc: 'Mercado', valor: 50, data: '2026-08-10', tipo: 'saida', cat: 'C' },
-            { id: 702, desc: 'Loja - Parcela 1/2', valor: 30, data: '2026-09-10', tipo: 'saida', cat: 'C' },
-            { id: 703, desc: 'Loja - Parcela 2/2', valor: 30, data: '2026-10-10', tipo: 'saida', cat: 'C' }],
+            { id: 702, desc: 'Loja parcela 1 de 2', valor: 30, data: '2026-09-10', tipo: 'saida', cat: 'C' },
+            { id: 703, desc: 'Loja parcela 2 de 2', valor: 30, data: '2026-10-10', tipo: 'saida', cat: 'C' }],
             b: { total: 4000, allocs: { C: 10 }, monthTotals: { '2026-11': 5000 } } });
         const r3 = inboxAplicar(b0, [
             { id: 'o1', op: 'orcamento', total: { valor: 6000, de: '2026-10' }, planejamento: { de: '2026-10', reais: { C: 1500, D: 600 } }, grupos: { D: 'needs' }, fixos: { D: true } },
@@ -9520,6 +9561,12 @@ function runSelfTests() {
         eq('merge: empréstimos criados nos dois lados', mergeStates(lb, ll, lr).merged.loans.map(l => l.nome).sort(), ['A', 'B']);
         eq('hash do estado inclui os empréstimos', _stateHash(lb) !== _stateHash(ll), true);
     }
+    {   // parcelas lançadas à mão entram na série; compras diferentes de mesmo nome ficam soltas
+        const T3 = (id, desc, k) => ({ id, desc: `${desc} - Parcela ${k}/3`, valor: 10, data: `2026-0${k}-10`, tipo: 'saida' });
+        const a = sanitizeState({ t: [T3(1, 'Fone', 1), T3(2, 'Fone', 2), T3(3, 'Outro', 1), T3(4, 'Outro', 1)] }).tx;
+        eq('parcelas soltas: ligadas só quando cada k aparece uma vez', [a[0].parcela && a[0].parcela.serie === a[1].parcela.serie, a[0].parcela && a[0].parcela.k, a[1].parcela.n, a[2].parcela, a[3].parcela], [true, 1, 3, undefined, undefined]);
+        eq('parcelas soltas: sanitizar de novo não muda', _stateHash(sanitizeState({ t: a })) === _stateHash(sanitizeState({ t: sanitizeState({ t: a }).tx })), true);
+    }
     // Análise mensal: tipo de gasto na cascata (juros vencem parcela e fixo)
     eq('mensal: tipo de gasto da cascata', [
         { desc: 'Juros/encargos - parcelamento fatura (Parcela 2/3)' }, { desc: 'Story Curso', fixo: true }, { desc: 'Multa/atraso - Story Curso', fixo: true },
@@ -9569,7 +9616,7 @@ async function _runFuzzImpl(seeds = [11, 23, 97, 1234], steps = 400) {
             const pick = arr => arr[Math.floor(rnd() * arr.length)], ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
             // qualquer dia válido (29–31 incluídos) e cartões que fecham/vencem até dia 31
             const date = () => { const y = pick([2025, 2026]), mm = ri(1, 12); return `${y}-${pad2(mm)}-${pad2(ri(1, new Date(y, mm, 0).getDate()))}`; };
-            restoreState(sanitizeState({ t: SEED })); undoStack = [];
+            restoreState(sanitizeState({ t: SEED })); undoStack = []; redoStack = [];
             cards = [{ id: newId(), nome: 'Fuzz', fechamento: ri(1, 31), vencimento: ri(1, 31), cor: '#6d28d9' }];
             const closeRep = () => { if ($('ovFixoRep').classList.contains('open')) closeFixoRep(pick(['sim', 'nao'])); };
             const actions = {
@@ -9632,7 +9679,7 @@ async function _runFuzzImpl(seeds = [11, 23, 97, 1234], steps = 400) {
     } finally {
         window.confirm = origConfirm; console.error = origErr;
         try { localStorage.clear(); Object.entries(savedLS).forEach(([k, val]) => localStorage.setItem(k, val)); } catch (e) {}
-        restoreState(saved); undoStack = []; _updateUndoBtn();
+        restoreState(saved); undoStack = []; redoStack = []; _updateUndoBtn();
         savedForm.forEach(([el, val, chk]) => { if (el.isConnected) { el.value = val; el.checked = chk; } });
         renderAll(); renderGoals(); renderCartoesMini();
     }
@@ -9667,7 +9714,7 @@ async function _runSyncFuzzImpl(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120) {
     const problems = [], stats = { merged: 0, conflict: 0 };
     _userRef = () => mockRef; _currentUser = { uid: 'syncfuzz' }; toast = () => {}; window.confirm = () => true;
     const MK = _syncKey('syncfuzz'), BK = _baseKey('syncfuzz');
-    const use = d => { restoreState(_clone(d.state)); undoStack = []; for (const [k, v] of [[MK, d.meta], [BK, d.base]]) v ? lsSet(k, JSON.stringify(v)) : lsDel(k); };
+    const use = d => { restoreState(_clone(d.state)); undoStack = []; redoStack = []; for (const [k, v] of [[MK, d.meta], [BK, d.base]]) v ? lsSet(k, JSON.stringify(v)) : lsDel(k); };
     const keep = d => { d.state = snapshotState(); d.meta = loadJSON(MK, null); d.base = loadJSON(BK, null); };
     try {
         for (const S of seeds) {
@@ -9727,7 +9774,7 @@ async function _runSyncFuzzImpl(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120) {
         _userRef = savedRef; _currentUser = savedUser; toast = savedToast; window.confirm = savedConfirm;
         $('ovConflict').classList.remove('open'); _conflictOpen = false; _pendingConflictRemote = null;
         try { localStorage.clear(); Object.entries(savedLS).forEach(([k, v]) => localStorage.setItem(k, v)); } catch (e) {}
-        restoreState(saved); undoStack = []; _updateUndoBtn(); renderAll(); renderGoals(); renderCartoesMini();
+        restoreState(saved); undoStack = []; redoStack = []; _updateUndoBtn(); renderAll(); renderGoals(); renderCartoesMini();
     }
     console[problems.length ? 'warn' : 'info'](`runSyncFuzz: ${seeds.length} cenários, ${stats.merged} merges, ${stats.conflict} conflitos resolvidos, ${problems.length} problema(s)`, problems);
     toast(problems.length ? `❌ Sync fuzz: ${problems.length} problema(s) — veja o console` : `✅ Sync fuzz: ${seeds.length} cenários convergiram (${stats.merged} merges)`, problems.length ? '#dc2626' : '#16a34a');
