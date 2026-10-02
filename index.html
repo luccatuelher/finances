@@ -3432,14 +3432,17 @@ function loadLocalState() {
 }
 
 let undoStack = [];
-let sortCol   = 'data', sortDir = 'desc';
+// Ordem da tabela de lançamentos e modo "agrupar por categoria": lembrados neste aparelho
+const _SORT_COLS = ['data', 'desc', 'cat', 'valor'];
+let sortCol   = _SORT_COLS.includes(lsGet('fin5_sortCol')) ? lsGet('fin5_sortCol') : 'data';
+let sortDir   = lsGet('fin5_sortDir') === 'asc' ? 'asc' : 'desc';
 let activeTab = 'all';
 let charts    = {};
 let currentView = 'dashboard';
 let selectedGoalColor = GOAL_COLORS[0];
 let _pendingFixo = null;
 let _openInlineId = null;
-let groupMode = 'none'; // 'none' | 'cat'
+let groupMode = lsGet('fin5_groupMode') === 'cat' ? 'cat' : 'none'; // 'none' | 'cat'
 let _dashDirty = false; // tracks if dashboard needs re-render after returning from another view
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
@@ -3583,6 +3586,7 @@ function init() {
         setInterval(_checkDayChange, 60 * 1000);
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') _checkDayChange(); });
     }
+    safeRender(_marcarSort);
     renderAll();
     renderGoals();
     renderCartoesMini();
@@ -3853,15 +3857,23 @@ function undo() {
 function sortBy(col) {
     sortDir = sortCol === col ? (sortDir === 'asc' ? 'desc' : 'asc') : (col === 'valor' ? 'desc' : 'asc');
     sortCol = col;
-    ['data','desc','cat','valor'].forEach(c => {
+    lsSet('fin5_sortCol', sortCol); lsSet('fin5_sortDir', sortDir);
+    _marcarSort();
+    renderTabela();
+}
+// Setas dos cabeçalhos, botão e seletor do agrupamento conforme a escolha guardada
+function _marcarSort() {
+    _SORT_COLS.forEach(c => {
         const th = $('si-' + c).closest('th');
         $('si-' + c).textContent = '↕';
-        th.classList.remove('sort-asc','sort-desc');
+        th.classList.remove('sort-asc', 'sort-desc');
     });
-    const si = $('si-' + col);
+    const si = $('si-' + sortCol);
     si.textContent = sortDir === 'asc' ? '↑' : '↓';
     si.closest('th').classList.add(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
-    renderTabela();
+    const btn = $('btnGroupCat'), ord = $('groupSort');
+    if (btn) btn.classList.toggle('active', groupMode === 'cat');
+    if (ord) { ord.value = _groupSort; ord.style.display = groupMode === 'cat' ? '' : 'none'; }
 }
 
 function sorted(list) {
@@ -5044,10 +5056,8 @@ function _caixinhasHtml(lista, rowHtml) {
 
 function toggleGroupMode() {
     groupMode = groupMode === 'cat' ? 'none' : 'cat';
-    const btn = $('btnGroupCat');
-    if (btn) btn.classList.toggle('active', groupMode === 'cat');
-    const ord = $('groupSort');
-    if (ord) { ord.value = _groupSort; ord.style.display = groupMode === 'cat' ? '' : 'none'; }
+    lsSet('fin5_groupMode', groupMode);
+    _marcarSort();
     renderTabela();
 }
 
