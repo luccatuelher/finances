@@ -20,5 +20,12 @@
       "Edit(CLAUDE.md)",
       "Write(CAIXA-DE-ENTRADA.md)"
     ]
+  },
+  "outputStyle": "Concise",
+  "model": "opusplan",
+  "effortLevel": "high",
+  "env": {
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-5-5",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-5-5"
   }
 }
