@@ -641,7 +641,7 @@
         .tx-sec-h .gh-label { font-size: 11.5px; }
         .tx-sub-h { display: flex; align-items: center; gap: 8px; margin: 14px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border); font-size: 12.5px; }
         .tx-sub-h .gh-total { margin-left: auto; }
-        .tx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); gap: 12px; align-items: start; }
+        .tx-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
         .tx-box { background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--cor, var(--border)); border-radius: 12px; overflow: hidden; min-width: 0; }
         .tx-box.wide { grid-column: 1 / -1; }
         .tx-box-h { display: flex; align-items: center; gap: 10px; padding: 11px 14px 4px; }
