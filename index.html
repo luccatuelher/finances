@@ -639,6 +639,8 @@
         .tx-sec-h { margin: 18px 0 10px; padding-top: 14px; border-top: 2px solid var(--border); }
         .tx-sec-h:first-child { border-top: 0; padding-top: 4px; margin-top: 8px; }
         .tx-sec-h .gh-label { font-size: 11.5px; }
+        .tx-sub-h { display: flex; align-items: center; gap: 8px; margin: 14px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+        .tx-sub-h .gh-total { margin-left: auto; }
         .tx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); gap: 12px; align-items: start; }
         .tx-box { background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--cor, var(--border)); border-radius: 12px; overflow: hidden; min-width: 0; }
         .tx-box.wide { grid-column: 1 / -1; }
@@ -1903,6 +1905,7 @@
                         <option value="itens">Mais lançamentos</option>
                         <option value="recente">Mais recentes</option>
                         <option value="nome">Nome (A–Z)</option>
+                        <option value="grupo_valor">Grupo + maior valor</option>
                     </select>
                 </div>
             </div>
@@ -5058,7 +5061,7 @@ function renderTabela() {
 // ── AGRUPAR POR CATEGORIA: caixinhas ─────────────────────────────────────────
 // Cada categoria vira uma caixinha (cor estável da categoria, total, % do tipo e os lançamentos),
 // separadas por Entradas / Saídas / Investimentos. A ordem das caixinhas fica guardada neste aparelho.
-const GROUP_ORDENS = ['valor_desc', 'valor_asc', 'itens', 'recente', 'nome'];
+const GROUP_ORDENS = ['valor_desc', 'valor_asc', 'itens', 'recente', 'nome', 'grupo_valor'];
 let _groupSort = GROUP_ORDENS.includes(lsGet('fin5_groupSort')) ? lsGet('fin5_groupSort') : 'valor_desc';
 function setGroupSort(v) {
     if (!GROUP_ORDENS.includes(v)) return;
@@ -5073,6 +5076,7 @@ const _GRUPO_TIPOS = [
 function _caixinhasHtml(lista, rowHtml) {
     const soma = items => roundMoney(items.reduce((s, t) => s + t.valor, 0));
     const ordem = {
+        grupo_valor: (x, y) => y.total - x.total,   // dentro de cada grupo (saídas); entradas e investimentos: por valor
         valor_desc: (x, y) => y.total - x.total, valor_asc: (x, y) => x.total - y.total,
         itens: (x, y) => y.items.length - x.items.length,
         recente: (x, y) => (y.ult > x.ult) - (y.ult < x.ult),
@@ -5087,16 +5091,26 @@ function _caixinhasHtml(lista, rowHtml) {
             ult: items.reduce((u, t) => (t.data > u ? t.data : u), '') }));
         caixas.sort((x, y) => ordem(x, y) || y.total - x.total || cmpText(x.nome, y.nome));
         const totalTipo = soma(doTipo), cores = coresCategorias(caixas.map(c => c.cat));
-        return `<div class="tx-sec-h"><div class="gh-label"><span>${label}</span><span class="gh-count">${doTipo.length} ${doTipo.length === 1 ? 'item' : 'itens'} · ${caixas.length} categoria${caixas.length === 1 ? '' : 's'}</span><span class="gh-total ${cls}" style="font-size:13px">${pre} ${fmt(totalTipo)}</span></div></div>
-        <div class="tx-grid">${caixas.map((c, i) => {
+        const caixaHtml = c => {
             const pct = totalTipo > 0 ? c.total / totalTipo * 100 : 0;
-            return `<section class="tx-box${c.items.some(t => t.id === _openInlineId) ? ' wide' : ''}" style="--cor:${cores[i]}">
+            return `<section class="tx-box${c.items.some(t => t.id === _openInlineId) ? ' wide' : ''}" style="--cor:${cores[caixas.indexOf(c)]}">
                 <div class="tx-box-h"><span class="tx-box-ico" aria-hidden="true">${escHtml(splitCatName(c.cat).icon || '📦')}</span><span class="tx-box-name">${escHtml(c.nome)}</span><span class="tx-box-total ${cls}">${pre} ${fmt(c.total)}</span></div>
                 <div class="tx-box-meta">${c.items.length} ${c.items.length === 1 ? 'lançamento' : 'lançamentos'} · ${escHtml(fmtPct(pct))} ${de}</div>
                 <div class="tx-box-bar" aria-hidden="true"><i style="width:${Math.min(100, pct).toFixed(1)}%"></i></div>
                 <table class="tx-box-table"><tbody>${c.items.map(rowHtml).join('')}</tbody></table>
             </section>`;
-        }).join('')}</div>`;
+        };
+        const cab = `<div class="tx-sec-h"><div class="gh-label"><span>${label}</span><span class="gh-count">${doTipo.length} ${doTipo.length === 1 ? 'item' : 'itens'} · ${caixas.length} categoria${caixas.length === 1 ? '' : 's'}</span><span class="gh-total ${cls}" style="font-size:13px">${pre} ${fmt(totalTipo)}</span></div></div>`;
+        // "Grupo + valor" (só saídas): Necessidades / Desejos / Sem categoria, cada um com subtotal
+        if (_groupSort === 'grupo_valor' && tipo === 'saida') {
+            const GR = [['needs', 'Necessidades', '#2a78d6'], ['wants', 'Desejos', '#eb6834'], ['sem', 'Sem categoria', '#9aa0ab']];
+            return cab + GR.map(([k, nome, cor]) => {
+                const grupo = caixas.filter(c => (c.cat === '(sem categoria)' ? 'sem' : _budgetGroup(c.cat)) === k);
+                if (!grupo.length) return '';
+                return `<div class="tx-sub-h"><span class="orc-dot" style="background:${cor}"></span><b>${nome}</b><span class="gh-count">${grupo.length} categoria${grupo.length === 1 ? '' : 's'}</span><span class="gh-total ${cls}">${pre} ${fmt(soma(grupo.flatMap(c => c.items)))}</span></div><div class="tx-grid">${grupo.map(caixaHtml).join('')}</div>`;
+            }).join('');
+        }
+        return cab + `<div class="tx-grid">${caixas.map(caixaHtml).join('')}</div>`;
     }).join('');
 }
 
