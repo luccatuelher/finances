@@ -5087,8 +5087,9 @@ function _caixinhasHtml(lista, rowHtml) {
         if (!doTipo.length) return '';
         const porCat = new Map();
         doTipo.forEach(t => { const k = catLabel(t); if (!porCat.has(k)) porCat.set(k, []); porCat.get(k).push(t); });
-        const caixas = [...porCat].map(([cat, items]) => ({ cat, nome: splitCatName(cat).label || cat, items, total: soma(items),
-            ult: items.reduce((u, t) => (t.data > u ? t.data : u), '') }));
+        // dentro da caixinha: maior valor em cima (empate: mais recente primeiro)
+        const caixas = [...porCat].map(([cat, itens]) => { const items = [...itens].sort((x, y) => y.valor - x.valor || y.data.localeCompare(x.data)); return ({ cat, nome: splitCatName(cat).label || cat, items, total: soma(items),
+            ult: items.reduce((u, t) => (t.data > u ? t.data : u), '') }); });
         caixas.sort((x, y) => ordem(x, y) || y.total - x.total || cmpText(x.nome, y.nome));
         const totalTipo = soma(doTipo), cores = coresCategorias(caixas.map(c => c.cat));
         const caixaHtml = c => {
