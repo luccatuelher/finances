@@ -1249,6 +1249,9 @@
         .mes-mrow { display: grid; grid-template-columns: minmax(140px, 1.4fr) 120px 120px 150px minmax(100px, 1fr); gap: 0 16px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--border-light); font-size: 13px; }
         .mes-mhead { font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--text-3); padding: 10px 0 6px; }
         .mes-mhead span:nth-child(2), .mes-mhead span:nth-child(3) { text-align: right; }
+        .mes-mcat { border-left: 3px solid var(--cor, var(--border)); padding: 11px 0 11px 12px; margin: 3px 0; border-radius: 0 8px 8px 0; border-bottom: 0; background: var(--bg); }
+        .mes-mgrp { margin-top: 14px; padding: 8px 0; border-bottom: 2px solid var(--border); font-weight: 700; }
+        .mes-mgrp small { font-weight: 500; color: var(--text-3); margin-left: 4px; }
         .mes-m-cat { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
         .mes-m-v { text-align: right; font-variant-numeric: tabular-nums; }
         .mes-m-med { color: var(--text-3); }
@@ -2073,6 +2076,8 @@
                             <option value="alta">Maior alta</option>
                             <option value="queda">Maior queda</option>
                             <option value="nome">Nome (A–Z)</option>
+                            <option value="grupo_valor">Grupo + maior valor</option>
+                            <option value="grupo_mudanca">Grupo + maior mudança</option>
                         </select>
                     </label>
                 </span>
@@ -5945,7 +5950,7 @@ function _mesListas(saidas) {
 }
 
 // Ordem de "O que mudou por categoria": guardada neste aparelho
-const MUDOU_ORDENS = ['mudanca', 'valor', 'alta', 'queda', 'nome'];
+const MUDOU_ORDENS = ['mudanca', 'valor', 'alta', 'queda', 'nome', 'grupo_valor', 'grupo_mudanca'];
 let _mudouSort = MUDOU_ORDENS.includes(lsGet('fin5_mudouSort')) ? lsGet('fin5_mudouSort') : 'mudanca';
 function setMudouSort(v) {
     if (!MUDOU_ORDENS.includes(v)) return;
@@ -5965,7 +5970,9 @@ function _mesMudou(porCat, base, m, a, gas, mGas, fase, ateTxt) {
         alta:    (x, y) => dd(y) - dd(x),
         queda:   (x, y) => dd(x) - dd(y),
     } : {};
-    const ordem = cmp[_mudouSort] || (_mudouSort === 'nome' ? (x, y) => cmpText(_mesNomeCat(x.c), _mesNomeCat(y.c)) : (x, y) => 0);
+    // "Grupo + …": separa em Necessidades / Desejos / Sem categoria (com subtotal) e ordena dentro de cada grupo
+    const porGrupo = _mudouSort.startsWith('grupo_'), chaveOrdem = porGrupo ? _mudouSort.slice(6) : _mudouSort;
+    const ordem = cmp[chaveOrdem] || (chaveOrdem === 'nome' ? (x, y) => cmpText(_mesNomeCat(x.c), _mesNomeCat(y.c)) : (x, y) => 0);
     const sel = $('mMudouSort'); if (sel) sel.value = _mudouSort;
     const linhas = porCat.filter(x => x.cur > 0 || (x.med || 0) >= 1)
         .sort((x, y) => ordem(x, y) || y.cur - x.cur || cmpText(_mesNomeCat(x.c), _mesNomeCat(y.c)));
@@ -5981,7 +5988,8 @@ function _mesMudou(porCat, base, m, a, gas, mGas, fase, ateTxt) {
         if (Math.abs(x.d) < lim) return `<span class="mes-dif">≈ igual</span>`;
         return `<span class="mes-dif ${x.d > 0 ? 'up' : 'down'}">${_mesDelta(x.d)}${x.med ? ` <small>${x.d > 0 ? '+' : '−'}${Math.round(Math.abs(x.d) / x.med * 100)}%</small>` : ''}</span>`;
     };
-    const linha = x => `<div class="mes-mrow">
+    const coresLista = coresCategorias(linhas.map(l => l.c)), cores = new Map(linhas.map((x, i) => [x.c, coresLista[i]]));
+    const linha = x => `<div class="mes-mrow mes-mcat" style="--cor:${cores.get(x.c)}">
         <span class="mes-m-cat"><span aria-hidden="true">${escHtml(_mesIco(x.c))}</span> ${escHtml(_mesNomeCat(x.c))}</span>
         <span class="mes-m-v">${fmt(x.cur)}</span>
         <span class="mes-m-v mes-m-med">${x.med == null ? '—' : fmt(x.med)}</span>
@@ -5989,8 +5997,17 @@ function _mesMudou(porCat, base, m, a, gas, mGas, fase, ateTxt) {
         ${spark(x)}
     </div>`;
     const total = { c: 'Total de gastos', cur: gas, med: mGas, d: mGas == null ? null : gas - mGas };
+    const GRUPOS_MES = [['needs', 'Necessidades', '#2a78d6'], ['wants', 'Desejos', '#eb6834'], ['sem', 'Sem categoria', '#9aa0ab']];
+    const grupoDe = x => x.c === '(sem categoria)' ? 'sem' : _budgetGroup(x.c);
+    const cabGrupo = (nome, cor, itens) => {
+        const cur = roundMoney(itens.reduce((t, x) => t + x.cur, 0)), med = base.length ? roundMoney(itens.reduce((t, x) => t + (x.med || 0), 0)) : null;
+        return `<div class="mes-mrow mes-mgrp"><span class="mes-m-cat"><span class="orc-dot" style="background:${cor}"></span> ${nome} <small>${itens.length} categoria${itens.length !== 1 ? 's' : ''}</small></span><span class="mes-m-v">${fmt(cur)}</span><span class="mes-m-v mes-m-med">${med == null ? '—' : fmt(med)}</span>${dif({ cur, med, d: med == null ? null : cur - med })}<span></span></div>`;
+    };
+    const corpo = porGrupo
+        ? GRUPOS_MES.map(([k, nome, cor]) => { const it = linhas.filter(x => grupoDe(x) === k); return it.length ? cabGrupo(nome, cor, it) + it.map(linha).join('') : ''; }).join('')
+        : linhas.map(linha).join('');
     $('mMudou').innerHTML = `<div class="mes-mrow mes-mhead" aria-hidden="true"><span>Categoria</span><span>Este mês</span><span>Média</span><span>Diferença</span><span>Últimos 6 meses</span></div>`
-        + linhas.map(linha).join('')
+        + corpo
         + `<div class="mes-mrow mes-mtotal"><span class="mes-m-cat">Total de gastos</span><span class="mes-m-v">${fmt(gas)}</span><span class="mes-m-v mes-m-med">${mGas == null ? '—' : fmt(mGas)}</span>${dif(total)}<span></span></div>`;
 }
 
