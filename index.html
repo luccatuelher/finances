@@ -2437,6 +2437,7 @@ const CONFIG = Object.freeze({
     BACKUP_LEMBRETE_DIAS: 30,           // alerta de "faz tempo que não baixa um backup"
     VIRADA_DIA_MS: 60 * 1000,           // confere virada de dia com o app aberto
     NOTA_MAX: 500,                      // nota de meta/empréstimo
+    PAYLOAD_AVISO_KB: 1500,             // avisa quando a base (enviada inteira a cada sync) passa disto
     BAK_DIAS: 14,                       // backups diários guardados no Firebase (finances_bak)
 });
 
@@ -4434,8 +4435,13 @@ function renderBackupAge() {
     el.textContent = dias === null ? '⚠️ Nenhum backup em arquivo neste navegador — exporte uma cópia.'
         : dias === 0 ? '✓ Backup feito hoje.'
         : `${atrasado ? '⚠️ ' : ''}Último backup há ${dias} dia${dias === 1 ? '' : 's'}${atrasado ? ' — exporte uma cópia.' : '.'}`;
-    el.style.color = atrasado ? '#b45309' : 'var(--text-3)';
+    el.style.color = atrasado ? 'var(--warn)' : 'var(--text-3)';
     el.style.fontWeight = atrasado ? '600' : '';
+    // Tamanho da base que cada sincronização envia/baixa por inteiro (a sync não é por item): avisa antes de pesar
+    try {
+        const kb = Math.round(JSON.stringify({ t: tx, c: cats, g: goals, k: cards, b: budget, l: loans }).length / 1024);
+        el.textContent += ` Dados: ${tx.length} lançamentos, ~${kb} KB` + (kb > CONFIG.PAYLOAD_AVISO_KB ? ' — base grande: cada sincronização sobe tudo; considere arquivar anos antigos.' : '.');
+    } catch (e) {}
 }
 
 // Excel/Sheets executam como FÓRMULA células que começam com = + - @ (CSV injection) — e
