@@ -2294,6 +2294,15 @@
     </div>
 </div>
 
+<!-- MODAL DE CONFIRMAÇÃO (substitui confirm() nativo; ver perguntar()) -->
+<div class="overlay" id="ovConfirmar" onclick="if(event.target===this)_confirmarFechar(null)">
+    <div class="modal" style="width:420px">
+        <div class="modal-title" id="confTitulo">Confirmar</div>
+        <div class="modal-sub" id="confMsg" style="white-space:pre-line"></div>
+        <div class="modal-footer" id="confBotoes"></div>
+    </div>
+</div>
+
 <!-- TOAST -->
 <div id="toast" style="position:fixed;bottom:20px;right:20px;background:#18181b;color:white;padding:10px 16px;border-radius:8px;font-size:12px;font-weight:500;opacity:0;transform:translateY(6px);transition:all .25s;pointer-events:none;z-index:999;"></div>
 
@@ -2743,7 +2752,7 @@ function mobEditSave() {
 }
 
 function mobEditDelete() {
-    if (remover(toId($('mob-edit-id').value))) closeMobEdit();
+    remover(toId($('mob-edit-id').value), () => closeMobEdit());
 }
 
 function renderMobList() {
@@ -3094,7 +3103,10 @@ function baixarQuarentena() {
 }
 function descartarQuarentena() {
     const n = loadJSON('fin5_quarantine', []).length;
-    if (!n || !confirm(`Descartar ${n} registro(s) inválido(s)? Baixe antes se quiser conferir — não dá para desfazer.`)) return;
+    if (!n) return;
+    confirmar(`Descartar ${n} registro(s) inválido(s)? Baixe antes se quiser conferir — não dá para desfazer.`, { ok: 'Descartar', perigo: true }, () => _descartarQuarentena());
+}
+function _descartarQuarentena() {
     lsDel('fin5_quarantine');
     renderQuarentena();
     toast('Quarentena descartada.', '#52525b');
@@ -3287,6 +3299,36 @@ function init() {
 // Registro único dos modais: cada um declara como fecha (respeitando efeitos: fechar o
 // "replicar fixo?" equivale a "só este mês", como o clique fora) e como confirma.
 // O de conflito de sync não tem close — exige uma decisão explícita.
+// ── CONFIRMAÇÃO PRÓPRIA (no lugar de confirm()) ───────────────────────────────
+// perguntar(msg, opcoes, cb): mostra o modal; cb(valor) uma vez — null se cancelou (Esc, voltar, fora do
+// quadro, Cancelar). opcoes = [{ label, valor, perigo? }] (a 1ª é a ação principal; Enter a escolhe).
+// A mensagem entra por textContent (nomes de lançamentos são texto do usuário).
+// Quando um teste troca window.confirm (fuzz), responde na hora e de forma síncrona: true → 1ª opção,
+// false → 2ª opção (ou null se só houver uma) — a mesma semântica dos confirm() antigos.
+const _confirmNativo = window.confirm;
+let _confCb = null, _confOpcoes = [];
+function perguntar(msg, opcoes, cb, { titulo = 'Confirmar' } = {}) {
+    if (window.confirm !== _confirmNativo) { cb(window.confirm(msg) ? opcoes[0].valor : (opcoes[1] ? opcoes[1].valor : null)); return; }
+    if (_confCb) _confirmarFechar(null);        // pergunta anterior ainda aberta: conta como cancelada
+    _confCb = cb; _confOpcoes = opcoes;
+    $('confTitulo').textContent = titulo;
+    $('confMsg').textContent = msg;
+    const box = $('confBotoes'); box.textContent = '';
+    const mk = (label, cls, fn) => { const b = document.createElement('button'); b.className = cls; b.textContent = label; b.onclick = fn; box.appendChild(b); return b; };
+    mk('Cancelar', 'btn-mcancel', () => _confirmarFechar(null));
+    opcoes.forEach((o, i) => { const b = mk(o.label, 'btn-confirm', () => _confirmarFechar(o.valor)); if (o.perigo) b.style.background = 'var(--danger)'; });
+    $('ovConfirmar').classList.add('open');
+}
+function _confirmarFechar(valor) {
+    const cb = _confCb; _confCb = null;
+    $('ovConfirmar').classList.remove('open');
+    if (cb) cb(valor);
+}
+const _confirmarPrimaria = () => _confOpcoes.length && _confirmarFechar(_confOpcoes[0].valor);
+// Atalhos: confirmar (sim/não), com callback ou em Promise
+function confirmar(msg, { ok = 'OK', perigo = false, titulo } = {}, cb) { perguntar(msg, [{ label: ok, valor: true, perigo }], v => { if (v) cb(); }, { titulo }); }
+const confirmarP = (msg, opts) => new Promise(res => perguntar(msg, [{ label: (opts && opts.ok) || 'OK', valor: true, perigo: !!(opts && opts.perigo) }], v => res(!!v), { titulo: opts && opts.titulo }));
+
 const MODALS = {
     ovFixos:        { close: () => closeFixos() },
     ovAplicarMeses: { close: () => $('ovAplicarMeses').classList.remove('open'), submit: () => confirmarAplicarMeses() },
@@ -3299,6 +3341,7 @@ const MODALS = {
     ovAporte:       { close: () => closeAporte(), submit: () => confirmarAporte() },
     ovFixoRep:      { close: () => closeFixoRep('nao') },
     ovConflict:     {},
+    ovConfirmar:    { close: () => _confirmarFechar(null), submit: () => _confirmarPrimaria() },
     ovCartoes:      { close: () => closeCartoes(), submit: () => salvarCartao() },
     ovExtrato:      { close: () => closeExtrato() },
     mobFormSheet:   { close: () => closeMobForm(), submit: () => mobAdicionar() },
@@ -3897,17 +3940,21 @@ function cancelarEdicao() {
     $('maisField').open = false; formParcInfo(FORM_DESKTOP);
 }
 
-function remover(id) {
+function remover(id, depois) {
     const t = tx.find(x => x.id === id);
     if (!t) { toast('⚠️ Lançamento não encontrado.', '#b45309'); return false; }
     if (t.parcela && parcelasDaSerie(t.parcela.serie).length > 1) { _abrirRemoverParcela(t); return false; }   // pergunta o escopo
-    if (!confirm(`Remover "${t.desc}"?`)) return false;
-    pushUndo(`Remoção de "${t.desc}"`);
-    tx = tx.filter(x => x.id !== id);
-    if (_openInlineId === id) _openInlineId = null;
-    commit();
-    toast('Removido.', '#52525b');
-    return true;
+    // `depois` roda só se a remoção aconteceu (a pergunta pode ser respondida mais tarde)
+    confirmar(`Remover "${t.desc}"?`, { ok: 'Remover', perigo: true }, () => {
+        if (!tx.some(x => x.id === id)) return;      // sumiu enquanto o modal estava aberto (sync de outro aparelho)
+        pushUndo(`Remoção de "${t.desc}"`);
+        tx = tx.filter(x => x.id !== id);
+        if (_openInlineId === id) _openInlineId = null;
+        commit();
+        toast('Removido.', '#52525b');
+        if (depois) depois();
+    });
+    return false;
 }
 
 // ── FIXOS ─────────────────────────────────────────────────────────────────────
@@ -4035,13 +4082,14 @@ function removerFixo(i) {
     if (!s) return;
     // Antes: "Cancelar" no confirm significava "remover só este mês" — quem queria
     // desistir perdia o lançamento. Agora a 1ª pergunta pode abortar.
-    if (!confirm(`Remover o fixo "${s.desc}"?`)) return;
-    const futuro = confirm(`Remover "${s.desc}" também dos meses seguintes?\n\nOK = este e os próximos · Cancelar = só este mês`);
-    const { m, a } = filtro(), ym = ymKey(m, a);
-    pushUndo(`Remoção do fixo "${s.desc}"`);
-    tx = tx.filter(t => !_fixoNoEscopo(t, s.serie, ym, futuro));
-    commit(); renderPopupFixos();
-    toast('Fixo removido.', '#52525b');
+    perguntar(`Remover o fixo "${s.desc}"?`, [{ label: 'Este e os próximos meses', valor: 'futuro', perigo: true }, { label: 'Só este mês', valor: 'este', perigo: true }], escopo => {
+        if (!escopo) return;
+        const futuro = escopo === 'futuro', { m, a } = filtro(), ym = ymKey(m, a);
+        pushUndo(`Remoção do fixo "${s.desc}"`);
+        tx = tx.filter(t => !_fixoNoEscopo(t, s.serie, ym, futuro));
+        commit(); renderPopupFixos();
+        toast('Fixo removido.', '#52525b');
+    });
 }
 
 // ── CATEGORIAS: identidade = (tipo, nome) ────────────────────────────────────
@@ -4094,7 +4142,7 @@ function deleteCategoryFlow(tipo, catName) {
     if (!catName || !(cats[tipo] || []).includes(catName)) return;
     const comEscopo = tipo !== 'entrada';
     if (!comEscopo && !tx.some(t => t.tipo === tipo && t.cat === catName)) {
-        if (confirm(`Remover a categoria "${catName}"?`)) _performCatDelete(tipo, catName, null);
+        confirmar(`Remover a categoria "${catName}"?`, { ok: 'Remover', perigo: true }, () => _performCatDelete(tipo, catName, null));
         return;
     }
     _catDeletePending = { tipo, name: catName };
@@ -4295,6 +4343,19 @@ function exportarCSV(escopo = 'mes') {
     toast(ano ? `CSV de ${a} exportado!` : `CSV de ${MESES[m]} exportado!`);
 }
 
+// Partes ausentes no arquivo mantêm o estado atual; tudo passa pela sanitização
+function _aplicarBackup(d) {
+    const s = sanitizeState({
+        t: d.t || tx, c: d.c || cats, g: d.g || goals, k: d.k || cards, b: d.b || budget, l: d.l || loans,
+    }, Number(d.v) || 2);
+    pushUndo('Importação de backup');
+    _quarantine(s.report);
+    if (Array.isArray(d.q) && d.q.length) _quarantine({ dropped: d.q });
+    restoreState(s);
+    commitAll();
+    renderGoals(); renderCartoesMini();
+    toast(s.report.dropped.length ? `Importado (${s.report.dropped.length} registro(s) inválido(s) ignorado(s)).` : 'Importado!');
+}
 function importar(input) {
     const file = input.files && input.files[0];
     if (!file) return;
@@ -4307,18 +4368,9 @@ function importar(input) {
                 return;
             }
             const n = _asList(d.t).length;
-            if (!confirm(`Substituir os dados atuais pelo backup${d.t ? ` (${n} lançamentos)` : ''}?\nDá para desfazer com Ctrl+Z.`)) return;
-            // Partes ausentes no arquivo mantêm o estado atual; tudo passa pela sanitização
-            const s = sanitizeState({
-                t: d.t || tx, c: d.c || cats, g: d.g || goals, k: d.k || cards, b: d.b || budget, l: d.l || loans,
-            }, Number(d.v) || 2);
-            pushUndo('Importação de backup');
-            _quarantine(s.report);
-            if (Array.isArray(d.q) && d.q.length) _quarantine({ dropped: d.q });
-            restoreState(s);
-            commitAll();
-            renderGoals(); renderCartoesMini();
-            toast(s.report.dropped.length ? `Importado (${s.report.dropped.length} registro(s) inválido(s) ignorado(s)).` : 'Importado!');
+            confirmar(`Substituir os dados atuais pelo backup${d.t ? ` (${n} lançamentos)` : ''}?\nDá para desfazer com Ctrl+Z.`, { ok: 'Substituir', perigo: true }, () => {
+                try { _aplicarBackup(d); } catch (e) { toast('❌ Erro ao importar o backup: ' + e.message, '#dc2626'); }
+            });
         } catch (e) {
             toast('❌ Erro ao ler o backup: ' + e.message, '#dc2626');
         } finally {
@@ -4666,10 +4718,11 @@ async function salvarInbox() {
 }
 function desligarInbox() {
     if (!_currentUser || !inboxCfg()) { _inboxStatus('Já está desligada neste aparelho.'); return; }
-    if (!confirm('Desligar a caixa de entrada neste aparelho? O token é apagado daqui.')) return;
-    lsDel(_inboxKey(_currentUser.uid)); lsDel(_inboxKey(_currentUser.uid) + '_copia');
-    $('inboxRepo').value = ''; $('inboxCopia').checked = false; $('inboxToken').placeholder = 'github_pat_…';
-    _inboxStatus('Desligada neste aparelho.');
+    confirmar('Desligar a caixa de entrada neste aparelho? O token é apagado daqui.', { ok: 'Desligar', perigo: true }, () => {
+        lsDel(_inboxKey(_currentUser.uid)); lsDel(_inboxKey(_currentUser.uid) + '_copia');
+        $('inboxRepo').value = ''; $('inboxCopia').checked = false; $('inboxToken').placeholder = 'github_pat_…';
+        _inboxStatus('Desligada neste aparelho.');
+    });
 }
 
 // ── TABLE ─────────────────────────────────────────────────────────────────────
@@ -5873,11 +5926,13 @@ function salvarGoal() {
 
 function removerGoal(id) {
     const g = goals.find(x => x.id === id);
-    if (!g || !confirm(`Remover a meta "${g.nome}"?`)) return;
-    pushUndo(`Remoção da meta "${g.nome}"`);
-    goals = goals.filter(x => x.id !== id);
-    commitGoals();
-    toast('Meta removida.', '#52525b');
+    if (!g) return;
+    confirmar(`Remover a meta "${g.nome}"?`, { ok: 'Remover', perigo: true }, () => {
+        pushUndo(`Remoção da meta "${g.nome}"`);
+        goals = goals.filter(x => x.id !== id);
+        commitGoals();
+        toast('Meta removida.', '#52525b');
+    });
 }
 
 function abrirAporte(id) {
@@ -5924,11 +5979,16 @@ function deleteAporte(goalId, aporteIdx) {
     const g = goals.find(x => x.id === goalId);
     if (!g || !g.aportes[aporteIdx]) return;
     const a = g.aportes[aporteIdx];
-    if (!confirm(`Remover aporte de ${fmt(a.valor)}?`)) return;
-    pushUndo(`Remoção de aporte em "${g.nome}"`);
-    g.aportes.splice(aporteIdx, 1);
-    commitGoals();
-    toast('Aporte removido.', '#52525b');
+    const sig = x => `${x.data}|${x.valor}|${x.nota || ''}`, alvo = sig(a);
+    confirmar(`Remover aporte de ${fmt(a.valor)}?`, { ok: 'Remover', perigo: true }, () => {
+        // a sync pode ter mexido na meta enquanto o modal estava aberto: relocaliza pelo conteúdo do aporte
+        const g2 = goals.find(x => x.id === goalId), i = g2 ? g2.aportes.findIndex(x => sig(x) === alvo) : -1;
+        if (i < 0) { toast('⚠️ Esse aporte já não existe.', '#b45309'); return; }
+        pushUndo(`Remoção de aporte em "${g2.nome}"`);
+        g2.aportes.splice(i, 1);
+        commitGoals();
+        toast('Aporte removido.', '#52525b');
+    });
 }
 
 function closeAporte(e) { closeOverlay('ovAporte', e); }
@@ -6030,10 +6090,13 @@ function orcNovoPlanejamento() {
 function orcJuntarPlanejamento() {
     const ym = ymKey(_budgetMonth, _budgetYear);
     if (!budget.allocsDe || !budget.allocsDe[ym]) return;
-    if (!confirm(`Apagar o planejamento que começa em ${MESES[_budgetMonth].toLowerCase()}/${_budgetYear}? Esses meses voltam a usar o planejamento anterior.`)) return;
-    pushUndo(`Planejamento de ${MESES[_budgetMonth]}/${_budgetYear} apagado`);
-    delete budget.allocsDe[ym];
-    saveBudget(); renderBudget();
+    const mes = _budgetMonth, ano = _budgetYear;
+    confirmar(`Apagar o planejamento que começa em ${MESES[mes].toLowerCase()}/${ano}? Esses meses voltam a usar o planejamento anterior.`, { ok: 'Apagar', perigo: true }, () => {
+        if (!budget.allocsDe || !budget.allocsDe[ym]) return;
+        pushUndo(`Planejamento de ${MESES[mes]}/${ano} apagado`);
+        delete budget.allocsDe[ym];
+        saveBudget(); renderBudget();
+    });
 }
 function _orcRenderVersao() {
     const el = $('orcVersao'); if (!el) return;
@@ -7109,11 +7172,12 @@ async function signInWithGoogle() {
 async function signOut() {
     if (PREVIEW_MODE || !FIREBASE_OK) return;
     const dirty = _localDirty();
-    if (!confirm(dirty ? 'Há alterações ainda não sincronizadas. Sincronizar e sair?' : 'Sair da conta?')) return;
+    if (!await confirmarP(dirty ? 'Há alterações ainda não sincronizadas. Sincronizar e sair?' : 'Sair da conta?', { ok: dirty ? 'Sincronizar e sair' : 'Sair', titulo: 'Sair da conta' })) return;
     if (dirty) await reconcile({ manual: true });
-    if (_localDirty() && !confirm('A sincronização falhou — as alterações ficam só neste navegador. Sair mesmo assim?')) return;
+    if (_localDirty() && !await confirmarP('A sincronização falhou — as alterações ficam só neste navegador. Sair mesmo assim?', { ok: 'Sair mesmo assim', perigo: true, titulo: 'Sair da conta' })) return;
     // Só oferece apagar quando tudo já está na nuvem (nada se perde)
-    const wipe = !_localDirty() && confirm('Apagar também os dados guardados NESTE navegador?\n\nRecomendado em computador compartilhado. Seus dados continuam na nuvem e voltam no próximo login.');
+    const wipe = !_localDirty() && await new Promise(res => perguntar('Apagar também os dados guardados NESTE navegador?\n\nRecomendado em computador compartilhado. Seus dados continuam na nuvem e voltam no próximo login.',
+        [{ label: 'Sair e apagar daqui', valor: 'apagar', perigo: true }, { label: 'Só sair', valor: 'sair' }], v => res(v === 'apagar'), { titulo: 'Sair da conta' }));
     const uid = _currentUser && _currentUser.uid;   // _currentUser vira null no signOut
     clearInterval(_autoSyncTimer);
     stopRemoteWatch();
@@ -7883,12 +7947,13 @@ function removerCartao(id) {
     if (!c) return;
     const n = tx.filter(t => t.cartaoId === id).length;
     const aviso = n ? `\n\n${n} lançamento(s) deste cartão continuam salvos, mas deixam de aparecer em faturas.` : '';
-    if (!confirm(`Remover "${c.nome}"?${aviso}\nDá para desfazer com Ctrl+Z.`)) return;
+    confirmar(`Remover "${c.nome}"?${aviso}\nDá para desfazer com Ctrl+Z.`, { ok: 'Remover', perigo: true }, () => {
     pushUndo(`Remoção do cartão "${c.nome}"`);
     cards = cards.filter(x => x.id !== id);
     commitAll();
     _renderCartaoList();
     toast('Cartão removido.', '#52525b');
+    });
 }
 
 function resetCartaoForm() {
@@ -8589,16 +8654,21 @@ function salvarLoan() {
 }
 function removerLoan(id) {
     const l = loans.find(x => x.id === id); if (!l) return;
-    if (!confirm(`Remover o empréstimo "${l.nome}"?`)) return;
     const hoje = todayLocalISO(), futuras = tx.filter(t => t.parcela && t.parcela.serie === l.serie && t.data > hoje);
+    const efetivar = (tirar) => {
+        if (!loans.some(x => x.id === id)) return;
+        pushUndo(`Remoção do empréstimo "${l.nome}"`);
+        loans = loans.filter(x => x.id !== id);
+        if (tirar.size) tx = tx.filter(t => !tirar.has(t.id));
+        commitAll();
+        toast('Empréstimo removido.', '#52525b');
+    };
     // Parcelas já vencidas ficam no histórico; as que ainda vão vencer podem sair junto
-    const tirar = futuras.length && confirm(`Remover também as ${futuras.length} parcela${futuras.length !== 1 ? 's' : ''} que ainda vão vencer, dos lançamentos?\n\nOK = remover as futuras (as já vencidas ficam no histórico) · Cancelar = manter todos os lançamentos`)
-        ? new Set(futuras.map(t => t.id)) : new Set();
-    pushUndo(`Remoção do empréstimo "${l.nome}"`);
-    loans = loans.filter(x => x.id !== id);
-    if (tirar.size) tx = tx.filter(t => !tirar.has(t.id));
-    commitAll();
-    toast('Empréstimo removido.', '#52525b');
+    if (!futuras.length) { confirmar(`Remover o empréstimo "${l.nome}"?`, { ok: 'Remover', perigo: true }, () => efetivar(new Set())); return; }
+    const n = futuras.length;
+    perguntar(`Remover o empréstimo "${l.nome}"?\n\nHá ${n} parcela${n !== 1 ? 's' : ''} que ainda vão vencer nos lançamentos. As já vencidas ficam no histórico.`,
+        [{ label: 'Remover e tirar as futuras', valor: 'tirar', perigo: true }, { label: 'Remover, manter lançamentos', valor: 'manter', perigo: true }],
+        v => { if (v) efetivar(v === 'tirar' ? new Set(futuras.map(t => t.id)) : new Set()); });
 }
 
 // Caixa "Parcelas do mês" (Orçamento): o que vence no mês, quantas faltam e o quanto

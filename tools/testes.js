@@ -270,6 +270,22 @@ function runSelfTests() {
             r3.state.tx.filter(t => t.parcela && t.parcela.serie === 'P9').map(t => t.parcela.k)],
            [['aplicado', 'aplicado', 'ignorado: já existe', 'aplicado', 'aplicado', 'ignorado: planejamento inválido'], 1, 4, [1, 2]]);
     }
+    {   // modal de confirmação próprio: Enter/botão escolhe, Cancelar/Esc devolve null, mensagem como texto
+        const c0 = window.confirm; window.confirm = _confirmNativo;
+        const ab = () => $('ovConfirmar').classList.contains('open');
+        try {
+            let got = 'x';
+            perguntar('Apagar <img src=x onerror=1>?', [{ label: 'Sim', valor: 'a' }, { label: 'Outra', valor: 'b' }], v => { got = v; });
+            const r1 = [ab(), $('confMsg').querySelector('img') === null, $('confBotoes').children.length];
+            _confirmarPrimaria(); const r2 = [got, ab()];
+            perguntar('de novo', [{ label: 'Sim', valor: 'a' }], v => { got = v; }); MODALS.ovConfirmar.close();
+            const r3 = [got, ab()];
+            perguntar('de novo', [{ label: 'Sim', valor: 'a' }, { label: 'Outra', valor: 'b' }], v => { got = v; }); $('confBotoes').children[2].click();
+            eq('confirmar: modal próprio (abre, escolhe, cancela, sem HTML)', [r1, r2, r3, got], [[true, true, 3], ['a', false], [null, false], 'b']);
+            window.confirm = () => false; let sync = 'x'; perguntar('m', [{ label: 'A', valor: 1 }, { label: 'B', valor: 2 }], v => { sync = v; });
+            eq('confirmar: com window.confirm trocado responde na hora', sync, 2);
+        } finally { window.confirm = c0; if (ab()) $('ovConfirmar').classList.remove('open'); }
+    }
     {   // CONFIG congelado e UNDO_MAX respeitado
         const uBak = undoStack; undoStack = [];
         for (let i = 0; i < CONFIG.UNDO_MAX + 5; i++) pushUndo('t' + i);
