@@ -2,6 +2,40 @@
 
 Análise de 07/10/2026 sobre o estado atual da `main` (commit `5c2379f`). Sem dados financeiros neste arquivo.
 
+## Status da execução (07/10/2026)
+
+Aplicado e na `main` (bateria verde: autoteste, sync, fuzz, XSS, CSP, celular, fusos, fluxos, tema, navegação, gráficos):
+
+| Item | Situação |
+|---|---|
+| 1.1 CSP | ✅ sem script inline; `connect-src`/`frame-src` abertos a `https:` de propósito (login do Firebase) |
+| 1.2 / 9.E token | ✅ aviso de vencimento + apagado no logout |
+| 1.3 / 9.I regras | ✅ `database.rules.json` + checagem de escrita |
+| 1.4 referrer, 5.1 zoom, 5.6 autocomplete, 6.1/6.3 PWA | ✅ |
+| 2.1 changelog, 2.2 testes fora do app | ✅ (`CHANGELOG.md`, `tools/testes.js`) |
+| 2.4 service worker | ✅ pré-cache, fontes, limite de cópias |
+| 3.2 handlers inline | ✅ `data-on*` + `handlers.js` (sem eval) |
+| 3.1 módulos | 🟡 parcial: `index.html` / `app.js` / `handlers.js` / `tema.js`; `app.js` segue sendo um arquivo só (dividir em módulos ES exige reorganizar ~430 funções globais) |
+| 3.3 funções gigantes | ✅ `_orcLigar` em blocos (`runSelfTests` ficou em `tools/`) |
+| 3.5 CONFIG | ✅ |
+| 4.1/4.2 CI + gráficos | ✅ GitHub Actions: lint, bateria com Chart.js, capturas |
+| 4.3 testes de UI, 4.4 capturas, 4.5, 4.6 lint | ✅ |
+| 5.2 modo escuro, 5.3 a11y, 5.4 hash, 5.5 confirmações | ✅ |
+| 7.1–7.3, 7.5 | ✅ (README, package.json, settings.json) |
+| 9.A, 9.B, 9.C (espera + limite), 9.C (backup diário), 9.F, 9.G, 9.H | ✅ |
+| Seção 8 | ✅ comparativo com o ano anterior; já existiam: impressão, parcelas, alertas do orçamento |
+
+Não feito, de propósito:
+
+- **2.3 build/minificação**: o app segue sem build (decisão de manter simples); ganho de ~35% no tamanho não compensa uma etapa de build.
+- **3.4 `html\`` com escape automático e 3.6 estilos inline → classes**: ~100 `innerHTML` e ~290 `style=""`; o escape já é coberto pelo teste de XSS e a CSP agora impede script injetado. Migrar seria churn sem ganho de segurança.
+- **3.7 `@ts-check`**: gera milhares de avisos sem tipagem prévia; o ESLint (`tools/lint.mjs`) cobre o essencial.
+- **6.2 aviso de nova versão**: o SW é "rede primeiro"; o risco real é o oposto (resolvido por 9.A).
+- **7.4 LICENSE**: decisão do dono (sem licença = todos os direitos reservados).
+- **9.D sync incremental por item**: exige migrar o formato dos dados no Firebase (quebra apps antigos); em vez disso o painel Backup mostra o tamanho da base e avisa acima de 1,5 MB.
+- **Backup diário precisa de 1 ação do dono**: publicar `database.rules.json` no console do Firebase (inclui `finances_bak`). Sem isso o app funciona normal e só não grava as cópias.
+
+
 ## Resumo
 
 O app é um único `index.html` (9.895 linhas, 654 KB: ~34 KB de changelog no `<head>`, ~101 KB de CSS, ~451 KB de JS) mais `sw.js`, manifest e `tools/checks.mjs`. A bateria passa limpa (autoteste 151/151, sync 0 problemas, fuzz 0 violações, segurança ok, celular ok, 5 fusos ok). A parte de dados (sanitização, sync de 3 vias, migração) é sólida e bem testada.
