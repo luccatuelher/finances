@@ -2,7 +2,7 @@
 
 Este arquivo é o **prompt e o manual** do loop de melhoria do app de finanças. Uma sessão
 na nuvem começa sem nenhum contexto: tudo o que ela precisa saber está aqui ou no próprio
-`index.html` (changelog no `<head>`). Ao fim de cada iteração, a sessão atualiza a seção 8
+`index.html` (changelog em `CHANGELOG.md`). Ao fim de cada iteração, a sessão atualiza a seção 8
 deste arquivo.
 
 ---
@@ -43,7 +43,7 @@ Pare quando eu pedir ou quando não houver mais melhoria relevante a fazer.
   (login Google).
 - **Modo preview** (`index.html?preview=1`): sem login e sem nuvem, dados de exemplo (`SEED`),
   armazenamento isolado no prefixo `preview:`. É onde TODO teste acontece.
-  `?preview=1&selftest` roda o autoteste ao carregar.
+  Os testes ficam em `tools/testes.js` (fora do app publicado); `node tools/checks.mjs` os injeta. À mão: abra `?preview=1` e cole o conteúdo de `tools/testes.js` no console, depois `await runSelfTests()`.
 
 ### Conceitos que o código já usa (reaproveite, não duplique)
 
@@ -71,7 +71,7 @@ O mapa completo está nos cabeçalhos `// ── NOME ──` do script (`grep -
    token de CSS, descritor). Nunca trate só o caso que você viu.
 2. **Prove antes de corrigir**: reproduza o problema (teste que falha, ou medição) e mostre
    que passa depois. Quando for possível, mostre também que o teste pegaria a versão antiga.
-3. **Todo fix ganha autoteste** em `runSelfTests()` (seção `// ── AUTOTESTE`) e o
+3. **Todo fix ganha autoteste** em `runSelfTests()` (em `tools/testes.js`, seção `// ── AUTOTESTE`) e o
    contador da linha "AUTOTESTE" do changelog é atualizado.
 4. **Nada de regressão**: a bateria da seção 5 passa inteira antes de registrar a iteração.
 5. **Iterações pequenas**: uma área (ou um risco) por vez, um commit por iteração.

@@ -14,7 +14,10 @@ const server = createServer(async (req, res) => {
     const p = join(process.cwd(), decodeURIComponent(new URL(req.url, 'http://x').pathname));
     // Só os arquivos do app: nada de .git/.claude nem caminhos fora da pasta
     if (!p.startsWith(process.cwd() + '/') || /\/\.(git|claude)(\/|$)/.test(p)) { res.writeHead(404); res.end(); return; }
-    const body = await readFile(p.endsWith('/') ? p + 'index.html' : p);
+    let body = await readFile(p.endsWith('/') ? p + 'index.html' : p);
+    // Os testes (tools/testes.js) não fazem parte do app publicado: entram só aqui, como <script> comum
+    // depois do script do app (escopo global compartilhado com as funções e variáveis do app)
+    if (extname(p) === '.html') body = Buffer.from(body.toString().replace('</body>', '<script src="/tools/testes.js"></script>\n</body>'));
     res.writeHead(200, { 'content-type': TIPOS[extname(p)] || 'application/octet-stream' }); res.end(body);
   } catch { res.writeHead(404); res.end(); }
 }).listen(5577, '127.0.0.1');
