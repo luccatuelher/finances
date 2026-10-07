@@ -2310,6 +2310,27 @@ if (IS_MOBILE) document.body.classList.add('mobile');
 // works purely off local (localStorage/seed) data.
 const PREVIEW_MODE = new URLSearchParams(location.search).has('preview');
 
+// ── CONFIG ────────────────────────────────────────────────────────────────────
+// Limites e prazos do app num lugar só (antes espalhados como números soltos). Congelado.
+const CONFIG = Object.freeze({
+    UNDO_MAX: 30,                       // passos de desfazer guardados
+    UNDO_GRUPO_MS: 10000,               // edições seguidas do mesmo campo viram um passo
+    QUARENTENA_MAX: 500,                // registros inválidos guardados (os mais recentes)
+    INBOX_PROCESSADOS_MAX: 300,         // histórico de operações da caixa de entrada
+    INBOX_MAX_DEL: 10,                  // exclusões por rodada da caixa (acima, nenhuma é feita)
+    INBOX_MIN_MS: 2 * 60 * 1000,        // checagens automáticas da caixa
+    ESTADO_MIN_MS: 10 * 60 * 1000,      // cópia dos dados (estado.json) no máximo a cada…
+    TOKEN_AVISO_DIAS: 14,               // avisa quando o token do GitHub vence em até N dias
+    SYNC_INTERVALO_MS: 5 * 60 * 1000,   // sincronização automática periódica
+    SYNC_PASSIVA_MIN_MS: 60 * 1000,     // gatilhos passivos (foco/visibilidade) no máximo a cada…
+    SYNC_PRAZO_MS: 20000,               // prazo de uma operação com o servidor
+    SYNC_DEBOUNCE_MS: 1500,             // várias edições seguidas = 1 envio
+    FIXO_REPLICAR_MESES: 12,            // meses gerados ao criar/renovar um fixo
+    BACKUP_LEMBRETE_DIAS: 30,           // alerta de "faz tempo que não baixa um backup"
+    VIRADA_DIA_MS: 60 * 1000,           // confere virada de dia com o app aberto
+    NOTA_MAX: 500,                      // nota de meta/empréstimo
+});
+
 // ── DOM CACHE ─────────────────────────────────────────────────────────────────
 // DOM helper
 function $(id) { return document.getElementById(id); }
@@ -2953,7 +2974,7 @@ function _sanLoans(list) {
         return { id, nome: String(l.nome ?? '').trim().slice(0, DESC_MAX) || 'Empréstimo',
                  valor: money(l.valor), taxa: Number.isFinite(taxa) && taxa > 0 ? Math.min(100, +taxa.toFixed(4)) : 0,
                  n: n >= 1 && n <= LOAN_N_MAX ? n : 1, parcela: money(l.parcela), primeira: _normDate(l.primeira) || '',
-                 serie: typeof l.serie === 'string' && l.serie ? l.serie : 'E' + id, nota: String(l.nota ?? '').slice(0, 500) };
+                 serie: typeof l.serie === 'string' && l.serie ? l.serie : 'E' + id, nota: String(l.nota ?? '').slice(0, CONFIG.NOTA_MAX) };
     });
 }
 function _sanGoals(list, report) {
@@ -3048,7 +3069,7 @@ function _quarantine(report) {
     const novos = report.dropped.filter(x => { const k = JSON.stringify(x); if (seen.has(k)) return false; seen.add(k); return true; });
     if (!novos.length) return;
     console.warn(`${novos.length} registro(s) inválido(s) movidos para fin5_quarantine`, novos);
-    storeJSON('fin5_quarantine', cur.concat(novos).slice(-500));
+    storeJSON('fin5_quarantine', cur.concat(novos).slice(-CONFIG.QUARENTENA_MAX));
     // Antes só havia o console.warn: para o usuário o lançamento simplesmente sumia
     if (typeof toast === 'function' && $('toast')) toast(`⚠️ ${novos.length} registro(s) sem data/valor válido separado(s) — veja em Backup.`, '#b45309');
     if (typeof renderQuarentena === 'function') renderQuarentena();
@@ -3253,7 +3274,7 @@ function init() {
         });
         if (IS_MOBILE) mobOnTipoChange();
         // Virada de dia com o app aberto: verifica a cada minuto e ao voltar para a aba
-        setInterval(_checkDayChange, 60 * 1000);
+        setInterval(_checkDayChange, CONFIG.VIRADA_DIA_MS);
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') _checkDayChange(); });
     }
     safeRender(_marcarSort);
@@ -3499,13 +3520,13 @@ function goToMensal(m, a) {
 // grupo: edições seguidas do MESMO campo (cada tecla do total do orçamento, ajustes de uma
 // alocação) viram UM passo, com o estado de antes da primeira — sem isso, um passo por
 // tecla esgotaria as 30 posições da pilha. Janela de 10 s renovada a cada edição.
-const UNDO_GRUPO_MS = 10000;
+const UNDO_GRUPO_MS = CONFIG.UNDO_GRUPO_MS;
 function pushUndo(label, grupo = null) {
     const top = undoStack[undoStack.length - 1], agora = Date.now();
     if (grupo && top && top.grupo === grupo && agora - top.at < UNDO_GRUPO_MS) { top.at = agora; return; }
     redoStack = [];   // uma ação nova encerra o "refazer"
     undoStack.push({ snap: snapshotState(), label, grupo, at: agora });
-    if (undoStack.length > 30) undoStack.shift();
+    if (undoStack.length > CONFIG.UNDO_MAX) undoStack.shift();
     _updateUndoBtn();
 }
 function _updateUndoBtn() {
@@ -3837,7 +3858,7 @@ function adicionar() {
 
 // Quantos meses um fixo novo é replicado (inclui o mês do lançamento). Antes ia só
 // "até dezembro" — criado em dezembro, não replicava nada.
-const FIXO_REPLICAR_MESES = 12;
+const FIXO_REPLICAR_MESES = CONFIG.FIXO_REPLICAR_MESES;
 
 function closeFixoRep(opcao) {
     $('ovFixoRep').classList.remove('open');
@@ -4225,7 +4246,7 @@ function exportar() {
 
 // Nuvem + navegador não bastam como única cópia (conta comprometida, regra errada,
 // exclusão acidental sincronizada). Lembra de exportar um arquivo a cada 30 dias.
-const BACKUP_LEMBRETE_DIAS = 30;
+const BACKUP_LEMBRETE_DIAS = CONFIG.BACKUP_LEMBRETE_DIAS;
 function renderBackupAge() {
     const el = $('backupAge');
     if (!el) return;
@@ -4323,8 +4344,8 @@ function importar(input) {
 const INBOX_ARQ = 'inbox.json', ESTADO_ARQ = 'estado.json';
 // `parcela` ({ serie, k, n }) liga lançamentos soltos numa série; `serie` é a recorrência de um fixo
 const INBOX_CAMPOS = ['desc', 'valor', 'data', 'tipo', 'cat', 'pagamento', 'cartaoId', 'faturaData', 'fixo', 'juros', 'parcela', 'serie'];
-const INBOX_MIN_MS  = 2 * 60 * 1000;     // checagens automáticas no máximo a cada 2 min
-const ESTADO_MIN_MS = 10 * 60 * 1000;    // cópia dos dados no máximo a cada 10 min
+const INBOX_MIN_MS  = CONFIG.INBOX_MIN_MS;     // checagens automáticas no máximo a cada 2 min
+const ESTADO_MIN_MS = CONFIG.ESTADO_MIN_MS;    // cópia dos dados no máximo a cada 10 min
 // Por conta: outra conta entrando no mesmo navegador não herda o token nem a caixa
 const _inboxKey = uid => 'fin5_inbox_' + uid;
 function inboxCfg() { return _currentUser ? loadJSON(_inboxKey(_currentUser.uid), null) : null; }
@@ -4396,7 +4417,7 @@ function _inboxOrcamento(b, o, txs) {
 // Aplica as operações sobre um estado (sem mutar o original). Devolve o estado novo
 // (sanitizado) e o resultado de cada operação: 'aplicado' ou 'ignorado: motivo'.
 // Operações: add/update/delete (lançamentos), orcamento, emprestimo (acao add/update/delete).
-const INBOX_MAX_DEL = 10;   // exclusões por rodada; acima disso nenhuma exclusão é feita (tudo-ou-nada)
+const INBOX_MAX_DEL = CONFIG.INBOX_MAX_DEL;   // exclusões por rodada; acima disso nenhuma exclusão é feita (tudo-ou-nada)
 function inboxAplicar(state, ops, { maxDel = INBOX_MAX_DEL } = {}) {
     // Exclusão em massa quase sempre é erro (id errado, lista errada): não apaga nada, o dono confirma e reenvia
     const nDel = _asList(ops).filter(o => o && o.id && ((o.op === 'delete') || (o.op === 'emprestimo' && o.acao === 'delete'))).length;
@@ -4553,7 +4574,7 @@ async function _inboxProcessar(cfg) {
         const feitos = new Set(resultados.map(x => x.id));
         for (let tent = 0; ; tent++) {
             const novo = { versao: 1, ops: ops.filter(o => !feitos.has(String((o && o.id) || ''))),
-                           processados: [..._asList(dados && dados.processados), ...resultados].slice(-300) };
+                           processados: [..._asList(dados && dados.processados), ...resultados].slice(-CONFIG.INBOX_PROCESSADOS_MAX) };
             if (await _ghGravar(cfg, INBOX_ARQ, novo, sha, `App: ${resultados.length} operação(ões) processada(s)`)) break;
             if (tent >= 3) throw new Error('não consegui marcar como processadas (as alterações já estão no app; tento de novo depois)');
             ({ sha, dados } = await _ghLer(cfg, INBOX_ARQ));
@@ -4602,7 +4623,7 @@ async function checkInbox({ manual = false } = {}) {
             const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
             const dExp = _ghDiasParaExpirar();
             _inboxStatus(`✓ Verificado às ${hora}` + (r.processadas ? ` — ${r.aplicadas} aplicada(s)` : ' — nada novo') + (r.copia ? ' · cópia dos dados atualizada' : '')
-                + (dExp !== null && dExp <= 14 ? ` · ⚠️ o token do GitHub ${dExp <= 0 ? 'venceu' : 'vence em ' + dExp + ' dia(s)'} — gere outro` : ''));
+                + (dExp !== null && dExp <= CONFIG.TOKEN_AVISO_DIAS ? ` · ⚠️ o token do GitHub ${dExp <= 0 ? 'venceu' : 'vence em ' + dExp + ' dia(s)'} — gere outro` : ''));
             if (manual && !r.processadas) toast('✓ Caixa de entrada: nada novo.');
             return r;
         } catch (e) {
@@ -7342,14 +7363,14 @@ function _marcarDesatualizado(remote) {
 let _syncing = null, _syncQueued = false, _conflictOpen = false, _pendingConflictRemote = null;
 
 let _lastRemoteCheck = 0;
-const PASSIVE_SYNC_MIN_MS = 60 * 1000;
+const PASSIVE_SYNC_MIN_MS = CONFIG.SYNC_PASSIVA_MIN_MS;
 // passive = gatilhos oportunistas (foco, visibilidade, timer): pulam se houve checagem
 // recente e não há nada local pendente — cada checagem baixa a base inteira
 // Sem conexão o SDK do Firebase não falha: once()/transaction() ficam pendurados até a rede
 // voltar — o botão mostrava "Sync…" para sempre e "Sair" com pendências travava em silêncio.
 // Offline declarado → estado "Offline" na hora (o evento 'online' retoma); conexão instável
 // → prazo vira erro. Uma transação que ainda confirme depois é segura (é condicional ao ts).
-const SYNC_PRAZO_MS = 20000;
+const SYNC_PRAZO_MS = CONFIG.SYNC_PRAZO_MS;
 function _comPrazo(promessa, ms, msg) {
     let t;
     return Promise.race([promessa, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(msg)), ms); })]).finally(() => clearTimeout(t));
@@ -7468,7 +7489,7 @@ function _applyRemote(remote, { keepUndo = false } = {}) {
 }
 
 // Salvamentos locais disparam uma sincronização agrupada (várias edições seguidas = 1 envio)
-const _syncSoon = debounce(() => reconcile(), 1500);
+const _syncSoon = debounce(() => reconcile(), CONFIG.SYNC_DEBOUNCE_MS);
 function schedulePush() { if (SYNC_ENABLED && _currentUser) _syncSoon(); }
 function syncNow() { return reconcile({ manual: true }); }
 
@@ -7574,7 +7595,7 @@ async function checkDbRules(db = fbDb) {
 
 function setupAutoSync() {
     clearInterval(_autoSyncTimer);
-    _autoSyncTimer = setInterval(() => { reconcile({ passive: true }); updateSyncTime(); checkInbox(); }, 5 * 60 * 1000);
+    _autoSyncTimer = setInterval(() => { reconcile({ passive: true }); updateSyncTime(); checkInbox(); }, CONFIG.SYNC_INTERVALO_MS);
     _watchRemoteTs();
     if (_syncListenersOn) return;
     _syncListenersOn = true;
@@ -8539,7 +8560,7 @@ function salvarLoan() {
         const l = loans.find(x => x.id === toId(editId));
         if (!l) return toast('⚠️ Empréstimo não encontrado.', '#b45309');
         pushUndo(`Edição do empréstimo "${nome}"`);
-        loans = loans.map(x => x.id === l.id ? { ...x, nome: nome.slice(0, DESC_MAX), nota: nota.slice(0, 500) } : x);
+        loans = loans.map(x => x.id === l.id ? { ...x, nome: nome.slice(0, DESC_MAX), nota: nota.slice(0, CONFIG.NOTA_MAX) } : x);
         // parcelas já lançadas acompanham o novo nome
         tx = tx.map(t => {
             if (!t.parcela || t.parcela.serie !== l.serie) return t;
@@ -8556,7 +8577,7 @@ function salvarLoan() {
     if (!(n >= 2 && n <= LOAN_N_MAX)) return toast(`⚠️ Informe de 2 a ${LOAN_N_MAX} parcelas.`, '#b45309');
     if (!(parcela > 0) || !_valorOk(parcela)) return toast('⚠️ Valor da parcela inválido.', '#b45309');
     if (!isValidISODate(primeira)) return toast('⚠️ Informe a data da 1ª parcela.', '#b45309');
-    const id = newId(), l = { id, nome: nome.slice(0, DESC_MAX), valor: roundMoney(valor), taxa: +taxa.toFixed(4), n, parcela: roundMoney(parcela), primeira, serie: 'E' + id, nota: nota.slice(0, 500) };
+    const id = newId(), l = { id, nome: nome.slice(0, DESC_MAX), valor: roundMoney(valor), taxa: +taxa.toFixed(4), n, parcela: roundMoney(parcela), primeira, serie: 'E' + id, nota: nota.slice(0, CONFIG.NOTA_MAX) };
     const modo = $('loanLancar').value, gerar = modo === 'juros' || modo === 'parcela';
     pushUndo(`Novo empréstimo "${nome}"`);
     loans = loans.concat(l);

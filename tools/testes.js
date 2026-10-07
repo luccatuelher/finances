@@ -270,6 +270,12 @@ function runSelfTests() {
             r3.state.tx.filter(t => t.parcela && t.parcela.serie === 'P9').map(t => t.parcela.k)],
            [['aplicado', 'aplicado', 'ignorado: já existe', 'aplicado', 'aplicado', 'ignorado: planejamento inválido'], 1, 4, [1, 2]]);
     }
+    {   // CONFIG congelado e UNDO_MAX respeitado
+        const uBak = undoStack; undoStack = [];
+        for (let i = 0; i < CONFIG.UNDO_MAX + 5; i++) pushUndo('t' + i);
+        eq('CONFIG: congelado e desfazer limitado', [Object.isFrozen(CONFIG), undoStack.length], [true, CONFIG.UNDO_MAX]);
+        undoStack = uBak;
+    }
     eq('trava de esquema: servidor mais novo', [_remotoMaisNovo({ v: SCHEMA_VERSION + 1 }), _remotoMaisNovo({ v: String(SCHEMA_VERSION) }), _remotoMaisNovo({}), _remotoMaisNovo(null), _buildPayload().appV === APP_BUILD], [true, false, false, false, true]);
     {   // empréstimo pela caixa: ids das parcelas derivados do contrato (dois aparelhos processando juntos não duplicam)
         const b0 = sanitizeState({}), op = { id: 'e9', op: 'emprestimo', acao: 'add', loan: { id: 1850000000001, nome: 'Giro', valor: 1000, taxa: 2, n: 4, parcela: 300, primeira: '2026-10-15' }, lancar: 'parcela' };
