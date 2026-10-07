@@ -316,6 +316,16 @@ function runSelfTests() {
             eq('handlers: delegação sobe como o bubbling, stopPropagation e forEach', [a1, a2, marcados], [[['filho'], ['pai']], [['para']], [true, true]]);
         } finally { raiz.remove(); }
     }
+    {   // Anual: comparativo com o ano anterior (ano fechado: período inteiro)
+        const bk = snapshotState(), f0 = filtro();
+        try {
+            restoreState(sanitizeState({ t: [
+                { id: 8001, desc: 'Sal23', valor: 1000, data: '2023-03-05', tipo: 'entrada', cat: 'C' }, { id: 8002, desc: 'Sal24', valor: 1500, data: '2024-03-05', tipo: 'entrada', cat: 'C' },
+                { id: 8003, desc: 'G23', valor: 400, data: '2023-02-10', tipo: 'saida', cat: 'C' }, { id: 8004, desc: 'G24', valor: 200, data: '2024-02-10', tipo: 'saida', cat: 'C' }] }));
+            setFiltro(0, 2024, { render: false }); renderAnual();
+            eq('anual: comparativo com o ano anterior', [$('aKpiEntSub').textContent, $('aKpiGasSub').textContent, $('aKpiInvSub').textContent], ['▲ +50% vs 2023', '▼ 50% vs 2023', '']);
+        } finally { restoreState(bk); setFiltro(f0.m, f0.a, { render: false }); }
+    }
     {   // CONFIG congelado e UNDO_MAX respeitado
         const uBak = undoStack; undoStack = [];
         for (let i = 0; i < CONFIG.UNDO_MAX + 5; i++) pushUndo('t' + i);

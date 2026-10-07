@@ -3197,6 +3197,22 @@ function renderAnual() {
     const aSaldo = roundMoney(aEnt - aGas - aInv);
     const saldoNow = roundMoney(sNowEnt - sNowGas - sNowInv);
 
+    // Comparativo com o ano anterior no MESMO período (ano em andamento: jan até o mês atual; senão o ano todo)
+    {
+        const ate = a === curYear ? curMonth : 11;
+        let cEnt = 0, cGas = 0, cInv = 0, pEnt = 0, pGas = 0, pInv = 0;
+        for (let m = 0; m <= ate; m++) {
+            txMes(m, a).forEach(t => { if (t.tipo === 'entrada') cEnt += t.valor; else if (t.tipo === 'investimento') cInv += t.valor; else cGas += t.valor; });
+            txMes(m, a - 1).forEach(t => { if (t.tipo === 'entrada') pEnt += t.valor; else if (t.tipo === 'investimento') pInv += t.valor; else pGas += t.valor; });
+        }
+        const per = a === curYear ? ` (jan–${MESES[ate].slice(0, 3).toLowerCase()})` : '';
+        const dlt = (cur, old) => {
+            if (!(old > 0) || !(cur > 0)) return '';
+            const d = Math.round((cur - old) / old * 100);
+            return d === 0 ? `= ${a - 1}${per}` : `${d > 0 ? '▲ +' : '▼ '}${Math.abs(d)}% vs ${a - 1}${per}`;
+        };
+        [['aKpiEntSub', cEnt, pEnt], ['aKpiGasSub', cGas, pGas], ['aKpiInvSub', cInv, pInv]].forEach(([id, c, o]) => { const el = $(id); if (el) el.textContent = dlt(c, o); });
+    }
     $('aKpiEnt').textContent = fmt(aEnt);
     $('aKpiGas').textContent = fmt(aGas);
     $('aKpiInv').textContent = fmt(aInv);
