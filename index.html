@@ -428,6 +428,8 @@
            do formulário. A visibilidade só some DEPOIS da animação de saída; ao abrir, na hora. */
         .overlay, .mob-form-sheet, .mob-edit-sheet { visibility: hidden; }
         .overlay { transition: opacity .18s, visibility 0s linear .18s; }
+        /* confirmações abrem por cima da folha de edição do celular (z-index 300) */
+        #ovConfirmar, #ovParcRemover { z-index: 400; }
         .mob-form-sheet, .mob-edit-sheet { transition: visibility 0s linear .35s; }
         .overlay.open, .mob-form-sheet.open, .mob-edit-sheet.open { visibility: visible; transition-delay: 0s; }
         .modal { background: var(--surface); border-radius: 14px; padding: 24px; box-shadow: 0 20px 50px rgba(0,0,0,.15); max-width: 95vw; transform: translateY(10px) scale(.98); transition: transform .22s cubic-bezier(.4,0,.2,1), opacity .22s; opacity: 0; }
@@ -546,7 +548,7 @@
         .login-logo { font-size:22px; font-weight:800; letter-spacing:-.5px; margin-bottom:6px; }
         .login-logo span { color:var(--text-3); font-weight:400; }
         .login-sub { font-size:13px; color:var(--text-3); margin-bottom:28px; }
-        .btn-google { display:flex; align-items:center; justify-content:center; gap:10px; width:100%; padding:11px 16px; background:#fff; border:1.5px solid var(--border); border-radius:10px; font-size:14px; font-weight:600; cursor:pointer; font-family:inherit; color:var(--text); transition:box-shadow .2s, border-color .2s, transform .1s; }
+        .btn-google { display:flex; align-items:center; justify-content:center; gap:10px; width:100%; padding:11px 16px; background:#fff; color:#1f2937; border:1.5px solid var(--border); border-radius:10px; font-size:14px; font-weight:600; cursor:pointer; font-family:inherit; color:var(--text); transition:box-shadow .2s, border-color .2s, transform .1s; }
         .btn-google:hover { box-shadow:0 2px 12px rgba(0,0,0,.1); border-color:#aaa; }
         .btn-google:active { transform: scale(.98); }
         .btn-google img { width:20px; height:20px; }
@@ -2416,7 +2418,7 @@ function ciclarTema() {
     try { renderAll(); renderGoals(); } catch (e) {}      // gráficos e cores montadas em JS
     toast('Tema: ' + (prox === 'auto' ? 'automático (segue o sistema)' : prox), '#52525b');
 }
-try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (_temaSalvo() === 'auto') { _aplicarTema(); try { renderAll(); } catch (e) {} } }); } catch (e) {}
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (_temaSalvo() === 'auto') { _aplicarTema(); try { renderAll(); renderGoals(); } catch (e) {} } }); } catch (e) {}
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 // Limites e prazos do app num lugar só (antes espalhados como números soltos). Congelado.
@@ -3416,7 +3418,8 @@ function init() {
 // O de conflito de sync não tem close — exige uma decisão explícita.
 // ── CONFIRMAÇÃO PRÓPRIA (no lugar de confirm()) ───────────────────────────────
 // perguntar(msg, opcoes, cb): mostra o modal; cb(valor) uma vez — null se cancelou (Esc, voltar, fora do
-// quadro, Cancelar). opcoes = [{ label, valor, perigo? }] (a 1ª é a ação principal; Enter a escolhe).
+// quadro, Cancelar). opcoes = [{ label, valor, perigo? }] (a 1ª é a ação principal). O foco inicial fica em
+// Cancelar (Enter sem querer não destrói nada); Enter num botão ativa o botão focado.
 // A mensagem entra por textContent (nomes de lançamentos são texto do usuário).
 // Quando um teste troca window.confirm (fuzz), responde na hora e de forma síncrona: true → 1ª opção,
 // false → 2ª opção (ou null se só houver uma) — a mesma semântica dos confirm() antigos.
@@ -7332,8 +7335,10 @@ async function signOut() {
     if (dirty) await reconcile({ manual: true });
     if (_localDirty() && !await confirmarP('A sincronização falhou — as alterações ficam só neste navegador. Sair mesmo assim?', { ok: 'Sair mesmo assim', perigo: true, titulo: 'Sair da conta' })) return;
     // Só oferece apagar quando tudo já está na nuvem (nada se perde)
-    const wipe = !_localDirty() && await new Promise(res => perguntar('Apagar também os dados guardados NESTE navegador?\n\nRecomendado em computador compartilhado. Seus dados continuam na nuvem e voltam no próximo login.',
-        [{ label: 'Sair e apagar daqui', valor: 'apagar', perigo: true }, { label: 'Só sair', valor: 'sair' }], v => res(v === 'apagar'), { titulo: 'Sair da conta' }));
+    let wipe = _localDirty() ? 'sair' : await new Promise(res => perguntar('Apagar também os dados guardados NESTE navegador?\n\nRecomendado em computador compartilhado. Seus dados continuam na nuvem e voltam no próximo login.',
+        [{ label: 'Sair e apagar daqui', valor: 'apagar', perigo: true }, { label: 'Só sair', valor: 'sair' }], res, { titulo: 'Sair da conta' }));
+    if (wipe === null) return;      // Cancelar/Esc/voltar na última pergunta: continua logado
+    wipe = wipe === 'apagar';
     const uid = _currentUser && _currentUser.uid;   // _currentUser vira null no signOut
     clearInterval(_autoSyncTimer);
     stopRemoteWatch();
@@ -7570,10 +7575,12 @@ let _bakRef = () => {       // trocado pelos testes; no preview nunca toca no Fi
     return fbDb.ref(`finances_bak/${_currentUser.uid}`);
 };
 const _erroPermissao = e => /permission/i.test((e && (e.code || e.message)) || '');
+let _bakEmCurso = false;
 async function _backupDiario(remote) {
-    if (!_currentUser || !remote || _remotoMaisNovo(remote)) return;
+    if (!_currentUser || !remote || _remotoMaisNovo(remote) || _bakEmCurso) return;   // um por vez: o 2º veria já o estado enviado
     const hoje = todayLocalISO(), marca = 'fin5_bak_' + _currentUser.uid;
     if (lsGet(marca) === hoje) return;
+    _bakEmCurso = true;
     try {
         const ref = _bakRef();
         const meta = (await _comPrazo(ref.child('meta').once('value'), CONFIG.SYNC_PRAZO_MS, 'backup sem resposta')).val() || {};
@@ -7587,7 +7594,7 @@ async function _backupDiario(remote) {
         if (_erroPermissao(e)) {      // regra ainda não publicada no console do Firebase
             if (lsGet('fb_bakAviso') !== hoje) { lsSet('fb_bakAviso', hoje); console.warn('Backup diário indisponível: publique database.rules.json (inclui finances_bak).'); }
         } else if (!(e && e.message === 'backup indisponível')) console.warn('Backup diário falhou:', e && e.message);
-    }
+    } finally { _bakEmCurso = false; }
 }
 function closeBackups() { $('ovBackups').classList.remove('open'); }
 async function abrirBackups() {
@@ -7613,7 +7620,7 @@ async function restaurarBackup(dia) {
         if (_remotoMaisNovo(raw)) { toast('⚠️ Essa cópia é de uma versão mais nova do app — recarregue a página.', '#b45309'); return; }
         const d = _mapKeys(raw, _fbKeyDec);
         closeBackups();
-        confirmar(`Substituir os dados atuais pela cópia de ${dia.split('-').reverse().join('/')} (${_asList(d.t).length} lançamentos)?\nDá para desfazer com Ctrl+Z.`, { ok: 'Restaurar', perigo: true }, () => _aplicarBackup(d));
+        confirmar(`Substituir os dados atuais pela cópia de ${dia.split('-').reverse().join('/')} (${_asList(d.t).length} lançamentos)?\nDá para desfazer com Ctrl+Z.`, { ok: 'Restaurar', perigo: true }, () => _aplicarBackup({ t: [], g: [], k: [], l: [], b: {}, ...d }));   // o Firebase não guarda vazios: ausente = vazio (como em _applyRemote)
     } catch (e) { toast('❌ Não consegui ler a cópia: ' + e.message, '#dc2626'); }
 }
 function _buildPayload() {
@@ -7866,13 +7873,12 @@ async function checkDbRules(db = fbDb) {
     lsSet('fb_rulesCheck', hoje);
     if (escritaAberta && !aberto) console.warn('⚠️ Regras do Firebase permitem ESCRITA fora do próprio uid. Aplique:\n' + JSON.stringify(DB_RULES_RECOMENDADAS, null, 2));
     if (escritaAberta && !aberto) { toast('⚠️ Segurança: as regras do Firebase permitem escrita em dados de outras contas — veja o console.', '#dc2626'); }
-    if (escritaAberta) return true;
     if (aberto) {
         console.warn('⚠️ Regras do Firebase ABERTAS: qualquer conta logada pode ler dados de outras.\n'
             + 'Firebase Console → Realtime Database → Regras, aplique:\n' + JSON.stringify(DB_RULES_RECOMENDADAS, null, 2));
         toast('⚠️ Segurança: as regras do Firebase permitem ler dados de outras contas — veja o console.', '#dc2626');
     }
-    return aberto;
+    return aberto || escritaAberta;
 }
 
 function setupAutoSync() {
@@ -8788,9 +8794,9 @@ function renderLoans() {
                 </div>
             </div>
             <div class="goal-desc">${l.nota ? escHtml(l.nota) : '&nbsp;'}</div>
-            <div class="goal-amounts"><div class="goal-atual" style="color:#6d28d9">${quitado ? '✓ Quitado' : fmt(r.falta)}</div><div class="goal-target">${quitado ? fmt(r.total) : 'falta pagar'}</div></div>
+            <div class="goal-amounts"><div class="goal-atual" style="color:var(--invest)">${quitado ? '✓ Quitado' : fmt(r.falta)}</div><div class="goal-target">${quitado ? fmt(r.total) : 'falta pagar'}</div></div>
             <div class="goal-track"><div class="goal-fill" style="width:${pct}%;background:var(--invest)"></div></div>
-            <div class="goal-meta-row"><span class="goal-pct" style="color:#6d28d9">${r.pagas} de ${l.n} parcelas pagas</span><span>${pct}%</span></div>
+            <div class="goal-meta-row"><span class="goal-pct" style="color:var(--invest)">${r.pagas} de ${l.n} parcelas pagas</span><span>${pct}%</span></div>
             <div class="loan-facts">
                 <div><small>Parcela</small><b>${fmt(l.parcela)}</b></div>
                 <div><small>Emprestado</small><b>${fmt(l.valor)}</b></div>
@@ -9132,7 +9138,7 @@ const HERO_FOLGA_ESTILO = {
     borderColor: HERO_VERDE, borderWidth: 3, tension: .35,
     fill: { target: 'origin', above: 'rgba(124,245,180,.14)', below: 'rgba(255,140,120,.26)' },
     segment: { borderColor: c => (c.p1.parsed.y < 0 ? HERO_CORAL : HERO_VERDE) },
-    pointBackgroundColor: _cssVar('--surface', '#fff'), pointBorderWidth: 2,
+    pointBackgroundColor: '#fff', pointBorderWidth: 2,   // o hero é azul nos dois temas
     pointBorderColor: c => (c.parsed && c.parsed.y < 0 ? HERO_CORAL : HERO_VERDE),
 };
 const HERO_FOLGA_OPCOES = {

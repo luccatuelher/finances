@@ -676,6 +676,14 @@ async function _runSyncFuzzImpl(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120) {
                     [apos.length === CONFIG.BAK_DIAS && dadosOk, 'poda errada: ' + apos.length + ' metas / ' + Object.keys(mem.dados).length + ' dados'], [apos.includes(hojeReal), 'backup de hoje foi podado'],
                     [igual, 'restaurar não devolveu o mesmo estado'],
                 ].filter(([ok]) => !ok).map(([, m]) => 'backup diário: ' + m));
+                // chamadas simultâneas: só a primeira grava (a 2ª veria o estado já enviado, não o "antes")
+                mem.meta = {}; mem.dados = {}; lsDel(marca);
+                await Promise.all([_backupDiario(rem(11)), _backupDiario(rem(22))]);
+                if (Object.keys(mem.meta).length !== 1 || (mem.dados[hojeReal] || {}).ts !== 11) problems.push('backup diário: chamadas simultâneas gravaram o estado errado');
+                // restaurar: chave ausente na cópia = vazio (empréstimo atual não sobrevive a uma cópia sem empréstimos)
+                loans = _sanLoans([{ id: newId(), nome: 'Giro', valor: 1000, n: 4, parcela: 300, primeira: '2026-10-10' }]);
+                _aplicarBackup({ t: [], g: [], k: [], l: [], b: {}, ...(_mapKeys(mem.dados[hojeReal], _fbKeyDec)) });
+                if (loans.length) problems.push('backup diário: restaurar manteve empréstimo que não está na cópia');
                 // permissão negada não derruba nada
                 _bakRef = () => ({ child: () => ({ once: async () => { const e = new Error('PERMISSION_DENIED'); e.code = 'PERMISSION_DENIED'; throw e; } }) });
                 lsDel(marca); await _backupDiario(rem(5));

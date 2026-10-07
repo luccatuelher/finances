@@ -97,6 +97,17 @@ mpg.on('console', m => { if (m.type() === 'error' && !/Failed to load resource: 
 if (chartjs) await mpg.route('**/chart.umd.min.js', r => r.fulfill({ status: 200, contentType: 'text/javascript', body: chartjs }));
 await mpg.goto(url); await mpg.waitForFunction(() => typeof runSelfTests === 'function');
 const mob = await mpg.evaluate(async () => ({ mobile: IS_MOBILE, self: (await runSelfTests()).fails, fuzz: await runFuzz() }));
+// Celular: a confirmação de excluir abre POR CIMA da folha de edição (z-index) e dá para tocar nos botões
+const mobConf = await mpg.evaluate(async () => {
+  restoreState(sanitizeState({ t: SEED })); commitAll(); setFiltro(1, 2026);
+  openMobEdit(tx[0].id); mobEditDelete(); await new Promise(r => setTimeout(r, 300));
+  const b = document.querySelector('#confBotoes button:last-child'), r = b.getBoundingClientRect();
+  const topo = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+  const ok = !!topo && !!topo.closest('#ovConfirmar');
+  _confirmarFechar(null); closeMobEdit();
+  return ok;
+});
+if (!mobConf) mob.self.push({ name: 'celular: confirmação de excluir fica atrás da folha de edição' });
 const mobilFalhas = (mob.mobile ? 0 : 1) + mob.self.length + (mob.fuzz || []).length + merros.length;
 await mctx.close();
 // Segurança: nomes/descrições hostis (HTML, aspas, </script>) em todas as telas + clique em tudo que os carrega no handler
