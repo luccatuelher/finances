@@ -14,6 +14,9 @@ Como o Claude lança gastos direto no app, sem o dono precisar exportar/importar
 4. Se o dono ligou a opção **"Guardar cópia dos meus dados"**, o app também grava `estado.json`
    (mesmo formato do backup) no repositório privado — use-o para conferir duplicados antes de lançar.
 
+O app **recusa repositório público** (confere `private: true` no GitHub a cada rodada, ao salvar a
+configuração e antes de gravar `estado.json`): um dono/nome errado nunca publica os dados.
+
 O app checa a caixa ao abrir (depois da 1ª sincronização), ao voltar para a aba/janela e a cada
 5 minutos (no máximo a cada 2 min). Configuração: seção Backup → "📥 Caixa de entrada do Claude"
 (no celular: formulário de lançamento → link no rodapé). O token fica só no aparelho (localStorage,
@@ -52,10 +55,15 @@ por conta Google) e nunca vai para o Firebase nem para o chat.
   novos. Campos aceitos: desc, valor, data, tipo, cat, pagamento, cartaoId, faturaData, fixo, juros,
   parcela (liga lançamentos soltos numa série; `null` desliga), serie (recorrência de um fixo).
   `espera` compara também objetos (`"parcela": null` = ainda solta).
+  **`espera` é obrigatória** no `update` (ao menos um campo da lista acima; sem ela → `ignorado: update exige espera`)
+  e chaves fora dessa lista → `ignorado: espera inválida`.
   Se o dono editou o lançamento depois, `espera` não bate → `ignorado: mudou desde então`.
 - Fixo: `fixo: true` + a mesma `serie` em todos os meses (ex.: `"serie": "S<id>"`); o app replica
   12 meses quando o dono cria pela tela — pela caixa, mande um `add` por mês.
-- `delete`: remove se `espera` bater; se já não existe → `ignorado: já não existe`.
+- `delete`: remove se `espera` bater; se já não existe → `ignorado: já não existe`. **`espera` precisa ter `desc` e
+  `valor`** (senão `ignorado: delete exige espera com desc e valor`). **Limite: 10 exclusões por rodada**
+  (lançamentos + empréstimos); com mais, NENHUMA exclusão é feita (`ignorado: N exclusões numa rodada…`) e
+  as demais operações seguem — confirme com o dono e reenvie em lotes de até 10.
 - `orcamento` (aplicado nesta ordem; mande só as partes que quer mudar):
   ```json
   { "id": "2026-10-02-010", "op": "orcamento",

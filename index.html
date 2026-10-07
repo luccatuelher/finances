@@ -376,6 +376,12 @@
         anteriores, totais por mês, planejamento em reais ou %, grupos, valor fixo), `emprestimo`
         (add com lançamento dos juros, update, delete) e `parcela`/`serie` no update (ligar parcelas
         e fixos que já existem). Autoteste +4 (149); fuzz cobre os planejamentos.
+      • RISCOS DE DADOS (revisão Opus, out/2026): (1) caixa de entrada só usa repositório PRIVADO
+        (GET /repos → private === true, a cada rodada, ao salvar e antes de gravar estado.json);
+        (2) `espera` obrigatória em update/delete (delete exige desc+valor) e máx. 10 exclusões por
+        rodada (tudo-ou-nada); (3) SCHEMA_VERSION 4 + `appV` no payload: app com esquema mais antigo
+        que o servidor não aplica, não mescla e não grava ("Atualize"); edições locais ficam pendentes
+        e a caixa de entrada pausa. Autoteste +5 (156), cenário "app antigo" no runSyncFuzz.
       Ferramentas de manutenção (use após qualquer mudança, em index.html?preview):
         runSelfTests() · runFuzz() · runSyncFuzz()
     -->
@@ -3225,7 +3231,10 @@ const DEFAULT_CATS = {
     investimento: ["🛡️ Renda Fixa","📈 Ações","₿ Cripto","🏦 Fundo"]
 };
 // v3: fatura de cartões com vencimento ≤ fechamento corrigida; fixos ganham `serie`
-const SCHEMA_VERSION = 3;
+// v4: sem migração de dados; o número sobe junto com campos novos (`l`, `parcela`, `allocsDe`...) para que um
+// app ANTIGO (que descartaria o que não conhece) se recuse a gravar por cima — ver _remotoMaisNovo()
+const SCHEMA_VERSION = 4;
+const APP_BUILD = 20261007;   // só diagnóstico (gravado em `appV`); a trava usa SCHEMA_VERSION
 
 // ── SANITIZAÇÃO ───────────────────────────────────────────────────────────────
 // TODO dado externo (localStorage, Firebase, backup) passa por aqui antes de virar
@@ -4761,7 +4770,11 @@ function _inboxOrcamento(b, o, txs) {
 // Aplica as operações sobre um estado (sem mutar o original). Devolve o estado novo
 // (sanitizado) e o resultado de cada operação: 'aplicado' ou 'ignorado: motivo'.
 // Operações: add/update/delete (lançamentos), orcamento, emprestimo (acao add/update/delete).
-function inboxAplicar(state, ops) {
+const INBOX_MAX_DEL = 10;   // exclusões por rodada; acima disso nenhuma exclusão é feita (tudo-ou-nada)
+function inboxAplicar(state, ops, { maxDel = INBOX_MAX_DEL } = {}) {
+    // Exclusão em massa quase sempre é erro (id errado, lista errada): não apaga nada, o dono confirma e reenvia
+    const nDel = _asList(ops).filter(o => o && o.id && ((o.op === 'delete') || (o.op === 'emprestimo' && o.acao === 'delete'))).length;
+    const delBloqueado = nDel > maxDel;
     const lista = state.tx.map(t => ({ ...t }));
     const porId = new Map(lista.map(t => [t.id, t]));
     const confere = (t, espera) => Object.entries(espera && typeof espera === 'object' ? espera : {}).every(([k, v]) =>
@@ -4786,6 +4799,13 @@ function inboxAplicar(state, ops) {
         if (o.op === 'update' || o.op === 'delete') {
             const t = porId.get(toId(o.txId));
             if (!t) return res(o.op === 'delete' ? 'ignorado: já não existe' : 'ignorado: não existe');
+            // `espera` é a trava contra id errado/edição do dono: sem ela a operação não vale
+            const esp = o.espera && typeof o.espera === 'object' && !Array.isArray(o.espera) ? o.espera : null;
+            if (esp && Object.keys(esp).some(k => !INBOX_CAMPOS.includes(k))) return res('ignorado: espera inválida');
+            if (o.op === 'delete') {
+                if (!esp || typeof esp.desc !== 'string' || !Number.isFinite(+esp.valor) || esp.valor === null || esp.valor === '') return res('ignorado: delete exige espera com desc e valor');
+                if (delBloqueado) return res(`ignorado: ${nDel} exclusões numa rodada (máx ${maxDel}) — confirme com o dono e reenvie`);
+            } else if (!esp || !Object.keys(esp).length) return res('ignorado: update exige espera');
             if (!confere(t, o.espera)) return res('ignorado: mudou desde então');
             if (o.op === 'delete') { porId.delete(t.id); removidos.add(t); return res('aplicado'); }
             const muda = o.muda && typeof o.muda === 'object' ? o.muda : {};
@@ -4811,7 +4831,10 @@ function inboxAplicar(state, ops) {
             }
             const l = loansN.find(x => x.id === toId(o.loanId));
             if (!l) return res(o.acao === 'delete' ? 'ignorado: já não existe' : 'ignorado: não existe');
-            if (o.acao === 'delete') { loansN = loansN.filter(x => x !== l); return res('aplicado'); }
+            if (o.acao === 'delete') {
+                if (delBloqueado) return res(`ignorado: ${nDel} exclusões numa rodada (máx ${maxDel}) — confirme com o dono e reenvie`);
+                loansN = loansN.filter(x => x !== l); return res('aplicado');
+            }
             if (o.acao === 'update') {
                 const muda = o.muda && typeof o.muda === 'object' ? o.muda : {};
                 const ok = ['nome', 'nota'].filter(k => typeof muda[k] === 'string');
@@ -4844,6 +4867,16 @@ async function _ghReq(cfg, method, arq, body) {
     return _comPrazo(_inboxFetch(`https://api.github.com/repos/${cfg.repo}/contents/${arq}`,
         { method, headers, cache: 'no-store', body: body ? JSON.stringify(body) : undefined }), SYNC_PRAZO_MS, 'GitHub sem resposta');
 }
+// A caixa e a cópia dos dados só podem usar repositório PRIVADO: este app e o `finances` são públicos
+// e um erro de digitação no dono/nome publicaria todos os lançamentos. Campo ausente conta como público.
+async function _ghRepoPrivado(cfg) {
+    const r = await _comPrazo(_inboxFetch(`https://api.github.com/repos/${cfg.repo}`,
+        { headers: _ghHeaders(cfg), cache: 'no-store' }), SYNC_PRAZO_MS, 'GitHub sem resposta');
+    if (!r.ok) throw _ghErro(r.status);
+    const j = await r.json().catch(() => null);
+    if (!j || j.private !== true)
+        throw new Error(`o repositório ${cfg.repo} é PÚBLICO (ou não deu para confirmar que é privado). A caixa de entrada só funciona com repositório privado — nada foi gravado`);
+}
 // Arquivo inexistente → { sha: null, dados: null }
 async function _ghLer(cfg, arq) {
     const r = await _ghReq(cfg, 'GET', arq);
@@ -4868,6 +4901,7 @@ async function _ghGravar(cfg, arq, dados, sha, msg) {
 }
 
 async function _inboxProcessar(cfg) {
+    await _ghRepoPrivado(cfg);      // a cada rodada: cobre config antiga e repositório que virou público
     let { sha, dados } = await _ghLer(cfg, INBOX_ARQ);
     let ops = dados && Array.isArray(dados.ops) ? dados.ops : [];
     let resultados = [];
@@ -4905,6 +4939,7 @@ async function _inboxCopiaEstado(cfg) {
     const key = _inboxKey(_currentUser.uid) + '_copia';
     const h = _stateHash(), ult = loadJSON(key, null);
     if (ult && (ult.hash === h || Date.now() - ult.em < ESTADO_MIN_MS)) return false;
+    await _ghRepoPrivado(cfg);      // defesa própria: este arquivo contém TODOS os dados financeiros
     const dados = { t: tx, c: cats, g: goals, k: cards, b: budget, l: loans, v: SCHEMA_VERSION, exportedAt: new Date().toISOString() };
     let sha = ult && ult.sha;
     for (let tent = 0; tent < 3; tent++) {
@@ -4920,6 +4955,7 @@ function _inboxStatus(msg) { _inboxMsg = msg; const el = $('inboxStatus'); if (e
 async function checkInbox({ manual = false } = {}) {
     const cfg = inboxCfg();
     if (!cfg || !cfg.repo || !cfg.token || !SYNC_ENABLED || !_currentUser || _conflictOpen || _offline()) return null;
+    if (_appDesatualizado) return null;   // não marca operações como processadas num app que não consegue sincronizar
     if (!manual && Date.now() - _inboxUltima < INBOX_MIN_MS) return null;
     if (_inboxRodando) return _inboxRodando;
     _inboxRodando = (async () => {
@@ -4958,6 +4994,11 @@ async function salvarInbox() {
     const antes = inboxCfg() || {};
     const token = $('inboxToken').value.trim() || antes.token || '';
     if (!token) { _inboxStatus('⚠️ Cole o token do GitHub.'); return; }
+    if (SYNC_ENABLED) {   // não guarda token de um repositório público/inexistente
+        _inboxStatus('Verificando o repositório…');
+        try { await _ghRepoPrivado({ repo, token }); }
+        catch (e) { _inboxStatus('❌ ' + e.message); return; }
+    }
     storeJSON(_inboxKey(_currentUser.uid), { repo, token, copia: $('inboxCopia').checked });
     $('inboxToken').value = '';
     $('inboxToken').placeholder = 'token salvo neste aparelho (vazio = manter)';
@@ -7642,7 +7683,23 @@ function _userRef() {
 function _buildPayload() {
     // JSON round-trip remove undefined/NaN (o set() do Firebase rejeita undefined)
     const data = JSON.parse(JSON.stringify({ t: tx, c: cats, g: goals, k: cards, b: budget, l: loans }));
-    return { ..._mapKeys(data, _fbKeyEnc), ts: Date.now(), v: SCHEMA_VERSION };
+    return { ..._mapKeys(data, _fbKeyEnc), ts: Date.now(), v: SCHEMA_VERSION, appV: APP_BUILD };
+}
+
+// Servidor com esquema mais novo que este app: este app ainda NÃO conhece campos que o outro grava e
+// os descartaria ao regravar a base inteira em todos os aparelhos. Então não aplica, não mescla e não
+// grava; as edições locais ficam salvas neste aparelho (pendentes) até recarregar a página.
+const _remotoMaisNovo = r => !!r && Number(r.v) > SCHEMA_VERSION;
+let _appDesatualizado = false;
+function _marcarDesatualizado(remote) {
+    if (!_appDesatualizado) {
+        _appDesatualizado = true;
+        const cons = remote && remote.appV ? ` (outro aparelho está na versão ${remote.appV})` : '';
+        toast('⚠️ Este app está desatualizado' + cons + ' — recarregue a página. Nada foi sincronizado; suas alterações ficam salvas aqui.', '#d97706');
+        try { navigator.serviceWorker.getRegistration().then(r => r && r.update()).catch(() => {}); } catch (e) {}
+    }
+    setSyncState('err', 'Atualize');
+    return 'stale';
 }
 
 let _syncing = null, _syncQueued = false, _conflictOpen = false, _pendingConflictRemote = null;
@@ -7677,7 +7734,7 @@ async function reconcile({ initial = false, manual = false, passive = false } = 
             const r = await _reconcileOnce();
             lsSet('fb_lastSync', String(Date.now()));
             updateSyncTime();
-            setSyncState(r === 'conflict' ? 'err' : 'ok', r === 'conflict' ? 'Conflito' : 'Sync');
+            if (r !== 'stale') setSyncState(r === 'conflict' ? 'err' : 'ok', r === 'conflict' ? 'Conflito' : 'Sync');
             if (r === 'pulled' && !initial) toast('🔥 Dados atualizados de outro dispositivo.', '#f97316');
             if (manual && r === 'noop') toast('✓ Tudo sincronizado.');
         } catch (e) {
@@ -7697,6 +7754,7 @@ async function _reconcileOnce() {
     const meta   = _getSyncMeta();
     const remote = (await _comPrazo(_userRef().once('value'), SYNC_PRAZO_MS, 'sem resposta do servidor (conexão instável?)')).val();
     _lastRemoteCheck = Date.now();
+    if (_remotoMaisNovo(remote)) return _marcarDesatualizado(remote);
     const localDirty = !meta || meta.hash !== _stateHash();
     if (!remote) return _pushCAS(null);                      // conta nova: sobe o local
     const remoteTs = remote.ts || 0;
@@ -7709,6 +7767,7 @@ async function _reconcileOnce() {
 
 // Os dois lados mudaram: tenta o merge de 3 vias; só pergunta se houver conflito real
 async function _mergeOrConflict(remote, attempt = 0) {
+    if (_remotoMaisNovo(remote)) return _marcarDesatualizado(remote);
     const base = _getSyncBase();
     if (base && attempt < 3) {
         const rs = sanitizeState(_mapKeys(remote, _fbKeyDec), Number(remote.v) || 2);
@@ -7739,10 +7798,12 @@ async function _pushCAS(expectedTs, attempt = 0) {
         // cur === null pode ser só cache vazio: devolve o payload e o servidor
         // re-executa com o valor real se ele não bater
         if (cur !== null && (cur.ts || 0) !== expectedTs) return;   // aborta
+        if (cur !== null && _remotoMaisNovo(cur)) return;           // outro aparelho já tem esquema mais novo
         return payload;
     }, undefined, false), SYNC_PRAZO_MS, 'gravação sem confirmação do servidor (conexão instável?)');
     if (!res.committed) {
         const remote = res.snapshot.val();
+        if (_remotoMaisNovo(remote)) return _marcarDesatualizado(remote);
         if (remote) return _mergeOrConflict(remote, attempt);
         throw new Error('gravação não confirmada');
     }
@@ -7803,6 +7864,7 @@ async function resolveConflict(choice) {
     _pendingConflictRemote = null;
     _conflictOpen = false;
     if (!remote) return;
+    if (_remotoMaisNovo(remote)) { _marcarDesatualizado(remote); return; }
     try {
         const base = _getSyncBase();
         if (base) {
@@ -9460,7 +9522,7 @@ function runSelfTests() {
             { id: 'e1', op: 'emprestimo', acao: 'add', loan: { id: 801, nome: 'Giro', valor: 1000, taxa: 0, n: 4, parcela: 300, primeira: '2026-10-15' }, lancar: 'juros' },
             { id: 'e2', op: 'emprestimo', acao: 'add', loan: { id: 801, nome: 'Giro', valor: 1000, n: 4, parcela: 300, primeira: '2026-10-15' } },
             { id: 'p1', op: 'update', txId: 702, espera: { parcela: null }, muda: { parcela: { serie: 'P9', k: 1, n: 2 } } },
-            { id: 'p2', op: 'update', txId: 703, muda: { parcela: { serie: 'P9', k: 2, n: 2 } } },
+            { id: 'p2', op: 'update', txId: 703, espera: { parcela: null }, muda: { parcela: { serie: 'P9', k: 2, n: 2 } } },
             { id: 'o2', op: 'orcamento', planejamento: { de: '2026-13', pct: {} } }]);
         const bb = r3.state.budget;
         eq('caixa de entrada: orçamento a partir de um mês (passado congelado)', [bb.total, bb.monthTotals['2026-08'], bb.monthTotals['2026-09'], bb.monthTotals['2026-11'], bb.allocs.C, bb.allocsDe['2026-10'], bb.needsWants.D, bb.locks.D],
@@ -9468,6 +9530,21 @@ function runSelfTests() {
         eq('caixa de entrada: empréstimo e parcelas ligadas', [r3.resultados.map(x => x.resultado), r3.state.loans.length, r3.state.tx.filter(t => t.parcela && t.parcela.serie === 'E801').length,
             r3.state.tx.filter(t => t.parcela && t.parcela.serie === 'P9').map(t => t.parcela.k)],
            [['aplicado', 'aplicado', 'ignorado: já existe', 'aplicado', 'aplicado', 'ignorado: planejamento inválido'], 1, 4, [1, 2]]);
+    }
+    eq('trava de esquema: servidor mais novo', [_remotoMaisNovo({ v: SCHEMA_VERSION + 1 }), _remotoMaisNovo({ v: String(SCHEMA_VERSION) }), _remotoMaisNovo({}), _remotoMaisNovo(null), _buildPayload().appV === APP_BUILD], [true, false, false, false, true]);
+    {   // caixa de entrada: espera obrigatória e limite de exclusões por rodada
+        const mk = n => sanitizeState({ t: Array.from({ length: n }, (_, i) => ({ id: 3000 + i, desc: 'L' + i, valor: 10 + i, data: '2026-09-01', tipo: 'saida', cat: 'C' })) });
+        const b = mk(12), dl = (i, esp) => ({ id: 'd' + i, op: 'delete', txId: 3000 + i, ...(esp === undefined ? { espera: { desc: 'L' + i, valor: 10 + i } } : esp ? { espera: esp } : {}) });
+        const res = (st, ops, o) => inboxAplicar(st, ops, o).resultados.map(x => x.resultado);
+        eq('caixa: delete sem espera / só com valor / espera inválida', res(b, [dl(0, null), dl(1, { valor: 11 }), dl(2, { foo: 1 }), dl(3, { desc: 'L3', valor: null })]),
+           ['ignorado: delete exige espera com desc e valor', 'ignorado: delete exige espera com desc e valor', 'ignorado: espera inválida', 'ignorado: delete exige espera com desc e valor']);
+        eq('caixa: update sem espera / vazia', res(b, [{ id: 'u0', op: 'update', txId: 3000, muda: { valor: 1 } }, { id: 'u1', op: 'update', txId: 3001, espera: {}, muda: { valor: 1 } }]),
+           ['ignorado: update exige espera', 'ignorado: update exige espera']);
+        const onze = Array.from({ length: 11 }, (_, i) => dl(i)).concat({ id: 'a1', op: 'add', tx: { id: 3500, desc: 'Novo', valor: 5, data: '2026-09-02', tipo: 'saida', cat: 'C' } });
+        const r11 = inboxAplicar(b, onze);
+        eq('caixa: 11 exclusões numa rodada não apagam nada (add segue)', [r11.resultados.filter(x => /exclusões numa rodada/.test(x.resultado)).length, r11.resultados[11].resultado, r11.state.tx.length], [11, 'aplicado', 13]);
+        const dez = inboxAplicar(b, Array.from({ length: 10 }, (_, i) => dl(i)));
+        eq('caixa: 10 exclusões passam e reaplicar é idempotente', [dez.resultados.every(x => x.resultado === 'aplicado'), dez.state.tx.length, _stateHash(inboxAplicar(dez.state, Array.from({ length: 10 }, (_, i) => dl(i))).state) === _stateHash(dez.state)], [true, 2, true]);
     }
     // Planejamento por período: cada mês usa o último planejamento que começou até ele
     {
@@ -9801,6 +9878,18 @@ async function _runSyncFuzzImpl(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120) {
             const perdidos = [...criados].filter(id => !apagados.has(id) && !noServidor.has(id));
             if (perdidos.length) problems.push(`seed ${S}: ${perdidos.length} lançamento(s) criado(s) e nunca apagado(s) sumiram (conflito descartou mudança não conflitante)`);
         }
+        {   // app antigo: servidor com esquema mais novo nunca é sobrescrito nem mesclado
+            const novo = { t: {}, v: SCHEMA_VERSION + 1, ts: Date.now() + 5000, appV: 99999999, campoFuturo: { x: 1 } };
+            server.data = norm(novo); use({ state: snapshotState(), meta: null, base: null });
+            tx = tx.concat(makeTx({ desc: 'local pendente', valor: 7, data: '2026-01-02', tipo: 'saida', cat: '', fixo: false, pagamento: undefined, cartaoId: null }));
+            const antes = JSON.stringify(server.data), nTx = tx.length;
+            const r1 = await _reconcileOnce(), r2 = await _pushCAS(null), r3 = await _mergeOrConflict(clone(server.data));
+            if (![r1, r2, r3].every(r => r === 'stale')) problems.push('app antigo: esperava "stale", veio ' + [r1, r2, r3].join('/'));
+            if (JSON.stringify(server.data) !== antes) problems.push('app antigo: sobrescreveu um servidor com esquema mais novo');
+            if (tx.length !== nTx) problems.push('app antigo: perdeu edição local pendente');
+            if (await checkInbox({ manual: true }) !== null) problems.push('app antigo: a caixa de entrada rodou');
+            _appDesatualizado = false;
+        }
         problems.push(...await _testeInbox());
     } finally {
         _userRef = savedRef; _currentUser = savedUser; toast = savedToast; window.confirm = savedConfirm;
@@ -9820,14 +9909,14 @@ async function _runSyncFuzzImpl(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120) {
 async function _testeInbox() {
     const problemas = [], p = m => problemas.push('caixa de entrada: ' + m);
     const arquivos = {};   // arquivo → { sha, content (base64) }
-    let n = 0, concorrente = null, statusForcado = 0;
+    let n = 0, concorrente = null, statusForcado = 0, repoPrivado = true;
     const resp = (st, body) => ({ status: st, ok: st >= 200 && st < 300, json: async () => body });
     const origFetch = _inboxFetch, cfgKey = _inboxKey(_currentUser.uid);
     _inboxFetch = async (url, init = {}) => {
         if (statusForcado) return resp(statusForcado, {});
         const m = url.match(/\/repos\/dono\/caixa(?:\/contents\/(.+))?$/);
         if (!m) return resp(404, {});
-        if (!m[1]) return resp(200, {});
+        if (!m[1]) return resp(200, { private: repoPrivado });
         const arq = m[1];
         if ((init.method || 'GET') === 'GET') return arquivos[arq] ? resp(200, { sha: arquivos[arq].sha, content: arquivos[arq].content }) : resp(404, {});
         const body = JSON.parse(init.body);
@@ -9846,7 +9935,7 @@ async function _testeInbox() {
         const iniciais = [
             { id: 'op1', op: 'add', tx: { id: 1900000000001, desc: 'Raia ✓', valor: 33.67, data: '2026-09-26', tipo: 'saida', cat: '💊 Saúde' } },
             { id: 'op2', op: 'update', txId: t1.id, espera: { valor: t1.valor }, muda: { valor: roundMoney(t1.valor + 1) } },
-            { id: 'op3', op: 'delete', txId: t2.id, espera: { valor: t2.valor } },
+            { id: 'op3', op: 'delete', txId: t2.id, espera: { desc: t2.desc, valor: t2.valor } },
         ];
         grava(INBOX_ARQ, { versao: 1, ops: iniciais, processados: [] });
         concorrente = () => { const d = le(INBOX_ARQ); d.ops.push({ id: 'op4', op: 'add', tx: { id: 1900000000002, desc: 'Nova', valor: 5, data: '2026-09-27', tipo: 'saida' } }); grava(INBOX_ARQ, d); };
@@ -9871,6 +9960,19 @@ async function _testeInbox() {
         delete arquivos[INBOX_ARQ];
         const r5 = await _inboxProcessar(inboxCfg());
         if (r5.processadas !== 0) p('sem inbox.json deveria ser "nada novo"');
+        // Repositório público (ou sem o campo `private`): recusa e não grava nada
+        grava(INBOX_ARQ, { versao: 1, ops: [{ id: 'pub1', op: 'add', tx: { id: 1900000000009, desc: 'Pub', valor: 1, data: '2026-09-28', tipo: 'saida' } }], processados: [] });
+        const antesPub = [_stateHash(), 0, arquivos[INBOX_ARQ].sha];
+        for (const forma of [false, undefined]) {
+            repoPrivado = forma;
+            try { await _inboxProcessar(inboxCfg()); p('repositório público não foi recusado'); }
+            catch (e) { if (!/PÚBLICO/.test(e.message)) p('erro inesperado (público): ' + e.message); }
+        }
+        lsDel(cfgKey + '_copia'); delete arquivos[ESTADO_ARQ];
+        try { await _inboxCopiaEstado(inboxCfg()); p('cópia dos dados foi gravada em repositório público'); } catch (e) {}
+        if (arquivos[ESTADO_ARQ] || _stateHash() !== antesPub[0] || arquivos[INBOX_ARQ].sha !== antesPub[2]) p('algo foi gravado em repositório público');
+        repoPrivado = true;
+        delete arquivos[INBOX_ARQ];
         try { await _inboxProcessar({ repo: 'outro/repo', token: 't' }); p('repositório inexistente não deu erro'); }
         catch (e) { if (!/repositório não encontrado/.test(e.message)) p('erro inesperado (repositório): ' + e.message); }
         statusForcado = 401;
