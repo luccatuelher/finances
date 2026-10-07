@@ -43,7 +43,7 @@ function runSelfTests() {
     }
     {   // acessibilidade: rótulo associado, clicável no Tab, fundo de modal/container ignorados, glifo nomeado
         const d = document.createElement('div');
-        d.innerHTML = '<div class="field"><label>Valor</label><input id="__a11yT"></div><div onclick="f()">Abrir</div>'
+        d.innerHTML = '<div class="field"><label>Valor</label><input id="__a11yT"></div><div data-onclick="f()">Abrir</div>'
             + '<div onclick="event.stopPropagation()"><input></div><div class="overlay" onclick="if(event.target===this)x()"></div><button>✕</button>';
         _a11y(d);
         const [, clic, stop, ov] = d.children;
@@ -290,6 +290,31 @@ function runSelfTests() {
         const c0 = sortCol, d0 = sortDir; sortCol = 'valor'; sortDir = 'desc'; _marcarSort();
         eq('aria-sort na coluna ativa', _SORT_COLS.map(c => $('si-' + c).closest('th').getAttribute('aria-sort')), _SORT_COLS.map(c => c === 'valor' ? 'descending' : 'none'));
         sortCol = c0; sortDir = d0; _marcarSort();
+    }
+    {   // handlers declarativos (data-onclick...): subconjunto aceito, recusas e delegação
+        const log = []; window.hxA = (...a) => log.push(a);
+        const el = document.createElement('input'); el.value = 'v'; el.checked = true; el.dataset.val = 'dv';
+        const ev = { target: el, key: 'Enter', stopPropagation() {}, preventDefault() {} };
+        const roda = c => { log.length = 0; try { const env = __hx.rodar(c, el, ev); return { log: JSON.parse(JSON.stringify(log)), parou: env.parou }; } catch (e) { return { erro: e.message }; } };
+        const perigoso = 'a"b\\c</script><img src=x onerror=1>\u00e7\u{1F600}';
+        const tmp = document.createElement('div'); tmp.innerHTML = `<button data-onclick="hxA(${jsStr(perigoso)}, 3)"></button>`;
+        eq('handlers: literais, this/event e várias instruções', [
+            roda("hxA(1, 'a', \"b\", -2, 1.5, true, null)").log, roda('hxA(this.value, this.checked, this.dataset.val)').log, roda("if(event.target===this)hxA('ok')").log,
+            roda("if(event.key==='Escape')hxA('nao')").log, roda('hxA(1);hxA(2)').log, roda("event.stopPropagation();hxA('s')"),
+            __hx.rodar(tmp.firstChild.getAttribute('data-onclick'), el, ev) && log.slice(-1)[0]],
+          [[[1, 'a', 'b', -2, 1.5, true, null]], [['v', true, 'dv']], [['ok']], [], [[1], [2]], { log: [['s']], parou: true }, [perigoso, 3]]);
+        const ruins = ['alert(1)', 'eval("1")', 'fetch("x")', 'document.cookie', 'hxA(this.innerHTML)', 'hxA(1)+hxA(2)', 'window.hxA(1)', 'hxA(function(){})', 'new Function("1")()', 'hxA(', 'x = 1', 'el.remove()'];
+        eq('handlers: tudo fora do subconjunto é recusado (nada executa)', ruins.map(c => { const r = roda(c); return !!r.erro && !(r.log || []).length; }), ruins.map(() => true));
+        // delegação: clique no filho sobe até o pai; stopPropagation interrompe; a seta de forEach funciona
+        const raiz = document.createElement('div'); raiz.innerHTML = `<div data-onclick="hxA('pai')"><span data-onclick="hxA('filho')"><i id="hxI"></i></span><b data-onclick="event.stopPropagation();hxA('para')"></b></div>
+            <input type="checkbox" class="hxC"><input type="checkbox" class="hxC"><button id="hxB" data-onclick="$('hxRaiz').querySelectorAll('.hxC').forEach(c=>c.checked=true)"></button>`;
+        raiz.id = 'hxRaiz'; document.body.appendChild(raiz);
+        try {
+            log.length = 0; raiz.querySelector('#hxI').click(); const a1 = JSON.parse(JSON.stringify(log));
+            log.length = 0; raiz.querySelector('b').click(); const a2 = JSON.parse(JSON.stringify(log));
+            raiz.querySelector('#hxB').click(); const marcados = [...raiz.querySelectorAll('.hxC')].map(c => c.checked);
+            eq('handlers: delegação sobe como o bubbling, stopPropagation e forEach', [a1, a2, marcados], [[['filho'], ['pai']], [['para']], [true, true]]);
+        } finally { raiz.remove(); }
     }
     {   // CONFIG congelado e UNDO_MAX respeitado
         const uBak = undoStack; undoStack = [];

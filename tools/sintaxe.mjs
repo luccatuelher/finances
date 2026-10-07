@@ -1,5 +1,7 @@
-// Confere só a sintaxe do <script> principal do index.html (rápido, sem navegador): node tools/sintaxe.mjs
+// Confere só a sintaxe do app.js / handlers.js / tema.js / sw.js / testes (rápido, sem navegador): node tools/sintaxe.mjs
 import { readFileSync } from 'node:fs';
-const s = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const i = s.lastIndexOf('<script>\n'), j = s.lastIndexOf('</script>');
-try { new Function(s.slice(i + 9, j)); console.log('sintaxe ok'); } catch (e) { console.error('ERRO de sintaxe:', e.message); process.exit(1); }
+let ok = true;
+for (const f of ['app.js', 'handlers.js', 'tema.js', 'sw.js', 'tools/testes.js']) {
+  try { new Function(readFileSync(new URL('../' + f, import.meta.url), 'utf8')); } catch (e) { console.error(`ERRO de sintaxe em ${f}: ${e.message}`); ok = false; }
+}
+if (ok) console.log('sintaxe ok'); else process.exit(1);

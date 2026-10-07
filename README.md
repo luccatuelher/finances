@@ -1,6 +1,6 @@
 # Finances
 
-Controle de finanças pessoais (pt-BR): PWA de arquivo único (`index.html`), sem build. Dados no `localStorage` com sincronização opcional via Firebase (login Google).
+Controle de finanças pessoais (pt-BR): PWA estático, sem build (`index.html` + `app.js` + `handlers.js` + `tema.js`). Dados no `localStorage` com sincronização opcional via Firebase (login Google).
 
 Este repositório é público: **nenhum dado financeiro vai para cá** (lançamentos enviados pelo chat vão para um repositório privado, ver `CAIXA-DE-ENTRADA.md`).
 
@@ -27,3 +27,11 @@ Sobe um servidor local (que injeta `tools/testes.js` no `index.html`: os testes 
 - `LOOP-NUVEM.md`: manual do loop de melhoria contínua.
 - `CHANGELOG.md`: histórico de mudanças.
 - `MELHORIAS.md`: análise do código e melhorias pendentes.
+
+## Arquitetura em 5 linhas
+
+- `index.html`: marcação e CSS (tema claro/escuro por variáveis). Nenhum script inline: a CSP (meta) só aceita scripts do próprio site e das CDNs fixadas.
+- `app.js`: todo o código do app (estado, sync, telas). `tema.js`: aplica o tema antes de pintar.
+- `handlers.js`: executor de `data-onclick`/`data-onchange`/... (subconjunto restrito de JS, sem eval) — é por isso que o HTML não usa `onclick=`.
+- `sw.js`: service worker (rede primeiro, pré-cache do app para abrir offline). `database.rules.json`: regras do Firebase para publicar no console.
+- `tools/`: bateria (`checks.mjs`), testes embutidos (`testes.js`), lint, capturas de tela.

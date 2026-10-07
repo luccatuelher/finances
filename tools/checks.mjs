@@ -24,9 +24,11 @@ const server = createServer(async (req, res) => {
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const page = await browser.newPage();
+// CSP: nenhuma violação (script inline, origem não permitida) em nenhuma das cargas desta página
+await page.addInitScript(() => { window.__csp = []; document.addEventListener('securitypolicyviolation', e => window.__csp.push(`${e.violatedDirective} ${e.blockedURI}`)); });
 const erros = [];
 // Falha de rede (CDN bloqueada no sandbox) não conta como erro
-page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource: net::/.test(m.text())) erros.push(m.text()); });
+page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource: net::|Refused to execute inline (script|event handler)/.test(m.text())) erros.push(m.text()); });
 page.on('pageerror', e => erros.push(e.message));
 const url = 'http://localhost:5577/index.html?preview=1';
 
@@ -43,7 +45,7 @@ await page.evaluate(() => { localStorage.clear(); localStorage.setItem('preview:
 await page.goto(url);
 await page.waitForFunction(() => typeof runSelfTests === 'function');
 
-const r = await page.evaluate(async () => ({
+const r = await page.evaluate(async () => ({ csp: window.__csp,
   self: await runSelfTests(),
   sync: await runSyncFuzz(),
   fuzz: await runFuzz(),
@@ -54,7 +56,7 @@ const graficos = [];
 if (chartjs) {
   await page.evaluate(() => setFiltro(1, 2026));   // mês dos dados de exemplo
   for (const v of ['dashboard', 'anual', 'mensal', 'metas']) {
-    await page.evaluate(v => navTo(v, [...document.querySelectorAll('.nav-pill')].find(b => (b.getAttribute('onclick') || '').includes("'" + v + "'"))), v);
+    await page.evaluate(v => navTo(v, [...document.querySelectorAll('.nav-pill')].find(b => (b.getAttribute('data-onclick') || '').includes("'" + v + "'"))), v);
     await page.waitForTimeout(600);
     const vazios = await page.evaluate(() => [...document.querySelectorAll('canvas')].filter(c => c.offsetParent).filter(c => {
       const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
@@ -124,8 +126,8 @@ const xss = await xpg.evaluate(async () => {
   renderAll(); renderGoals(); renderCartoesMini();
   let cliques = 0;
   for (const v of ['dashboard', 'anual', 'mensal', 'metas']) {
-    navTo(v, [...document.querySelectorAll('.nav-pill')].find(b => (b.getAttribute('onclick') || '').includes("'" + v + "'")) || null); await new Promise(r => setTimeout(r, 250));
-    for (const e of [...document.querySelectorAll('[onclick], [onchange]')].filter(e => /xss|img|svg|script/i.test((e.getAttribute('onclick') || '') + (e.getAttribute('onchange') || '')))) { try { e.click(); cliques++; } catch {} }
+    navTo(v, [...document.querySelectorAll('.nav-pill')].find(b => (b.getAttribute('data-onclick') || '').includes("'" + v + "'")) || null); await new Promise(r => setTimeout(r, 250));
+    for (const e of [...document.querySelectorAll('[data-onclick], [data-onchange]')].filter(e => /xss|img|svg|script/i.test((e.getAttribute('data-onclick') || '') + (e.getAttribute('data-onchange') || '')))) { try { e.click(); cliques++; } catch {} }
     // Orçamento: sem handlers inline (delegação por índice); clica nas linhas, fatias e ações que levam os nomes hostis
     if (v === 'metas') for (const sel of ['#budgetCatList .orc-row', '#orcSlices path[data-kind]', '#orcSel [data-act]:not([data-act="excluir"])', '#orcEntradasList [data-ent-act="renomear"]'])
       for (let i = 0, n = document.querySelectorAll(sel).length; i < n; i++) {   // cada clique redesenha: busca de novo
@@ -134,11 +136,21 @@ const xss = await xpg.evaluate(async () => {
       }
     await new Promise(r => setTimeout(r, 150));
   }
+  // Todo handler declarativo (inclusive com os nomes hostis) precisa ser aceito pelo executor e chamar função existente
+  const ruinsHx = [];
+  for (const v of ['dashboard', 'anual', 'mensal', 'metas']) {
+    navTo(v, null); await new Promise(r => setTimeout(r, 120));
+    for (const e of document.querySelectorAll('*')) for (const at of e.getAttributeNames().filter(n => /^data-on(click|change|input|keydown|focus|mouseenter)$/.test(n))) {
+      const c = e.getAttribute(at); if (!c) continue;
+      try { const ast = __hx.analisar(c); for (const st of ast) { const f = st.t === 'if' ? st.s : st; if (f.t === 'call' && f.f.t === 'id' && typeof window[f.f.n] !== 'function') ruinsHx.push(`${c.slice(0, 40)} → função "${f.f.n}" não existe`); } }
+      catch (er) { ruinsHx.push(`${c.slice(0, 50)}: ${er.message}`); }
+    }
+  }
   const injetados = [...document.querySelectorAll('img[src="x"], svg[onload], [onerror], [onmouseover], [onload]')].length;
-  return { executou: window.__xss || null, injetados, cliques };
+  return { executou: window.__xss || null, injetados, cliques, ruinsHx: [...new Set(ruinsHx)] };
 });
 await xctx.close();
-const xssFalhas = (xss.executou ? 1 : 0) + xss.injetados + xerros.length + (xss.cliques ? 0 : 1);
+const xssFalhas = (xss.executou ? 1 : 0) + xss.injetados + xerros.length + (xss.cliques ? 0 : 1) + xss.ruinsHx.length;
 
 // Navegação: URL com hash restaura a tela; voltar/avançar troca de tela; modal fecha antes de voltar de tela
 const nctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
@@ -229,8 +241,17 @@ if (await tema() !== 'claro') dprob.push('escolha do tema não persistiu');
 await dctx.close();
 const temaProblemas = dprob.length;
 
-const falhas = fluxoProblemas + temaProblemas + navProblemas + r.self.fails.length + r.sync.length + (r.fuzz || []).length + erros.length + graficos.length + fusoFalhas.length + mobilFalhas + xssFalhas;
-console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · sync ${r.sync.length} problema(s) · fuzz ${(r.fuzz || []).length} violação(ões) · console ${erros.length} erro(s) · segurança ${xssFalhas ? xssFalhas + ' problema(s)' : 'ok (' + xss.cliques + ' cliques)'} · celular ${mobilFalhas ? mobilFalhas + ' problema(s)' : 'ok'} · fusos ${fusoFalhas.length ? fusoFalhas.length + ' problema(s)' : fusos.length + ' ok'} · fluxos ${fluxoProblemas ? fluxoProblemas + ' problema(s)' : 'ok'} · tema ${temaProblemas ? temaProblemas + ' problema(s)' : 'ok'} · navegação ${navProblemas ? navProblemas + ' problema(s)' : 'ok'} · gráficos ${chartjs ? (graficos.length ? graficos.length + ' problema(s)' : 'ok') : 'não verificados (sem tools/.cache/chart.umd.min.js)'}`);
+// A política está valendo de verdade: script inline injetado e handler onclick inline são bloqueados
+const cspAtiva = await page.evaluate(() => new Promise(res => {
+  const v = []; document.addEventListener('securitypolicyviolation', e => v.push(e.violatedDirective));
+  const s = document.createElement('script'); s.textContent = 'window.__ruim = 1'; document.head.appendChild(s);
+  const b = document.createElement('button'); b.setAttribute('onclick', 'window.__ruim = 2'); document.body.appendChild(b); b.click();
+  setTimeout(() => { b.remove(); s.remove(); res({ rodou: window.__ruim || null, v }); }, 300);
+}));
+const cspFurada = cspAtiva.rodou || !cspAtiva.v.length ? 1 : 0;
+const cspProblemas = cspFurada + (r.csp || []).filter(x => !/cdn\.jsdelivr|gstatic/.test(x)).length;   // CDNs bloqueadas por rede no sandbox não são violação
+const falhas = cspProblemas + fluxoProblemas + temaProblemas + navProblemas + r.self.fails.length + r.sync.length + (r.fuzz || []).length + erros.length + graficos.length + fusoFalhas.length + mobilFalhas + xssFalhas;
+console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · sync ${r.sync.length} problema(s) · fuzz ${(r.fuzz || []).length} violação(ões) · console ${erros.length} erro(s) · segurança ${xssFalhas ? xssFalhas + ' problema(s)' : 'ok (' + xss.cliques + ' cliques)'} · celular ${mobilFalhas ? mobilFalhas + ' problema(s)' : 'ok'} · fusos ${fusoFalhas.length ? fusoFalhas.length + ' problema(s)' : fusos.length + ' ok'} · csp ${cspProblemas ? cspProblemas + ' violação(ões): ' + r.csp.join('; ') : 'ok'} · fluxos ${fluxoProblemas ? fluxoProblemas + ' problema(s)' : 'ok'} · tema ${temaProblemas ? temaProblemas + ' problema(s)' : 'ok'} · navegação ${navProblemas ? navProblemas + ' problema(s)' : 'ok'} · gráficos ${chartjs ? (graficos.length ? graficos.length + ' problema(s)' : 'ok') : 'não verificados (sem tools/.cache/chart.umd.min.js)'}`);
 if (falhas) console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros, graficos, fprob, dprob, navFalhas, nerros, fusoFalhas, mobil: { ...mob, merros }, xss, xerros }, null, 2));
 // Sem fechar o navegador e o servidor o processo nunca terminava quando tudo passava (parecia travado)
 await browser.close(); server.close();

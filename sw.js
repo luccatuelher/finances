@@ -3,9 +3,9 @@
 // versão nova do index.html (nunca fica preso numa versão antiga em cache); sem internet
 // usa a última cópia guardada. Dados do usuário NÃO passam por aqui (localStorage/Firebase).
 // Na instalação já guarda o app, o manifest e os ícones: a 1ª visita também abre offline.
-const CACHE = 'finances-v2';
+const CACHE = 'finances-v3';
 const CDNS = ['cdn.jsdelivr.net', 'www.gstatic.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
-const PRECACHE = ['./', './index.html', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
+const PRECACHE = ['./', './index.html', './app.js', './handlers.js', './tema.js', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 const MAX_ITENS = 60;   // limite do cache de terceiros (fontes/CDN) e das cópias de navegação
 
 self.addEventListener('install', e => {

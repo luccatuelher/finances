@@ -13,7 +13,8 @@
 // Carregado ANTES do app.js: o instantâneo abaixo guarda o que é nativo do navegador.
 (function () {
     'use strict';
-    const NATIVOS = new Set(Object.getOwnPropertyNames(window));
+    // Nativos do navegador + as bibliotecas das CDNs (carregadas depois deste arquivo, por isso listadas à mão)
+    const NATIVOS = new Set([...Object.getOwnPropertyNames(window), 'Chart', 'firebase']);
     const PROPS = new Set(['value', 'checked', 'dataset', 'files', 'parentElement', 'classList', 'target', 'key', 'id', 'nextElementSibling', 'previousElementSibling', 'length']);
     const METODOS = new Set(['click', 'toggle', 'add', 'remove', 'querySelectorAll', 'forEach', 'stopPropagation', 'preventDefault', 'focus', 'select']);
     const cache = new Map();
