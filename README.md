@@ -19,7 +19,7 @@ python3 -m http.server 8000      # ou qualquer servidor estático
 node tools/checks.mjs
 ```
 
-Sobe um servidor local (que injeta `tools/testes.js` no `index.html`: os testes não vão no app publicado), abre o app no Chromium (Playwright) e roda autoteste, fuzz de sincronização e de interface, checagem de XSS, celular e fusos horários. Para também conferir os gráficos, coloque o Chart.js 4.5.1 em `tools/.cache/` (comando no topo do `tools/checks.mjs`). O GitHub Actions (`.github/workflows/checks.yml`) roda tudo isso a cada push.
+Sobe um servidor local (que injeta `tools/testes.js` no `index.html`: os testes não vão no app publicado), abre o app no Chromium (Playwright) e roda autoteste, fuzz de sincronização e de interface, checagem de XSS, celular e fusos horários. Para também conferir os gráficos, coloque o Chart.js 4.5.1 em `tools/.cache/` (comando no topo do `tools/checks.mjs`). `node tools/lint.mjs` roda o ESLint (instala sozinho em `tools/.cache/lint`). O GitHub Actions (`.github/workflows/checks.yml`) roda tudo isso a cada push.
 
 ## Mais documentação
 

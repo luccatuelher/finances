@@ -17,5 +17,7 @@ jobs:
         run: |
           mkdir -p tools/.cache && cd tools/.cache
           npm pack chart.js@4.5.1 && tar xzf chart.js-4.5.1.tgz && cp package/dist/chart.umd.min.js .
+      - name: Lint (ESLint: variáveis indefinidas, duplicadas, código morto)
+        run: node tools/lint.mjs
       - name: Bateria
         run: node tools/checks.mjs
