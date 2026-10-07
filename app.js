@@ -5385,6 +5385,9 @@ async function _mergeOrConflict(remote, attempt = 0) {
 // Se outro dispositivo gravou no meio do caminho, aborta e vira conflito.
 async function _pushCAS(expectedTs, attempt = 0) {
     const hash = _stateHash(), payload = _buildPayload(), baseSnap = snapshotState();
+    // O `ts` é a "versão" que os outros aparelhos comparam por IGUALDADE: dois envios no mesmo milissegundo (ou o relógio deste
+    // aparelho atrasado) davam o mesmo ts e o outro lado achava que nada mudou, perdendo a alteração. Sempre maior que o substituído.
+    payload.ts = Math.max(payload.ts, (expectedTs || 0) + 1);
     _pushingTs = payload.ts;
     const res = await _comPrazo(_userRef().transaction(cur => {
         // cur === null pode ser só cache vazio: devolve o payload e o servidor

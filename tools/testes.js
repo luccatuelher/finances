@@ -611,7 +611,8 @@ async function _runFuzzImpl(seeds = [11, 23, 97, 1234], steps = 400) {
 // chaves, transaction com cache vazio na 1ª chamada). Edições e sincronizações
 // aleatórias; conflitos resolvidos ao acaso. Invariante: após sincronizar sem edições
 // novas, dispositivo A, dispositivo B e servidor convergem para o mesmo estado.
-async function _runSyncFuzzImpl(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120) {
+// relogioParado: Date.now() fixo durante os cenários — reproduz máquinas rápidas, onde duas gravações caem no mesmo milissegundo
+async function _runSyncFuzzImpl(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120, { relogioParado = false } = {}) {
     if (!PREVIEW_MODE) { console.warn('runSyncFuzz só roda em ?preview'); return; }
     const saved = snapshotState(), savedLS = {}, savedUser = _currentUser, savedRef = _userRef, savedToast = toast, savedConfirm = window.confirm;
     for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); savedLS[k] = localStorage.getItem(k); }
@@ -629,6 +630,7 @@ async function _runSyncFuzzImpl(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120) {
     };
     const problems = [], stats = { merged: 0, conflict: 0 };
     _userRef = () => mockRef; _currentUser = { uid: 'syncfuzz' }; toast = () => {}; window.confirm = () => true;
+    const nowReal = Date.now; if (relogioParado) { const base = nowReal.call(Date); Date.now = () => base; }
     const MK = _syncKey('syncfuzz'), BK = _baseKey('syncfuzz');
     const use = d => { restoreState(_clone(d.state)); undoStack = []; redoStack = []; for (const [k, v] of [[MK, d.meta], [BK, d.base]]) v ? lsSet(k, JSON.stringify(v)) : lsDel(k); };
     const keep = d => { d.state = snapshotState(); d.meta = loadJSON(MK, null); d.base = loadJSON(BK, null); };
@@ -749,6 +751,7 @@ async function _runSyncFuzzImpl(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120) {
         }
         problems.push(...await _testeInbox());
     } finally {
+        Date.now = nowReal;
         _userRef = savedRef; _currentUser = savedUser; toast = savedToast; window.confirm = savedConfirm;
         $('ovConflict').classList.remove('open'); _conflictOpen = false; _pendingConflictRemote = null;
         try { localStorage.clear(); Object.entries(savedLS).forEach(([k, v]) => localStorage.setItem(k, v)); } catch (e) {}

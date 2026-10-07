@@ -28,7 +28,7 @@ const page = await browser.newPage();
 await page.addInitScript(() => { window.__csp = []; document.addEventListener('securitypolicyviolation', e => window.__csp.push(`${e.violatedDirective} ${e.blockedURI}`)); });
 const erros = [];
 // Falha de rede (CDN bloqueada no sandbox) não conta como erro
-page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource: net::|Refused to execute inline (script|event handler)/.test(m.text())) erros.push(m.text()); });
+page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource: net::|Refused to execute inline (script|event handler)|Executing inline (script|event handler) violates/.test(m.text())) erros.push(m.text()); });
 page.on('pageerror', e => erros.push(e.message));
 const url = 'http://localhost:5577/index.html?preview=1';
 
@@ -47,7 +47,7 @@ await page.waitForFunction(() => typeof runSelfTests === 'function');
 
 const r = await page.evaluate(async () => ({ csp: window.__csp,
   self: await runSelfTests(),
-  sync: await runSyncFuzz(),
+  sync: [...(await runSyncFuzz()), ...(await runSyncFuzz([1, 2, 3, 4, 5, 6, 7, 8], 120, { relogioParado: true })).map(x => '[relógio parado] ' + x)],
   fuzz: await runFuzz(),
 }));
 
