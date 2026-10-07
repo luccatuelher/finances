@@ -1,5 +1,16 @@
 # Histórico de mudanças do app
 
+## Lote de melhorias — out/2026 (ver MELHORIAS.md)
+
+- **Dados**: caixa de entrada só em repositório privado; `espera` obrigatória e no máximo 10 exclusões por rodada; trava de esquema (app antigo não sobrescreve servidor mais novo); backup diário no Firebase (`finances_bak`) com "Restaurar da nuvem"; ids determinísticos das parcelas de empréstimo; token do GitHub avisa antes de vencer e some no logout; armazenamento persistente.
+- **Segurança**: CSP sem script inline (código em `app.js`, handlers em `data-on*` executados por `handlers.js`); referrer desligado; regras do Firebase versionadas (`database.rules.json`) e checagem de escrita aberta.
+- **Interface**: modo escuro (automático/claro/escuro); confirmações em modal próprio (no lugar de `confirm()`); navegação por URL (`#mensal`...) com botão voltar; comparativo com o ano anterior na Visão Anual; zoom por pinça liberado; tamanho da base no painel de backup.
+- **Acessibilidade**: `aria-sort` nas colunas, alternativa em texto (tabela) para todos os gráficos, `autocomplete="off"` nos campos.
+- **PWA/offline**: service worker com pré-cache (abre offline na 1ª visita), fontes offline, metas do iOS, manifest com `id`.
+- **Manutenção**: changelog e testes fora do app publicado (`CHANGELOG.md`, `tools/testes.js`); `CONFIG` com as constantes; CI (GitHub Actions) com lint, bateria e capturas de tela; README.
+
+---
+
 (Movido do comentário do `<head>` do `index.html`; texto original preservado.)
 
 ```
