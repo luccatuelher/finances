@@ -144,9 +144,44 @@ await confere('voltar com modal fecha o modal', [await npg.evaluate(() => docume
 await nctx.close();
 const navProblemas = navFalhas.length + nerros.length;
 
-const falhas = navProblemas + r.self.fails.length + r.sync.length + (r.fuzz || []).length + erros.length + graficos.length + fusoFalhas.length + mobilFalhas + xssFalhas;
-console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · sync ${r.sync.length} problema(s) · fuzz ${(r.fuzz || []).length} violação(ões) · console ${erros.length} erro(s) · segurança ${xssFalhas ? xssFalhas + ' problema(s)' : 'ok (' + xss.cliques + ' cliques)'} · celular ${mobilFalhas ? mobilFalhas + ' problema(s)' : 'ok'} · fusos ${fusoFalhas.length ? fusoFalhas.length + ' problema(s)' : fusos.length + ' ok'} · navegação ${navProblemas ? navProblemas + ' problema(s)' : 'ok'} · gráficos ${chartjs ? (graficos.length ? graficos.length + ' problema(s)' : 'ok') : 'não verificados (sem tools/.cache/chart.umd.min.js)'}`);
-if (falhas) console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros, graficos, navFalhas, nerros, fusoFalhas, mobil: { ...mob, merros }, xss, xerros }, null, 2));
+// Tema escuro: segue o sistema, o botão alterna e a escolha persiste; nenhum texto visível com contraste < 3:1
+const dctx = await browser.newContext({ colorScheme: 'dark', viewport: { width: 1280, height: 900 } });
+const dpg = await dctx.newPage(); const dprob = [];
+dpg.on('pageerror', e => dprob.push('erro: ' + e.message));
+if (chartjs) await dpg.route('**/chart.umd.min.js', r => r.fulfill({ status: 200, contentType: 'text/javascript', body: chartjs }));
+await dpg.goto(url); await dpg.waitForFunction(() => typeof runSelfTests === 'function');
+const tema = () => dpg.evaluate(() => document.documentElement.getAttribute('data-tema'));
+if (await tema() !== 'escuro') dprob.push('não seguiu o sistema escuro');
+await dpg.evaluate(() => setFiltro(1, 2026));
+for (const v of ['dashboard', 'anual', 'mensal', 'metas']) {
+  await dpg.evaluate(v => navTo(v), v); await dpg.waitForTimeout(500);
+  const ruins = await dpg.evaluate(() => {
+    const parse = c => { const m = c.match(/rgba?\(([^)]+)\)/); if (!m) return null; const [r, g, b, a = 1] = m[1].split(/[ ,\/]+/).filter(Boolean).map(Number); return [r, g, b, a]; };
+    const lum = ([r, g, b]) => { const f = v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }; return .2126 * f(r) + .7152 * f(g) + .0722 * f(b); };
+    const bgOf = el => { const L = []; for (let e = el; e; e = e.parentElement) { const c = parse(getComputedStyle(e).backgroundColor); if (c && c[3] > 0) { L.push(c); if (c[3] >= .99) break; } }
+      const base = L.length && L[L.length - 1][3] >= .99 ? [0, 0, 0] : [11, 16, 32]; return L.reverse().reduce((acc, c) => acc.map((x, i) => x * (1 - c[3]) + c[i] * c[3]), base); };
+    const out = [];
+    for (const el of document.querySelectorAll('body *')) {
+      if (!el.offsetParent && getComputedStyle(el).position !== 'fixed') continue;
+      const t = [...el.childNodes].filter(n => n.nodeType === 3 && n.textContent.trim()).map(n => n.textContent.trim()).join(' '); if (!t) continue;
+      const fg = parse(getComputedStyle(el).color); if (!fg) continue; const bg = bgOf(el);
+      const L1 = lum(fg.slice(0, 3).map((x, i) => x * fg[3] + bg[i] * (1 - fg[3]))), L2 = lum(bg), cr = (Math.max(L1, L2) + .05) / (Math.min(L1, L2) + .05);
+      if (cr < 3) out.push(cr.toFixed(1) + ' ' + (el.className || el.tagName) + ' "' + t.slice(0, 24) + '"');
+    }
+    return out;
+  });
+  if (ruins.length) dprob.push(`${v}: contraste baixo em ${ruins.length}: ${ruins.slice(0, 3).join(' | ')}`);
+}
+await dpg.evaluate(() => ciclarTema());   // auto → claro
+if (await tema() !== 'claro') dprob.push('botão não mudou para claro');
+await dpg.reload(); await dpg.waitForFunction(() => typeof runSelfTests === 'function');
+if (await tema() !== 'claro') dprob.push('escolha do tema não persistiu');
+await dctx.close();
+const temaProblemas = dprob.length;
+
+const falhas = temaProblemas + navProblemas + r.self.fails.length + r.sync.length + (r.fuzz || []).length + erros.length + graficos.length + fusoFalhas.length + mobilFalhas + xssFalhas;
+console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · sync ${r.sync.length} problema(s) · fuzz ${(r.fuzz || []).length} violação(ões) · console ${erros.length} erro(s) · segurança ${xssFalhas ? xssFalhas + ' problema(s)' : 'ok (' + xss.cliques + ' cliques)'} · celular ${mobilFalhas ? mobilFalhas + ' problema(s)' : 'ok'} · fusos ${fusoFalhas.length ? fusoFalhas.length + ' problema(s)' : fusos.length + ' ok'} · tema ${temaProblemas ? temaProblemas + ' problema(s)' : 'ok'} · navegação ${navProblemas ? navProblemas + ' problema(s)' : 'ok'} · gráficos ${chartjs ? (graficos.length ? graficos.length + ' problema(s)' : 'ok') : 'não verificados (sem tools/.cache/chart.umd.min.js)'}`);
+if (falhas) console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros, graficos, dprob, navFalhas, nerros, fusoFalhas, mobil: { ...mob, merros }, xss, xerros }, null, 2));
 // Sem fechar o navegador e o servidor o processo nunca terminava quando tudo passava (parecia travado)
 await browser.close(); server.close();
 process.exit(falhas ? 1 : 0);

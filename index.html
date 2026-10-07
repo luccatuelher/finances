@@ -435,6 +435,7 @@
         .modal-footer { display: flex; gap: 8px; margin-top: 16px; }
         .modal-footer button { flex: 1; padding: 8px; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; border: none; }
         .btn-confirm { background: var(--accent); color: white; }
+        :root[data-tema="escuro"] .btn-confirm[style*="--credit"] { color: #04121c; }
         .btn-mcancel { background: var(--bg); color: var(--text-2); border: 1px solid var(--border) !important; }
         #ovFixos .modal { width: 560px; max-height: 85vh; display: flex; flex-direction: column; padding: 0; overflow: hidden; }
         .fixos-popup-head { padding: 20px 24px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
@@ -1611,7 +1612,7 @@
             </div>
             <div class="fixos-table-section" id="debitoSection" style="display:none">
                 <div class="fixos-table-header" onclick="$('debitoSection').classList.toggle('open')">
-                    <div class="fixos-table-title" style="color:#1d4ed8">🔵 Débito <span class="fixo-count-badge" id="debitoCountBadge" style="background:var(--t-blue-bg);color:#1d4ed8"></span></div>
+                    <div class="fixos-table-title" style="color:var(--debit)">🔵 Débito <span class="fixo-count-badge" id="debitoCountBadge" style="background:var(--t-blue-bg);color:var(--debit)"></span></div>
                     <div class="fixos-table-total" id="debitoTotal"></div>
                     <div class="fixos-table-arrow">▼</div>
                 </div>
@@ -5804,7 +5805,7 @@ function _mesCalendario(r, m, a) {
         const v = gasto[d], iso = `${ym}-${pad2(d)}`;
         const k = v > 0 ? Math.min(_mesRampa().length - 1, Math.floor(Math.sqrt(v / max) * _mesRampa().length - 1e-9)) : -1;
         const tit = `${pad2(d)}/${pad2(m + 1)}: ${v ? `${fmt(v)} em ${n[d]} gasto${n[d] !== 1 ? 's' : ''}` : 'sem gastos'}${entrou[d] ? ` · entrada ${fmt(entrou[d])}` : ''}`;
-        h += `<button class="mes-dia${k >= 3 ? ' esc' : ''}${iso === hoje ? ' hoje' : ''}${iso > hoje ? ' fut' : ''}" data-dia="${d}" aria-pressed="${_mesDia.dia === d}" title="${escHtml(tit)}" style="${k >= 0 ? `background:${MES_RAMPA[k]}` : ''}">
+        h += `<button class="mes-dia${k >= 3 ? ' esc' : ''}${iso === hoje ? ' hoje' : ''}${iso > hoje ? ' fut' : ''}" data-dia="${d}" aria-pressed="${_mesDia.dia === d}" title="${escHtml(tit)}" style="${k >= 0 ? `background:${_mesRampa()[k]}` : ''}">
             <b>${d}</b>${v && !curto ? `<span>${escHtml(v < 1000 ? String(Math.round(v)) : _fmtCompacto.format(v))}</span>` : ''}${entrou[d] ? '<i class="mes-ent" aria-label="teve entrada">+</i>' : ''}</button>`;
     }
     $('mCal').innerHTML = h;
@@ -8749,7 +8750,7 @@ function renderLoans() {
     grid.innerHTML = infos.map(({ l, r }) => {
         const pct = l.n ? Math.min(100, Math.floor(r.pagas / l.n * 100)) : 0, quitado = r.faltam === 0;
         return `<div class="goal-card">
-            <div class="goal-accent" style="background:#7c3aed"></div>
+            <div class="goal-accent" style="background:var(--invest)"></div>
             <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:10px">
                 <div class="goal-name" style="margin-top:0">🏦 ${escHtml(l.nome)}</div>
                 <div class="goal-actions">
@@ -8759,7 +8760,7 @@ function renderLoans() {
             </div>
             <div class="goal-desc">${l.nota ? escHtml(l.nota) : '&nbsp;'}</div>
             <div class="goal-amounts"><div class="goal-atual" style="color:#6d28d9">${quitado ? '✓ Quitado' : fmt(r.falta)}</div><div class="goal-target">${quitado ? fmt(r.total) : 'falta pagar'}</div></div>
-            <div class="goal-track"><div class="goal-fill" style="width:${pct}%;background:#7c3aed"></div></div>
+            <div class="goal-track"><div class="goal-fill" style="width:${pct}%;background:var(--invest)"></div></div>
             <div class="goal-meta-row"><span class="goal-pct" style="color:#6d28d9">${r.pagas} de ${l.n} parcelas pagas</span><span>${pct}%</span></div>
             <div class="loan-facts">
                 <div><small>Parcela</small><b>${fmt(l.parcela)}</b></div>
