@@ -644,6 +644,41 @@ async function _runSyncFuzzImpl(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120) {
             const perdidos = [...criados].filter(id => !apagados.has(id) && !noServidor.has(id));
             if (perdidos.length) problems.push(`seed ${S}: ${perdidos.length} lançamento(s) criado(s) e nunca apagado(s) sumiram (conflito descartou mudança não conflitante)`);
         }
+        {   // backup diário: 1 por dia, só se mudou, poda além de BAK_DIAS, restaura o mesmo estado
+            const mem = { meta: {}, dados: {} }, bakOrig = _bakRef, hojeReal = todayLocalISO(), marca = 'fin5_bak_syncfuzz';
+            const dia = n => addMonthsISO('2026-01-01', 0).slice(0, 8) + pad2(n);
+            _bakRef = () => ({
+                child: p => ({ once: async () => ({ val: () => { const v = p === 'meta' ? mem.meta : mem.dados[p.split('/')[1]]; return Object.keys(v || {}).length || p !== 'meta' ? clone(v ?? null) : null; } }) }),
+                update: async up => { for (const [k, v] of Object.entries(up)) { const [g, d] = k.split('/'); if (v === null) delete mem[g][d]; else mem[g][d] = clone(v); } },
+            });
+            try {
+                const rem = ts => ({ t: [{ id: 1, desc: 'a', valor: 5, data: '2026-01-02', tipo: 'saida', cat: '' }], v: SCHEMA_VERSION, appV: 1, ts });
+                lsDel(marca); await _backupDiario(rem(100));
+                const aposPrimeiro = Object.keys(mem.meta);
+                await _backupDiario(rem(200));                       // mesmo dia: marca local já diz que fez
+                lsDel(marca); await _backupDiario(rem(100));         // marca perdida, mas o servidor já tem hoje
+                lsDel(marca); await _backupDiario(rem(300));
+                const hojeKeys = Object.keys(mem.meta);
+                // poda: 20 dias antigos + hoje → fica só BAK_DIAS
+                for (let i = 1; i <= 20; i++) { mem.meta['2025-12-' + pad2(i)] = { ts: i, n: 0 }; mem.dados['2025-12-' + pad2(i)] = rem(i); }
+                lsDel(marca); mem.meta[hojeReal] && delete mem.meta[hojeReal]; await _backupDiario(rem(999));
+                const apos = Object.keys(mem.meta).sort(), dadosOk = Object.keys(mem.dados).length === apos.length;
+                // restaurar devolve o mesmo estado
+                const d = _mapKeys(mem.dados[hojeReal], _fbKeyDec); _aplicarBackup(d);
+                const igual = tx.length === 1 && tx[0].desc === 'a' && tx[0].valor === 5;
+                problems.push(...[
+                    [aposPrimeiro.length === 1, 'primeiro backup não gravou'], [hojeKeys.length === 1, 'gravou mais de um backup no mesmo dia'],
+                    [apos.length === CONFIG.BAK_DIAS && dadosOk, 'poda errada: ' + apos.length + ' metas / ' + Object.keys(mem.dados).length + ' dados'], [apos.includes(hojeReal), 'backup de hoje foi podado'],
+                    [igual, 'restaurar não devolveu o mesmo estado'],
+                ].filter(([ok]) => !ok).map(([, m]) => 'backup diário: ' + m));
+                // permissão negada não derruba nada
+                _bakRef = () => ({ child: () => ({ once: async () => { const e = new Error('PERMISSION_DENIED'); e.code = 'PERMISSION_DENIED'; throw e; } }) });
+                lsDel(marca); await _backupDiario(rem(5));
+                // servidor com esquema mais novo não é copiado
+                _bakRef = () => { throw new Error('não deveria chamar'); }; lsDel(marca); await _backupDiario({ ...rem(6), v: SCHEMA_VERSION + 1 });
+            } catch (e) { problems.push('backup diário: exceção ' + e.message); }
+            finally { _bakRef = bakOrig; lsDel(marca); }
+        }
         {   // app antigo: servidor com esquema mais novo nunca é sobrescrito nem mesclado
             const novo = { t: {}, v: SCHEMA_VERSION + 1, ts: Date.now() + 5000, appV: 99999999, campoFuturo: { x: 1 } };
             server.data = norm(novo); use({ state: snapshotState(), meta: null, base: null });

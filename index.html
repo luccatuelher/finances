@@ -1452,6 +1452,7 @@
                 <div class="backup-btn" onclick="exportar()">↑ Exportar</div>
                 <label class="backup-btn">↓ Importar<input type="file" hidden onchange="importar(this)"></label>
             </div>
+            <div class="backup-row" style="margin-top:6px"><div class="backup-btn" onclick="abrirBackups()" title="Volta aos dados de um dia anterior (cópia automática na nuvem)">🕘 Restaurar backup da nuvem</div></div>
             <div id="backupAge" style="font-size:10px;margin-top:5px;line-height:1.4;color:var(--text-3)"></div>
             <div id="quarentenaBox"></div>
             <div class="backup-row" style="margin-top:6px">
@@ -2294,6 +2295,16 @@
     </div>
 </div>
 
+<!-- MODAL RESTAURAR BACKUP (cópias diárias no Firebase) -->
+<div class="overlay" id="ovBackups" onclick="if(event.target===this)closeBackups()">
+    <div class="modal" style="width:420px">
+        <div class="modal-title">🕘 Restaurar backup</div>
+        <div class="modal-sub" id="bakSub">Cópias diárias dos seus dados na nuvem (últimos dias).</div>
+        <div id="bakLista" style="display:flex;flex-direction:column;gap:6px;margin:10px 0;max-height:50vh;overflow:auto"></div>
+        <div class="modal-footer"><button class="btn-mcancel" onclick="closeBackups()">Fechar</button></div>
+    </div>
+</div>
+
 <!-- MODAL DE CONFIRMAÇÃO (substitui confirm() nativo; ver perguntar()) -->
 <div class="overlay" id="ovConfirmar" onclick="if(event.target===this)_confirmarFechar(null)">
     <div class="modal" style="width:420px">
@@ -2338,6 +2349,7 @@ const CONFIG = Object.freeze({
     BACKUP_LEMBRETE_DIAS: 30,           // alerta de "faz tempo que não baixa um backup"
     VIRADA_DIA_MS: 60 * 1000,           // confere virada de dia com o app aberto
     NOTA_MAX: 500,                      // nota de meta/empréstimo
+    BAK_DIAS: 14,                       // backups diários guardados no Firebase (finances_bak)
 });
 
 // ── DOM CACHE ─────────────────────────────────────────────────────────────────
@@ -3341,6 +3353,7 @@ const MODALS = {
     ovAporte:       { close: () => closeAporte(), submit: () => confirmarAporte() },
     ovFixoRep:      { close: () => closeFixoRep('nao') },
     ovConflict:     {},
+    ovBackups:      { close: () => closeBackups() },
     ovConfirmar:    { close: () => _confirmarFechar(null), submit: () => _confirmarPrimaria() },
     ovCartoes:      { close: () => closeCartoes(), submit: () => salvarCartao() },
     ovExtrato:      { close: () => closeExtrato() },
@@ -7402,6 +7415,64 @@ function _userRef() {
     if (!_currentUser || !fbDb) throw new Error('Não autenticado');
     return fbDb.ref(`finances/${_currentUser.uid}`);
 }
+// ── BACKUP DIÁRIO NA NUVEM ────────────────────────────────────────────────────
+// A sync sobrescreve a base inteira em todos os aparelhos; um engano (ou bug) se espalharia sem volta.
+// Caminho irmão `finances_bak/{uid}` (regra no database.rules.json; sem ela o app só avisa, 1×/dia):
+//   meta/{AAAA-MM-DD} = { ts, n, appV, v }   (pequeno: é o que a lista lê)
+//   dados/{AAAA-MM-DD} = base crua do servidor (mesmo formato do nó finances/{uid})
+// Guarda o que o SERVIDOR tinha ao abrir o dia, antes de este aparelho gravar por cima — sem download
+// extra. No máximo 1 por dia, só se mudou desde o último, e poda além de CONFIG.BAK_DIAS dias.
+let _bakRef = () => {       // trocado pelos testes; no preview nunca toca no Firebase real
+    if (PREVIEW_MODE || !_currentUser || !fbDb) throw new Error('backup indisponível');
+    return fbDb.ref(`finances_bak/${_currentUser.uid}`);
+};
+const _erroPermissao = e => /permission/i.test((e && (e.code || e.message)) || '');
+async function _backupDiario(remote) {
+    if (!_currentUser || !remote || _remotoMaisNovo(remote)) return;
+    const hoje = todayLocalISO(), marca = 'fin5_bak_' + _currentUser.uid;
+    if (lsGet(marca) === hoje) return;
+    try {
+        const ref = _bakRef();
+        const meta = (await _comPrazo(ref.child('meta').once('value'), CONFIG.SYNC_PRAZO_MS, 'backup sem resposta')).val() || {};
+        const dias = Object.keys(meta).sort(), ult = dias.length ? meta[dias[dias.length - 1]] : null;
+        if (meta[hoje] || (ult && ult.ts === (remote.ts || 0))) { lsSet(marca, hoje); return; }
+        const up = { ['dados/' + hoje]: remote, ['meta/' + hoje]: { ts: remote.ts || 0, n: _asList(remote.t).length, appV: remote.appV || 0, v: Number(remote.v) || 0 } };
+        dias.concat(hoje).sort().slice(0, -CONFIG.BAK_DIAS).forEach(d => { up['dados/' + d] = null; up['meta/' + d] = null; });
+        await _comPrazo(ref.update(up), CONFIG.SYNC_PRAZO_MS, 'backup sem confirmação');
+        lsSet(marca, hoje);
+    } catch (e) {
+        if (_erroPermissao(e)) {      // regra ainda não publicada no console do Firebase
+            if (lsGet('fb_bakAviso') !== hoje) { lsSet('fb_bakAviso', hoje); console.warn('Backup diário indisponível: publique database.rules.json (inclui finances_bak).'); }
+        } else if (!(e && e.message === 'backup indisponível')) console.warn('Backup diário falhou:', e && e.message);
+    }
+}
+function closeBackups() { $('ovBackups').classList.remove('open'); }
+async function abrirBackups() {
+    if (PREVIEW_MODE || !SYNC_ENABLED || !_currentUser) { toast('Backups da nuvem só existem com login.', '#52525b'); return; }
+    $('bakLista').textContent = 'Carregando…'; $('ovBackups').classList.add('open');
+    try {
+        const meta = (await _comPrazo(_bakRef().child('meta').once('value'), CONFIG.SYNC_PRAZO_MS, 'sem resposta do servidor')).val() || {};
+        const dias = Object.keys(meta).sort().reverse(), box = $('bakLista'); box.textContent = '';
+        if (!dias.length) { box.textContent = 'Ainda não há cópias (a primeira é criada no próximo uso com internet).'; return; }
+        dias.forEach(d => {
+            const b = document.createElement('button'); b.className = 'btn-mcancel'; b.style.textAlign = 'left';
+            b.textContent = `${d.split('-').reverse().join('/')} · ${meta[d].n} lançamentos`; b.onclick = () => restaurarBackup(d);
+            box.appendChild(b);
+        });
+    } catch (e) {
+        $('bakLista').textContent = _erroPermissao(e) ? 'Sem permissão: publique database.rules.json no Firebase (inclui finances_bak).' : '❌ ' + e.message;
+    }
+}
+async function restaurarBackup(dia) {
+    try {
+        const raw = (await _comPrazo(_bakRef().child('dados/' + dia).once('value'), CONFIG.SYNC_PRAZO_MS, 'sem resposta do servidor')).val();
+        if (!raw) { toast('⚠️ Essa cópia não existe mais.', '#b45309'); return; }
+        if (_remotoMaisNovo(raw)) { toast('⚠️ Essa cópia é de uma versão mais nova do app — recarregue a página.', '#b45309'); return; }
+        const d = _mapKeys(raw, _fbKeyDec);
+        closeBackups();
+        confirmar(`Substituir os dados atuais pela cópia de ${dia.split('-').reverse().join('/')} (${_asList(d.t).length} lançamentos)?\nDá para desfazer com Ctrl+Z.`, { ok: 'Restaurar', perigo: true }, () => _aplicarBackup(d));
+    } catch (e) { toast('❌ Não consegui ler a cópia: ' + e.message, '#dc2626'); }
+}
 function _buildPayload() {
     // JSON round-trip remove undefined/NaN (o set() do Firebase rejeita undefined)
     const data = JSON.parse(JSON.stringify({ t: tx, c: cats, g: goals, k: cards, b: budget, l: loans }));
@@ -7479,6 +7550,7 @@ async function _reconcileOnce() {
     const remote = (await _comPrazo(_userRef().once('value'), SYNC_PRAZO_MS, 'sem resposta do servidor (conexão instável?)')).val();
     _lastRemoteCheck = Date.now();
     if (_remotoMaisNovo(remote)) return _marcarDesatualizado(remote);
+    if (remote) _backupDiario(remote);   // sem await: o backup não atrasa nem derruba a sync
     _appDesatualizado = false;      // o servidor voltou a ser compatível (ex.: outra conta nesta página)
     const localDirty = !meta || meta.hash !== _stateHash();
     if (!remote) return _pushCAS(null);                      // conta nova: sobe o local
@@ -7627,7 +7699,10 @@ let _syncListenersOn = false, _tsRef = null, _pushingTs = null;
 // (auth.uid === $uid) a leitura é negada; se for permitida, as regras estão abertas e
 // qualquer conta logada leria as finanças das outras. Checa no máximo 1×/dia.
 const DB_RULES_RECOMENDADAS = {
-    rules: { finances: { $uid: { '.read': 'auth != null && auth.uid === $uid', '.write': 'auth != null && auth.uid === $uid' } } }
+    rules: {
+        finances:     { $uid: { '.read': 'auth != null && auth.uid === $uid', '.write': 'auth != null && auth.uid === $uid' } },
+        finances_bak: { $uid: { '.read': 'auth != null && auth.uid === $uid', '.write': 'auth != null && auth.uid === $uid' } },
+    }
 };
 async function checkDbRules(db = fbDb) {
     if (!SYNC_ENABLED || !_currentUser || !db) return null;
