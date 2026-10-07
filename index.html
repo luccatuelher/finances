@@ -4962,7 +4962,7 @@ async function checkInbox({ manual = false } = {}) {
         _inboxUltima = Date.now();
         try {
             if (_syncing) await _syncing;      // aplica sobre o estado já sincronizado
-            if (_conflictOpen) return null;
+            if (_conflictOpen || _appDesatualizado) return null;   // a sync acima pode ter acabado de marcar 'stale'
             const r = await _inboxProcessar(cfg);
             const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
             _inboxStatus(`✓ Verificado às ${hora}` + (r.processadas ? ` — ${r.aplicadas} aplicada(s)` : ' — nada novo') + (r.copia ? ' · cópia dos dados atualizada' : ''));
@@ -7732,9 +7732,11 @@ async function reconcile({ initial = false, manual = false, passive = false } = 
     _syncing = (async () => {
         try {
             const r = await _reconcileOnce();
-            lsSet('fb_lastSync', String(Date.now()));
-            updateSyncTime();
-            if (r !== 'stale') setSyncState(r === 'conflict' ? 'err' : 'ok', r === 'conflict' ? 'Conflito' : 'Sync');
+            if (r !== 'stale') {      // app desatualizado não sincronizou: nada de "sincronizado agora"
+                lsSet('fb_lastSync', String(Date.now()));
+                updateSyncTime();
+                setSyncState(r === 'conflict' ? 'err' : 'ok', r === 'conflict' ? 'Conflito' : 'Sync');
+            }
             if (r === 'pulled' && !initial) toast('🔥 Dados atualizados de outro dispositivo.', '#f97316');
             if (manual && r === 'noop') toast('✓ Tudo sincronizado.');
         } catch (e) {
@@ -7755,6 +7757,7 @@ async function _reconcileOnce() {
     const remote = (await _comPrazo(_userRef().once('value'), SYNC_PRAZO_MS, 'sem resposta do servidor (conexão instável?)')).val();
     _lastRemoteCheck = Date.now();
     if (_remotoMaisNovo(remote)) return _marcarDesatualizado(remote);
+    _appDesatualizado = false;      // o servidor voltou a ser compatível (ex.: outra conta nesta página)
     const localDirty = !meta || meta.hash !== _stateHash();
     if (!remote) return _pushCAS(null);                      // conta nova: sobe o local
     const remoteTs = remote.ts || 0;
@@ -7875,14 +7878,14 @@ async function resolveConflict(choice) {
             restoreState(sanitizeState({ t: merged.tx, c: merged.cats, g: merged.goals, k: merged.cards, b: merged.budget, l: merged.loans }));
             persistAll();
             renderAll(); renderGoals(); renderCartoesMini();
-            if (await _pushCAS(remote.ts || 0) === 'conflict') return;   // outro dispositivo gravou de novo
+            if (!['pushed', 'merged'].includes(await _pushCAS(remote.ts || 0))) return;   // conflito/app desatualizado: nada subiu
             toast(choice === 'remote' ? '✓ Usadas as versões do outro dispositivo; o resto foi combinado.' : '✓ Mantidas as suas versões; o resto foi combinado.', '#0b62f0');
         } else if (choice === 'remote') {
             pushUndo('Aplicar dados do Firebase');       // dá para voltar ao local com Ctrl+Z
             _applyRemote(remote, { keepUndo: true });
             toast('🔥 Dados do Firebase aplicados.', '#f97316');
         } else {
-            if (await _pushCAS(remote.ts || 0) === 'conflict') return;
+            if (!['pushed', 'merged'].includes(await _pushCAS(remote.ts || 0))) return;
             toast('💾 Dados locais enviados ao Firebase.', '#16a34a');
         }
         setSyncState('ok', 'Sync');
@@ -9883,11 +9886,18 @@ async function _runSyncFuzzImpl(seeds = [1, 2, 3, 4, 5, 6, 7, 8], steps = 120) {
             server.data = norm(novo); use({ state: snapshotState(), meta: null, base: null });
             tx = tx.concat(makeTx({ desc: 'local pendente', valor: 7, data: '2026-01-02', tipo: 'saida', cat: '', fixo: false, pagamento: undefined, cartaoId: null }));
             const antes = JSON.stringify(server.data), nTx = tx.length;
-            const r1 = await _reconcileOnce(), r2 = await _pushCAS(null), r3 = await _mergeOrConflict(clone(server.data));
+            const r1 = await _reconcileOnce(), r2 = await _pushCAS(server.data.ts), r3 = await _mergeOrConflict(clone(server.data));
             if (![r1, r2, r3].every(r => r === 'stale')) problems.push('app antigo: esperava "stale", veio ' + [r1, r2, r3].join('/'));
             if (JSON.stringify(server.data) !== antes) problems.push('app antigo: sobrescreveu um servidor com esquema mais novo');
             if (tx.length !== nTx) problems.push('app antigo: perdeu edição local pendente');
-            if (await checkInbox({ manual: true }) !== null) problems.push('app antigo: a caixa de entrada rodou');
+            if (!_appDesatualizado) problems.push('app antigo: flag de desatualizado não ficou ligada (a caixa de entrada depende dela)');
+            // Servidor compatível de novo (ex.: outra conta): a flag desliga e a sync volta ao normal
+            server.data = null; use({ state: snapshotState(), meta: null, base: null });
+            if (await _reconcileOnce() === 'stale' || _appDesatualizado) problems.push('app antigo: não voltou ao normal com servidor compatível');
+            // Trava dentro da transação: o ts confere, mas o servidor virou esquema novo no meio do caminho
+            await _pushCAS(null); const ts0 = server.data.ts;
+            server.data = norm({ ...server.data, v: SCHEMA_VERSION + 1 }); const aposNovo = JSON.stringify(server.data);
+            if (await _pushCAS(ts0) !== 'stale' || JSON.stringify(server.data) !== aposNovo) problems.push('app antigo: a transação sobrescreveu esquema mais novo com ts igual');
             _appDesatualizado = false;
         }
         problems.push(...await _testeInbox());
