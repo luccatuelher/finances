@@ -4582,10 +4582,19 @@ function _orcFimArraste() {
     if (d0.mudou) saveBudget();
     renderBudget();
 }
+// Ligação única dos eventos do Orçamento (roda, tabela, painel lateral e listas), em blocos por região
 function _orcLigar() {
     if (_orcLigado || !$('orcRing')) return;
     _orcLigado = true;
     const nomeDe = el => _orcNomes[+el.dataset.i];
+    const escolher = s => { _orcSel = s; _orcMov = null; renderBudget(); };
+    _orcLigarArraste();
+    _orcLigarRoda(nomeDe, escolher);
+    _orcLigarTabela(nomeDe, escolher);
+    _orcLigarPainel();
+    _orcLigarListas();
+}
+function _orcLigarArraste() {
     const ch = $('orcCatHandle'), ci = $('orcCatHandleIni'), gh = $('orcGHandles');
     const catSel = () => _orcSel && _orcSel.type === 'cat' ? _orcSel.id : null;
     ch.addEventListener('pointerdown', e => _orcIniciaArraste(e, 'cat', catSel(), 'fim'));
@@ -4597,13 +4606,16 @@ function _orcLigar() {
         el.addEventListener('pointercancel', _orcFimArraste);
         el.addEventListener('lostpointercapture', _orcFimArraste);
     });
-    const escolher = s => { _orcSel = s; _orcMov = null; renderBudget(); };
+}
+function _orcLigarRoda(nomeDe, escolher) {
     $('orcSlices').addEventListener('click', e => {
         const p = e.target.closest('path[data-kind]'); if (!p) return;
         if (p.dataset.kind === 'group') escolher({ type: 'group', id: p.dataset.g });
         else if (p.dataset.kind === 'cat') escolher({ type: 'cat', id: nomeDe(p) });
     });
     $('orcChips').addEventListener('click', e => { const b = e.target.closest('button[data-g]'); if (b) escolher({ type: 'group', id: b.dataset.g }); });
+}
+function _orcLigarTabela(nomeDe, escolher) {
     const lista = $('budgetCatList');
     // Seleciona a categoria sem redesenhar a tabela (o campo em foco seria recriado)
     const selLeve = (nome, row) => {
@@ -4644,6 +4656,8 @@ function _orcLigar() {
         if (nome !== _orcHover) { _orcHover = nome; _orcRenderRoda(_orcModelo()); }
     });
     lista.addEventListener('mouseleave', () => { if (_orcHover) { _orcHover = null; _orcRenderRoda(_orcModelo()); } });
+}
+function _orcLigarPainel() {
     const sel = $('orcSel');
     sel.addEventListener('click', e => {
         const b = e.target.closest('[data-act], [data-move]'); if (!b || !_orcSel) return;
@@ -4676,6 +4690,8 @@ function _orcLigar() {
         e.preventDefault();
         _orcAjustar((e.key === 'ArrowUp' || e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 5 : 1) * ORC_PASSO);
     });
+}
+function _orcLigarListas() {
     $('orcOcultasList').addEventListener('click', e => {
         const b = e.target.closest('[data-oc]'); if (!b) return;
         const nome = _orcOcultas[+b.dataset.i]; if (nome == null) return;
