@@ -21,3 +21,11 @@ jobs:
         run: node tools/lint.mjs
       - name: Bateria
         run: node tools/checks.mjs
+      - name: Capturas de tela (claro/escuro, desktop/celular)
+        if: always()
+        run: node tools/capturas.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capturas
+          path: tools/.cache/capturas/
