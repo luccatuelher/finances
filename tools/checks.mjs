@@ -12,10 +12,12 @@ const TIPOS = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '
 const server = createServer(async (req, res) => {
   try {
     const p = join(process.cwd(), decodeURIComponent(new URL(req.url, 'http://x').pathname));
+    // Só os arquivos do app: nada de .git/.claude nem caminhos fora da pasta
+    if (!p.startsWith(process.cwd() + '/') || /\/\.(git|claude)(\/|$)/.test(p)) { res.writeHead(404); res.end(); return; }
     const body = await readFile(p.endsWith('/') ? p + 'index.html' : p);
     res.writeHead(200, { 'content-type': TIPOS[extname(p)] || 'application/octet-stream' }); res.end(body);
   } catch { res.writeHead(404); res.end(); }
-}).listen(5577);
+}).listen(5577, '127.0.0.1');
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const page = await browser.newPage();
