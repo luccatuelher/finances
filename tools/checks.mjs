@@ -124,9 +124,29 @@ const xss = await xpg.evaluate(async () => {
 await xctx.close();
 const xssFalhas = (xss.executou ? 1 : 0) + xss.injetados + xerros.length + (xss.cliques ? 0 : 1);
 
-const falhas = r.self.fails.length + r.sync.length + (r.fuzz || []).length + erros.length + graficos.length + fusoFalhas.length + mobilFalhas + xssFalhas;
-console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · sync ${r.sync.length} problema(s) · fuzz ${(r.fuzz || []).length} violação(ões) · console ${erros.length} erro(s) · segurança ${xssFalhas ? xssFalhas + ' problema(s)' : 'ok (' + xss.cliques + ' cliques)'} · celular ${mobilFalhas ? mobilFalhas + ' problema(s)' : 'ok'} · fusos ${fusoFalhas.length ? fusoFalhas.length + ' problema(s)' : fusos.length + ' ok'} · gráficos ${chartjs ? (graficos.length ? graficos.length + ' problema(s)' : 'ok') : 'não verificados (sem tools/.cache/chart.umd.min.js)'}`);
-if (falhas) console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros, graficos, fusoFalhas, mobil: { ...mob, merros }, xss, xerros }, null, 2));
+// Navegação: URL com hash restaura a tela; voltar/avançar troca de tela; modal fecha antes de voltar de tela
+const nctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+const npg = await nctx.newPage(); const nerros = [], navFalhas = [];
+npg.on('pageerror', e => nerros.push(e.message));
+if (chartjs) await npg.route('**/chart.umd.min.js', r => r.fulfill({ status: 200, contentType: 'text/javascript', body: chartjs }));
+await npg.goto(url + '#mensal'); await npg.waitForFunction(() => typeof runSelfTests === 'function');
+const cv = () => npg.evaluate(() => currentView), hash = () => npg.evaluate(() => location.hash), ativa = () => npg.evaluate(() => (document.querySelector('.nav-pill.active') || {}).textContent);
+const confere = async (nome, got, exp) => { if (JSON.stringify(got) !== JSON.stringify(exp)) navFalhas.push(`${nome}: ${JSON.stringify(got)} ≠ ${JSON.stringify(exp)}`); };
+await confere('abre no hash', [await cv(), await ativa()], ['mensal', 'Mensal']);
+await npg.evaluate(() => navTo('anual')); await confere('navTo muda o hash', [await cv(), await hash()], ['anual', '#anual']);
+await npg.evaluate(() => navTo('metas')); await npg.goBack(); await npg.waitForTimeout(150); await confere('voltar → anual', [await cv(), await hash()], ['anual', '#anual']);
+await npg.goBack(); await npg.waitForTimeout(150); await confere('voltar → mensal', await cv(), 'mensal');
+await npg.goForward(); await npg.waitForTimeout(150); await confere('avançar → anual', await cv(), 'anual');
+// modal: voltar fecha o modal e não muda de tela
+await npg.evaluate(() => document.getElementById('ovCartoes').classList.add('open')); await npg.waitForTimeout(100);
+await npg.goBack(); await npg.waitForTimeout(150);
+await confere('voltar com modal fecha o modal', [await npg.evaluate(() => document.getElementById('ovCartoes').classList.contains('open')), await cv()], [false, 'anual']);
+await nctx.close();
+const navProblemas = navFalhas.length + nerros.length;
+
+const falhas = navProblemas + r.self.fails.length + r.sync.length + (r.fuzz || []).length + erros.length + graficos.length + fusoFalhas.length + mobilFalhas + xssFalhas;
+console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · sync ${r.sync.length} problema(s) · fuzz ${(r.fuzz || []).length} violação(ões) · console ${erros.length} erro(s) · segurança ${xssFalhas ? xssFalhas + ' problema(s)' : 'ok (' + xss.cliques + ' cliques)'} · celular ${mobilFalhas ? mobilFalhas + ' problema(s)' : 'ok'} · fusos ${fusoFalhas.length ? fusoFalhas.length + ' problema(s)' : fusos.length + ' ok'} · navegação ${navProblemas ? navProblemas + ' problema(s)' : 'ok'} · gráficos ${chartjs ? (graficos.length ? graficos.length + ' problema(s)' : 'ok') : 'não verificados (sem tools/.cache/chart.umd.min.js)'}`);
+if (falhas) console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros, graficos, navFalhas, nerros, fusoFalhas, mobil: { ...mob, merros }, xss, xerros }, null, 2));
 // Sem fechar o navegador e o servidor o processo nunca terminava quando tudo passava (parecia travado)
 await browser.close(); server.close();
 process.exit(falhas ? 1 : 0);

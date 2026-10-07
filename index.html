@@ -2703,15 +2703,7 @@ function closeOverlay(id, e) { if (!e || e.target === $(id)) $(id).classList.rem
 const MOB_VIEW_LABELS = { dashboard: 'Visão Geral', anual: 'Visão Anual', mensal: 'Mensal', metas: 'Orçamento' };
 const MOB_TYPE_ICON   = { entrada: '💰', saida: '💸', investimento: '📈' };
 
-function mobNavTo(view, btn) {
-    document.querySelectorAll('.mob-nav-tab:not(.mob-add-tab)').forEach(t => t.classList.remove('active'));
-    if (btn) btn.classList.add('active');
-    const label = $('mobViewLabel');
-    if (label) label.textContent = MOB_VIEW_LABELS[view] || '';
-    const bar = $('mobMonthBar');
-    if (bar) bar.style.display = (view === 'anual' || view === 'metas') ? 'none' : 'flex';
-    navTo(view);
-}
+function mobNavTo(view, btn) { navTo(view); }
 
 function mobFiltroChange() { setFiltro($('mobFiltroMes').value, $('mobFiltroAno').value); }
 
@@ -3457,7 +3449,11 @@ function _setupModalFocus() {
     window.addEventListener('popstate', () => {
         if (_ignorePop > 0) { _ignorePop--; return; }
         const top = _topModal();
-        if (!top) return;
+        if (!top) {      // voltar/avançar entre telas
+            const v = (history.state && history.state.finView) || _viewDoHash();
+            if (v && v !== currentView && $('view-' + v)) navTo(v, null, { hist: 'none' });
+            return;
+        }
         const m = MODALS[top.id];
         if (m.close) m.close();
         else history.pushState({ finModal: top.id }, '');   // exige decisão: mantém aberto
@@ -3505,10 +3501,32 @@ function _checkDayChange() {
 }
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
-function navTo(view, btn) {
+// ── NAVEGAÇÃO ENTRE TELAS (com URL: #dashboard #anual #mensal #metas) ──────────
+// Recarregar mantém a tela; o botão voltar do celular/navegador volta para a tela anterior. Os modais
+// continuam empilhando a própria entrada (sem mudar a URL) e voltar ainda fecha o modal primeiro.
+const VIEWS = ['dashboard', 'anual', 'mensal', 'metas'];
+const _viewDoHash = () => { const v = (location.hash || '').slice(1); return VIEWS.includes(v) ? v : null; };
+function _marcarAbaAtiva(view) {
+    document.querySelectorAll('.nav-pill').forEach(el => el.classList.toggle('active', (el.getAttribute('onclick') || '').includes(`'${view}'`)));
+    document.querySelectorAll('.mob-nav-tab:not(.mob-add-tab)').forEach(t => t.classList.toggle('active', t.id === 'mob-tab-' + view));
+    const label = $('mobViewLabel'); if (label) label.textContent = MOB_VIEW_LABELS[view] || '';
+    const bar = $('mobMonthBar'); if (bar) bar.style.display = (view === 'anual' || view === 'metas') ? 'none' : 'flex';
+}
+// hist: 'push' (padrão: nova entrada no histórico), 'replace' (boot), 'none' (veio do botão voltar)
+function _historicoDaView(view, hist) {
+    if (hist === 'none') return;
+    const st = { ...(history.state || {}), finView: view };
+    const modalAberto = typeof _topModal === 'function' && _topModal();
+    try {
+        if (hist === 'replace' || modalAberto || _viewDoHash() === view) history.replaceState(st, '', '#' + view);
+        else history.pushState(st, '', '#' + view);
+    } catch (e) {}
+}
+function navTo(view, btn, { hist = 'push' } = {}) {
+    if (!VIEWS.includes(view)) view = 'dashboard';
     currentView = view;
-    document.querySelectorAll('.nav-pill').forEach(el => el.classList.remove('active'));
-    if (btn) btn.classList.add('active');
+    _marcarAbaAtiva(view);
+    _historicoDaView(view, hist);
 
     const isDash = view === 'dashboard';
     $('view-dashboard').style.display = isDash ? (IS_MOBILE ? 'flex' : 'grid') : 'none';
@@ -3552,21 +3570,7 @@ function goToMensal(m, a) {
     // do topo e marca o dashboard como sujo (senão ele volta mostrando o mês antigo)
     setFiltro(m, a, { render: false });
     safeRender(atualizar);
-    // Sync desktop nav pill
-    const pills = document.querySelectorAll('.nav-pill');
-    pills.forEach(p => p.classList.remove('active'));
-    if (pills[2]) pills[2].classList.add('active');
-    // Sync mobile bottom nav
-    if (IS_MOBILE) {
-        document.querySelectorAll('.mob-nav-tab:not(.mob-add-tab)').forEach(t => t.classList.remove('active'));
-        const mensalTab = $('mob-tab-mensal');
-        if (mensalTab) mensalTab.classList.add('active');
-        const label = $('mobViewLabel');
-        if (label) label.textContent = MOB_VIEW_LABELS['mensal'] || '';
-        const bar = $('mobMonthBar');
-        if (bar) bar.style.display = 'flex';
-    }
-    navTo('mensal');
+    navTo('mensal');      // marca as abas (desktop e celular) e o histórico
 }
 
 // ── UNDO ──────────────────────────────────────────────────────────────────────
@@ -7137,7 +7141,7 @@ function showApp(user) {
     el.id = 'userInitials';
     if (cur) cur.replaceWith(el);
 
-    navTo('dashboard');
+    navTo(_viewDoHash() || 'dashboard', null, { hist: 'replace' });
 }
 
 // Erros de login em pt-BR (antes aparecia o texto cru do Firebase, ex.: "Firebase: Error
