@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Finances / Lucca</title>
     <!--
       Revisão Claude (jun/2026)
@@ -254,7 +254,7 @@
       • ESCALA re-medida após acessibilidade/contraste: 6.000 lançamentos (1,1 MB) —
         renderAll 12,6 ms, salvar+render 25 ms, _a11y no documento inteiro 1 ms, fuzz de
         1.600 ações com a base grande sem violações.
-      • VALOR DA META E DO APORTE (it. 43): eram <input type="number">, que lê "." como
+      • VALOR DA META E DO APORTE (it. 43): eram <input autocomplete="off" type="number">, que lê "." como
         decimal: digitar 1.500 (milhar BR) salvava R$ 1,50 sem aviso. Agora são texto com
         inputmode decimal e passam por parseValor (1.500 → 1500; 1.500,50 → 1500,5), como
         os demais formulários; ao editar, o valor volta formatado com vírgula. Autoteste
@@ -389,6 +389,11 @@
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <meta name="theme-color" content="#0b62f0">
+    <meta name="referrer" content="no-referrer">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Finances">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Sans:wght@700;800&display=swap" rel="stylesheet">
     <!-- Versões FIXAS + SRI (integrity): "chart.js" sem versão pegava sempre a mais
          recente — uma major nova quebraria o site sozinha; e o hash impede que um CDN
@@ -1574,12 +1579,12 @@
         </div>
         <div class="field">
             <label>Descrição</label>
-            <input type="text" id="mob-desc" maxlength="200" placeholder="Ex: Supermercado">
+            <input autocomplete="off" type="text" id="mob-desc" maxlength="200" placeholder="Ex: Supermercado">
         </div>
         <div class="g2">
             <div class="field">
                 <label>Valor (R$)</label>
-                <input type="text" id="mob-valor" placeholder="0,00" inputmode="decimal">
+                <input autocomplete="off" type="text" id="mob-valor" placeholder="0,00" inputmode="decimal">
             </div>
             <div class="field">
                 <label>Data</label>
@@ -1617,7 +1622,7 @@
             <div class="field">
                 <label>Parcelas</label>
                 <div class="g2">
-                    <input type="number" id="mob-parcelas" min="1" max="120" value="1" inputmode="numeric" aria-label="Número de parcelas">
+                    <input autocomplete="off" type="number" id="mob-parcelas" min="1" max="120" value="1" inputmode="numeric" aria-label="Número de parcelas">
                     <select id="mob-parcelasModo" aria-label="O valor digitado é">
                         <option value="total">valor total</option>
                         <option value="parcela">valor da parcela</option>
@@ -1627,7 +1632,7 @@
             </div>
             <div class="field">
                 <label>Juros/multa incluídos no valor (R$)</label>
-                <input type="text" id="mob-juros" inputmode="decimal" placeholder="0,00">
+                <input autocomplete="off" type="text" id="mob-juros" inputmode="decimal" placeholder="0,00">
             </div>
         </details>
         <label class="check-row" style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:13px;cursor:pointer;margin-bottom:10px">
@@ -1650,12 +1655,12 @@
         <input type="hidden" id="mob-edit-id">
         <div class="mob-edit-full field">
             <label>Descrição</label>
-            <input type="text" id="mob-edit-desc" maxlength="200" placeholder="Descrição">
+            <input autocomplete="off" type="text" id="mob-edit-desc" maxlength="200" placeholder="Descrição">
         </div>
         <div class="mob-edit-grid">
             <div class="field">
                 <label>Valor (R$)</label>
-                <input type="text" id="mob-edit-valor" inputmode="decimal">
+                <input autocomplete="off" type="text" id="mob-edit-valor" inputmode="decimal">
             </div>
             <div class="field">
                 <label>Data</label>
@@ -1691,7 +1696,7 @@
         <div id="mobEditMaisField">
             <div class="field">
                 <label>Juros/multa incluídos no valor (R$)</label>
-                <input type="text" id="mob-edit-juros" inputmode="decimal" placeholder="0,00">
+                <input autocomplete="off" type="text" id="mob-edit-juros" inputmode="decimal" placeholder="0,00">
             </div>
             <label class="check-row" id="mobEditProxRow" style="display:none;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:13px;cursor:pointer;margin-bottom:8px">
                 <input type="checkbox" id="mob-edit-prox"> <span id="mobEditProxTxt">Aplicar às parcelas seguintes</span>
@@ -1740,12 +1745,12 @@
             <input type="hidden" id="editId">
             <div class="field">
                 <label>Descrição</label>
-                <input type="text" id="desc" maxlength="200" placeholder="Ex: Supermercado">
+                <input autocomplete="off" type="text" id="desc" maxlength="200" placeholder="Ex: Supermercado">
             </div>
             <div class="g2">
                 <div class="field">
                     <label>Valor (R$)</label>
-                    <input type="text" id="valor" placeholder="0,00">
+                    <input autocomplete="off" type="text" id="valor" placeholder="0,00">
                 </div>
                 <div class="field">
                     <label>Data</label>
@@ -1783,7 +1788,7 @@
                 <div class="field">
                     <label>Parcelas</label>
                     <div class="g2">
-                        <input type="number" id="parcelas" min="1" max="120" value="1" inputmode="numeric" aria-label="Número de parcelas" title="Em quantas vezes (1 = à vista)">
+                        <input autocomplete="off" type="number" id="parcelas" min="1" max="120" value="1" inputmode="numeric" aria-label="Número de parcelas" title="Em quantas vezes (1 = à vista)">
                         <select id="parcelasModo" aria-label="O valor digitado é" title="O valor digitado é o total da compra ou o de cada parcela">
                             <option value="total">valor total</option>
                             <option value="parcela">valor da parcela</option>
@@ -1793,7 +1798,7 @@
                 </div>
                 <div class="field">
                     <label>Juros/multa incluídos no valor (R$)</label>
-                    <input type="text" id="juros" inputmode="decimal" placeholder="0,00" title="Boleto pago com atraso: quanto do valor é juros ou multa. Fica no mesmo lançamento e na categoria do boleto">
+                    <input autocomplete="off" type="text" id="juros" inputmode="decimal" placeholder="0,00" title="Boleto pago com atraso: quanto do valor é juros ou multa. Fica no mesmo lançamento e na categoria do boleto">
                 </div>
             </details>
             <label class="check-row">
@@ -1903,7 +1908,7 @@
                     <button class="tab t-invest"  id="tab-invest"  onclick="setTab('investimento')">Investimentos</button>
                 </div>
                 <div class="search-row" style="display:flex;gap:8px;align-items:center">
-                    <input type="text" id="busca" placeholder="Buscar..." style="flex:1">
+                    <input autocomplete="off" type="text" id="busca" placeholder="Buscar..." style="flex:1">
                     <button class="group-toggle" id="btnGroupCat" onclick="toggleGroupMode()" title="Agrupar por categoria em caixinhas">⊞ Categoria</button>
                     <select id="groupSort" class="group-sort" onchange="setGroupSort(this.value)" style="display:none" aria-label="Ordenar as caixinhas de categoria" title="Ordenar as caixinhas">
                         <option value="valor_desc">Maior valor</option>
@@ -2128,7 +2133,7 @@
                 <div class="orc-card-h"><span class="orc-card-t">Distribuição do mês</span><span class="orc-hint">arraste as alças das duas pontas · setas ajustam</span></div>
                 <div class="orc-total">
                     <label for="budgetTotal">Total do mês</label>
-                    <input type="text" id="budgetTotal" inputmode="decimal" placeholder="R$ 5.000" oninput="onBudgetTotalChange()" onchange="onBudgetTotalChange(true)">
+                    <input autocomplete="off" type="text" id="budgetTotal" inputmode="decimal" placeholder="R$ 5.000" oninput="onBudgetTotalChange()" onchange="onBudgetTotalChange(true)">
                     <span id="budgetTypeBadge"></span>
                     <button class="orc-mini" onclick="openAplicarMeses()">📅 Aplicar a meses</button>
                     <button class="orc-mini warn" id="btnResetMonthBudget" onclick="resetMonthBudget()" style="display:none">↩ Usar padrão</button>
@@ -2189,7 +2194,7 @@
                             <div class="ch-add-icon" id="catHubIconBtn" onclick="toggleIconPicker('catHubPicker')" title="Escolher ícone">📦</div>
                             <div class="icon-picker" id="catHubPicker"></div>
                         </div>
-                        <input type="text" id="catHubInput" maxlength="50" class="budget-add-name" placeholder="Nova categoria…"
+                        <input autocomplete="off" type="text" id="catHubInput" maxlength="50" class="budget-add-name" placeholder="Nova categoria…"
                             onkeydown="if(event.key==='Enter')addBudgetCategory()">
                         <button onclick="addBudgetCategory()" class="btn-save" style="width:auto;margin:0;padding:8px 14px;font-size:13px;flex-shrink:0">＋</button>
                     </div>
@@ -2304,7 +2309,7 @@
         <div class="modal-sub">Defina um valor e selecione os meses de <span id="aplicarMesesAno"></span> que devem usar esse orçamento.</div>
         <div class="field">
             <label>Valor do Orçamento (R$)</label>
-            <input type="text" id="aplicarMesesValor" placeholder="5.000" inputmode="decimal"
+            <input autocomplete="off" type="text" id="aplicarMesesValor" placeholder="5.000" inputmode="decimal"
                 style="font-size:16px;font-weight:700;padding:10px 12px">
         </div>
         <div style="margin-bottom:12px">
@@ -2369,26 +2374,26 @@
         <input type="hidden" id="loanEditId">
         <div class="field">
             <label>Nome</label>
-            <input type="text" id="loanNome" maxlength="120" placeholder="Ex: Empréstimo do carro">
+            <input autocomplete="off" type="text" id="loanNome" maxlength="120" placeholder="Ex: Empréstimo do carro">
         </div>
         <div class="g2">
             <div class="field">
                 <label>Valor emprestado (R$)</label>
-                <input type="text" id="loanValor" inputmode="decimal" placeholder="10.000,00">
+                <input autocomplete="off" type="text" id="loanValor" inputmode="decimal" placeholder="10.000,00">
             </div>
             <div class="field">
                 <label>Taxa de juros (% ao mês)</label>
-                <input type="text" id="loanTaxa" inputmode="decimal" placeholder="opcional, ex: 1,99">
+                <input autocomplete="off" type="text" id="loanTaxa" inputmode="decimal" placeholder="opcional, ex: 1,99">
             </div>
         </div>
         <div class="g2">
             <div class="field">
                 <label>Nº de parcelas</label>
-                <input type="number" id="loanN" min="2" max="600" inputmode="numeric" placeholder="24">
+                <input autocomplete="off" type="number" id="loanN" min="2" max="600" inputmode="numeric" placeholder="24">
             </div>
             <div class="field">
                 <label>Valor da parcela (R$)</label>
-                <input type="text" id="loanParcela" inputmode="decimal" placeholder="vazio = calcular">
+                <input autocomplete="off" type="text" id="loanParcela" inputmode="decimal" placeholder="vazio = calcular">
             </div>
         </div>
         <div class="field">
@@ -2398,7 +2403,7 @@
         <div id="loanPreview" class="fatura-info" style="display:none"></div>
         <div class="field">
             <label>Nota (opcional)</label>
-            <input type="text" id="loanNota" maxlength="500" placeholder="Ex: banco, contrato, finalidade">
+            <input autocomplete="off" type="text" id="loanNota" maxlength="500" placeholder="Ex: banco, contrato, finalidade">
         </div>
         <div class="field" id="loanGerarRow">
             <label>Lançar automaticamente nos lançamentos (uma por mês)</label>
@@ -2439,7 +2444,7 @@
         <div class="modal-sub" id="editFixoNome"></div>
         <div class="field">
             <label>Novo Valor (R$)</label>
-            <input type="text" id="editFixoVal" placeholder="0,00">
+            <input autocomplete="off" type="text" id="editFixoVal" placeholder="0,00">
         </div>
         <div class="field">
             <label>Categoria</label>
@@ -2462,12 +2467,12 @@
         <input type="hidden" id="goalEditId">
         <div class="field">
             <label>Nome da meta</label>
-            <input type="text" id="goalNome" maxlength="200" placeholder="Ex: Fundo de emergência">
+            <input autocomplete="off" type="text" id="goalNome" maxlength="200" placeholder="Ex: Fundo de emergência">
         </div>
         <div class="g2">
             <div class="field">
                 <label>Valor alvo (R$)</label>
-                <input type="text" id="goalMeta" placeholder="10.000,00" inputmode="decimal">
+                <input autocomplete="off" type="text" id="goalMeta" placeholder="10.000,00" inputmode="decimal">
             </div>
             <div class="field">
                 <label>Prazo</label>
@@ -2476,7 +2481,7 @@
         </div>
         <div class="field">
             <label>Descrição (opcional)</label>
-            <input type="text" id="goalDesc" placeholder="Ex: 6 meses de despesas">
+            <input autocomplete="off" type="text" id="goalDesc" placeholder="Ex: 6 meses de despesas">
         </div>
         <div class="field">
             <label>Cor</label>
@@ -2499,7 +2504,7 @@
         <div class="g2">
             <div class="field">
                 <label>Valor (R$)</label>
-                <input type="text" id="aporteValor" placeholder="500,00" inputmode="decimal">
+                <input autocomplete="off" type="text" id="aporteValor" placeholder="500,00" inputmode="decimal">
             </div>
             <div class="field">
                 <label>Data</label>
@@ -2508,7 +2513,7 @@
         </div>
         <div class="field">
             <label>Nota (opcional)</label>
-            <input type="text" id="aporteNota" placeholder="Ex: Salário de março">
+            <input autocomplete="off" type="text" id="aporteNota" placeholder="Ex: Salário de março">
         </div>
         <div class="modal-footer">
             <button class="btn-mcancel" onclick="closeAporte()">Cancelar</button>
@@ -2578,10 +2583,10 @@
         <div class="cartao-add-form">
             <div class="cartao-add-title" id="cartaoFormTitle">Novo Cartão</div>
             <input type="hidden" id="cartaoEditId">
-            <div class="field"><label>Nome</label><input type="text" id="cartaoNome" maxlength="40" placeholder="Ex: Nubank, Itaú Platinum"></div>
+            <div class="field"><label>Nome</label><input autocomplete="off" type="text" id="cartaoNome" maxlength="40" placeholder="Ex: Nubank, Itaú Platinum"></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-                <div class="field"><label>Dia fechamento</label><input type="number" id="cartaoFech" min="1" max="31" placeholder="Ex: 15" title="Em meses mais curtos, vale o último dia"></div>
-                <div class="field"><label>Dia vencimento</label><input type="number" id="cartaoVenc" min="1" max="31" placeholder="Ex: 22" title="Em meses mais curtos, vale o último dia"></div>
+                <div class="field"><label>Dia fechamento</label><input autocomplete="off" type="number" id="cartaoFech" min="1" max="31" placeholder="Ex: 15" title="Em meses mais curtos, vale o último dia"></div>
+                <div class="field"><label>Dia vencimento</label><input autocomplete="off" type="number" id="cartaoVenc" min="1" max="31" placeholder="Ex: 22" title="Em meses mais curtos, vale o último dia"></div>
             </div>
             <div class="field" style="margin-bottom:4px"><label>Cor</label>
                 <div class="card-color-picker" id="cardColorPicker"></div>
@@ -2781,7 +2786,7 @@ function parseValor(s) {
     if (!Number.isFinite(v)) return NaN;
     return neg ? -v : v;
 }
-// <input type="number"> já entrega número com ponto decimal — não passar pelo parser BR
+// <input autocomplete="off" type="number"> já entrega número com ponto decimal — não passar pelo parser BR
 function numInput(el) {
     if (!el) return NaN;
     return el.type === 'number' ? el.valueAsNumber : parseValor(el.value);
@@ -4826,7 +4831,8 @@ function inboxAplicar(state, ops, { maxDel = INBOX_MAX_DEL } = {}) {
                 if (!(n0.valor > 0) || !(n0.n >= 2) || !(n0.parcela > 0) || !n0.primeira) return res('ignorado: contrato inválido');
                 loansN = loansN.concat(n0);
                 const modo = o.lancar === 'parcela' ? 'parcela' : o.lancar === 'nada' ? null : 'juros';
-                if (modo) loanTx(n0, modo).forEach(t => { const nt = { ...t, extId: 'claude:' + id }; lista.push(nt); porId.set(nt.id, nt); });
+                if (modo) loanTx(n0, modo).forEach(t => { const nt = { ...t, id: lid * 1000 + t.parcela.k, extId: 'claude:' + id };   // id derivado: dois aparelhos processando juntos não duplicam parcelas
+                    if (porId.has(nt.id)) return; lista.push(nt); porId.set(nt.id, nt); });
                 return res('aplicado');
             }
             const l = loansN.find(x => x.id === toId(o.loanId));
@@ -4864,9 +4870,17 @@ const _ghHeaders = cfg => ({ Authorization: 'Bearer ' + cfg.token, Accept: 'appl
 async function _ghReq(cfg, method, arq, body) {
     const headers = _ghHeaders(cfg);
     if (body) headers['Content-Type'] = 'application/json';
-    return _comPrazo(_inboxFetch(`https://api.github.com/repos/${cfg.repo}/contents/${arq}`,
+    const r = await _comPrazo(_inboxFetch(`https://api.github.com/repos/${cfg.repo}/contents/${arq}`,
         { method, headers, cache: 'no-store', body: body ? JSON.stringify(body) : undefined }), SYNC_PRAZO_MS, 'GitHub sem resposta');
+    _ghLerExpiracao(r);
+    return r;
 }
+// O GitHub informa quando o token vence (cabeçalho, se o navegador o expõe): o app avisa antes de a caixa parar
+let _ghTokenExpira = null;
+function _ghLerExpiracao(r) {
+    try { const e = r && r.headers && r.headers.get && r.headers.get('github-authentication-token-expiration'); if (e) _ghTokenExpira = Date.parse(e) || null; } catch (e) {}
+}
+const _ghDiasParaExpirar = () => _ghTokenExpira ? Math.ceil((_ghTokenExpira - Date.now()) / 86400000) : null;
 // A caixa e a cópia dos dados só podem usar repositório PRIVADO: este app e o `finances` são públicos
 // e um erro de digitação no dono/nome publicaria todos os lançamentos. Campo ausente conta como público.
 async function _ghRepoPrivado(cfg) {
@@ -4965,7 +4979,9 @@ async function checkInbox({ manual = false } = {}) {
             if (_conflictOpen || _appDesatualizado) return null;   // a sync acima pode ter acabado de marcar 'stale'
             const r = await _inboxProcessar(cfg);
             const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            _inboxStatus(`✓ Verificado às ${hora}` + (r.processadas ? ` — ${r.aplicadas} aplicada(s)` : ' — nada novo') + (r.copia ? ' · cópia dos dados atualizada' : ''));
+            const dExp = _ghDiasParaExpirar();
+            _inboxStatus(`✓ Verificado às ${hora}` + (r.processadas ? ` — ${r.aplicadas} aplicada(s)` : ' — nada novo') + (r.copia ? ' · cópia dos dados atualizada' : '')
+                + (dExp !== null && dExp <= 14 ? ` · ⚠️ o token do GitHub ${dExp <= 0 ? 'venceu' : 'vence em ' + dExp + ' dia(s)'} — gere outro` : ''));
             if (manual && !r.processadas) toast('✓ Caixa de entrada: nada novo.');
             return r;
         } catch (e) {
@@ -5025,8 +5041,8 @@ function _inlineEditorHtml(t) {
     const selStyle = 'padding:2px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px;font-family:inherit';
     return `<td colspan="5">
         <div class="ie-inner">
-            <div class="ie-field"><label>Descrição</label><input id="ie-desc-${t.id}" value="${escHtml(t.desc)}" type="text" maxlength="200"></div>
-            <div class="ie-field"><label>Valor (R$)</label><input id="ie-valor-${t.id}" value="${fmtValorInput(t.valor)}" type="text" inputmode="decimal"></div>
+            <div class="ie-field"><label>Descrição</label><input autocomplete="off" id="ie-desc-${t.id}" value="${escHtml(t.desc)}" type="text" maxlength="200"></div>
+            <div class="ie-field"><label>Valor (R$)</label><input autocomplete="off" id="ie-valor-${t.id}" value="${fmtValorInput(t.valor)}" type="text" inputmode="decimal"></div>
             <div class="ie-field"><label>Data</label><input id="ie-data-${t.id}" value="${t.data}" type="date"></div>
             <div class="ie-field"><label>Tipo</label><select id="ie-tipo-${t.id}" onchange="ieUpdateCats(${t.id})">${tipoOpts}</select></div>
             <div class="ie-field"><label>Categoria</label><div class="cat-combo" id="ie-cat-wrap-${t.id}">${buildCatCombo('ie-cat-' + t.id, t.tipo, t.cat)}</div></div>
@@ -5038,7 +5054,7 @@ function _inlineEditorHtml(t) {
         <div style="display:flex;gap:16px;margin-top:8px;align-items:center;flex-wrap:wrap">
             <label class="ie-check"><input type="checkbox" id="ie-fixo-${t.id}" ${t.fixo ? 'checked' : ''}> Gasto fixo mensal</label>
             <div id="ie-mais-${t.id}" style="${t.tipo !== 'saida' ? 'display:none' : ''}">
-                <label class="ie-check">Juros incluídos:&nbsp;<input id="ie-juros-${t.id}" type="text" inputmode="decimal" value="${t.juros ? fmtValorInput(t.juros) : ''}" placeholder="0,00" style="${selStyle};width:84px"></label>
+                <label class="ie-check">Juros incluídos:&nbsp;<input autocomplete="off" id="ie-juros-${t.id}" type="text" inputmode="decimal" value="${t.juros ? fmtValorInput(t.juros) : ''}" placeholder="0,00" style="${selStyle};width:84px"></label>
             </div>
             ${t.parcela && t.parcela.k < t.parcela.n ? `<label class="ie-check"><input type="checkbox" id="ie-prox-${t.id}"> Aplicar às parcelas seguintes (${t.parcela.k + 1}–${t.parcela.n})</label>` : ''}
             <div id="ie-pag-wrap-${t.id}" style="${t.tipo !== 'saida' ? 'display:none' : ''}">
@@ -6850,7 +6866,7 @@ function _orcRenderSel(mod) {
         <div class="orc-sel-spent">Gastou ${fmt(c.spent)} · <span class="orc-st-${st.cls}">${st.lbl}${st.v === '—' ? '' : ' ' + st.v}</span></div>
         ${c.grupo === 'invest' ? '' : `<div class="orc-gsw">Grupo: ${ORC_GRUPOS.filter(x => x.key !== 'invest').map(x => `<button data-move="${x.key}" aria-pressed="${x.key === c.grupo}"><span class="orc-dot" style="background:${x.cor}"></span>${x.one}</button>`).join('')}</div>`}
         <details class="orc-edit"><summary>✏️ Renomear ou excluir</summary>
-            <div class="btd-row"><input type="text" id="orcRenameIn" class="btd-rename" maxlength="${CAT_MAX}" value="${escHtml(c.nome)}" aria-label="Nome da categoria">
+            <div class="btd-row"><input autocomplete="off" type="text" id="orcRenameIn" class="btd-rename" maxlength="${CAT_MAX}" value="${escHtml(c.nome)}" aria-label="Nome da categoria">
             <button class="btd-save" data-act="renomear">✓</button><button class="btd-del" data-act="excluir" title="Excluir categoria">🗑️</button></div>
         </details>`;
     } else {
@@ -7008,7 +7024,7 @@ function _orcRenderEntradas() {
     box.style.display = lista.length ? '' : 'none';
     $('orcEntradasSum').textContent = `Categorias de entrada (${lista.length})`;
     $('orcEntradasList').innerHTML = lista.map((nome, i) => `<div class="btd-row orc-ent-row">
-        <input type="text" class="btd-rename" data-ent="${i}" maxlength="${CAT_MAX}" value="${escHtml(nome)}" aria-label="Nome da categoria de entrada">
+        <input autocomplete="off" type="text" class="btd-rename" data-ent="${i}" maxlength="${CAT_MAX}" value="${escHtml(nome)}" aria-label="Nome da categoria de entrada">
         <button class="btd-save" data-ent-act="renomear" data-ent="${i}" title="Renomear">✓</button>
         <button class="btd-del" data-ent-act="excluir" data-ent="${i}" title="Excluir">🗑️</button></div>`).join('');
 }
@@ -7472,7 +7488,7 @@ function wipeLocalData(uid = null) {
     for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (!k || !k.startsWith(LS_PREFIX)) continue;
-        const nome = k.slice(LS_PREFIX.length), dono = nome.match(/^(?:fin5_pendente_|fb_sync_|fb_base_)(.+)$/);
+        const nome = k.slice(LS_PREFIX.length), dono = nome.match(/^(?:fin5_pendente_|fb_sync_|fb_base_|fin5_inbox_)(.+?)(?:_copia)?$/);
         if (dono && dono[1] !== uid) continue;
         if (/^(fin5_|fb_)/.test(nome)) keys.push(k);
     }
@@ -7919,7 +7935,14 @@ async function checkDbRules(db = fbDb) {
         if (!/permission/i.test(e.code || e.message || '')) return null;   // erro de rede etc.: tenta outro dia
         aberto = false;
     }
+    // Escrita em caminho vizinho (set(null): não cria nada): regra de escrita aberta passava sem aviso
+    let escritaAberta = false;
+    try { await db.ref('finances/__probe_' + Math.random().toString(36).slice(2)).set(null); escritaAberta = true; }
+    catch (e) { if (!/permission/i.test(e.code || e.message || '')) return null; }
     lsSet('fb_rulesCheck', hoje);
+    if (escritaAberta && !aberto) console.warn('⚠️ Regras do Firebase permitem ESCRITA fora do próprio uid. Aplique:\n' + JSON.stringify(DB_RULES_RECOMENDADAS, null, 2));
+    if (escritaAberta && !aberto) { toast('⚠️ Segurança: as regras do Firebase permitem escrita em dados de outras contas — veja o console.', '#dc2626'); }
+    if (escritaAberta) return true;
     if (aberto) {
         console.warn('⚠️ Regras do Firebase ABERTAS: qualquer conta logada pode ler dados de outras.\n'
             + 'Firebase Console → Realtime Database → Regras, aplique:\n' + JSON.stringify(DB_RULES_RECOMENDADAS, null, 2));
@@ -9535,6 +9558,11 @@ function runSelfTests() {
            [['aplicado', 'aplicado', 'ignorado: já existe', 'aplicado', 'aplicado', 'ignorado: planejamento inválido'], 1, 4, [1, 2]]);
     }
     eq('trava de esquema: servidor mais novo', [_remotoMaisNovo({ v: SCHEMA_VERSION + 1 }), _remotoMaisNovo({ v: String(SCHEMA_VERSION) }), _remotoMaisNovo({}), _remotoMaisNovo(null), _buildPayload().appV === APP_BUILD], [true, false, false, false, true]);
+    {   // empréstimo pela caixa: ids das parcelas derivados do contrato (dois aparelhos processando juntos não duplicam)
+        const b0 = sanitizeState({}), op = { id: 'e9', op: 'emprestimo', acao: 'add', loan: { id: 1850000000001, nome: 'Giro', valor: 1000, taxa: 2, n: 4, parcela: 300, primeira: '2026-10-15' }, lancar: 'parcela' };
+        const ids = st => inboxAplicar(st, [op]).state.tx.map(t => t.id).sort((x, y) => x - y);
+        eq('caixa: parcelas do empréstimo têm ids determinísticos', [ids(b0).join() === ids(b0).join(), ids(b0).length, ids(b0)[0]], [true, 4, 1850000000001001]);
+    }
     {   // caixa de entrada: espera obrigatória e limite de exclusões por rodada
         const mk = n => sanitizeState({ t: Array.from({ length: n }, (_, i) => ({ id: 3000 + i, desc: 'L' + i, valor: 10 + i, data: '2026-09-01', tipo: 'saida', cat: 'C' })) });
         const b = mk(12), dl = (i, esp) => ({ id: 'd' + i, op: 'delete', txId: 3000 + i, ...(esp === undefined ? { espera: { desc: 'L' + i, valor: 10 + i } } : esp ? { espera: esp } : {}) });
@@ -9998,6 +10026,8 @@ async function _testeInbox() {
 bootApp();
 // Instalável como app e abre sem rede (sw.js: rede primeiro, cópia local como reserva).
 // Fora do preview e só em http(s); falha de registro nunca atrapalha o app.
+// Pede armazenamento persistente: sem isso o iOS/Safari pode apagar o localStorage (e as alterações ainda não sincronizadas)
+if (!PREVIEW_MODE) { try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) {} }
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !PREVIEW_MODE) {
     window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }

@@ -1,0 +1,7 @@
+{
+  "name": "finances",
+  "private": true,
+  "description": "Controle de finanças pessoais (PWA de arquivo único)",
+  "scripts": { "test": "node tools/checks.mjs" },
+  "devDependencies": { "playwright": "^1" }
+}

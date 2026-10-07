@@ -1,4 +1,5 @@
 {
+  "id": "./index.html",
   "name": "Finances",
   "short_name": "Finances",
   "description": "Controle de finanças pessoais",
@@ -33,5 +34,8 @@
       "type": "image/svg+xml",
       "purpose": "any"
     }
+  ],
+  "categories": [
+    "finance"
   ]
 }
