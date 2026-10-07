@@ -18,14 +18,14 @@ Abrir a sessão na nuvem apontando para esse repositório e colar o prompt da se
 
 ```
 Você vai continuar o loop de melhoria contínua do app de finanças deste repositório
-(arquivo único index.html, pt-BR). Leia LOOP-NUVEM.md inteiro antes de qualquer coisa e
+(index.html + app.js, pt-BR; sem build). Leia LOOP-NUVEM.md inteiro antes de qualquer coisa e
 siga-o: comece pela "Iteração 0" (preparar o ambiente de testes e confirmar que tudo passa
 ANTES de mudar código) e depois faça iterações seguindo o passo a passo da seção 4.
 
 Em cada iteração: escolha a próxima área ainda não revisada (ou um risco encontrado),
 procure bugs/otimizações, corrija de forma ESTRUTURAL (entender a causa, nunca hardcode do
 caso específico), valide sintaxe com node, teste num navegador headless em modo ?preview=1
-e registre o que mudou (changelog no <head> do index.html e seção 8 do LOOP-NUVEM.md).
+e registre o que mudou (CHANGELOG.md e seção 8 do LOOP-NUVEM.md).
 Um commit por iteração, direto na main (autorizado pelo dono do repositório): faça push
 para origin main ao fim de cada iteração, com a bateria verde.
 Pare quando eu pedir ou quando não houver mais melhoria relevante a fazer.
@@ -35,7 +35,7 @@ Pare quando eu pedir ou quando não houver mais melhoria relevante a fazer.
 
 ## 2. O projeto em 1 minuto
 
-- **Tudo em `index.html`** (~7.300 linhas): HTML, CSS e um único `<script>` principal.
+- **`index.html`** (marcação + CSS), **`app.js`** (~6.900 linhas, todo o código), `handlers.js` (executor de `data-onclick`...; NUNCA use `onclick=` inline: a CSP bloqueia), `tema.js`. Testes em `tools/testes.js`, bateria `node tools/checks.mjs`, lint `node tools/lint.mjs`.
   Sem build, sem dependências locais. CDNs: Chart.js 4.5.1 e Firebase 10.12.2 (com SRI).
   Sem rede o app continua funcionando (sem gráficos e sem sync).
 - **Dados**: estado `{ tx, cats, goals, cards, budget }` (lançamentos, categorias, metas,
@@ -61,7 +61,7 @@ Pare quando eu pedir ou quando não houver mais melhoria relevante a fazer.
 | Acessibilidade | `_a11y(root)` aplicado ao DOM e a tudo que é renderizado depois (MutationObserver) |
 | Boot | `bootApp() → init() → showApp()`; `loadLocalState()` roda no carregamento do script |
 
-O mapa completo está nos cabeçalhos `// ── NOME ──` do script (`grep -n "^// ── " index.html`).
+O mapa completo está nos cabeçalhos `// ── NOME ──` do script (`grep -n "^// ── " app.js`).
 
 ---
 
@@ -112,12 +112,8 @@ O mapa completo está nos cabeçalhos `// ── NOME ──` do script (`grep -
 ### 5.1 Sintaxe (sempre)
 
 ```bash
-node -e "
-const s=require('fs').readFileSync('index.html','utf8');
-const head=s.slice(0,s.indexOf('</head>')); const c=head.indexOf('<!--');
-console.log('changelog sem --:', !head.slice(c+4, head.indexOf('-->',c)).includes('--'));
-const re=/<script(?![^>]*src)[^>]*>([\s\S]*?)<\/script>/g; let m;
-while((m=re.exec(s))){ try{ new Function(m[1]); console.log('SYNTAX OK') } catch(x){ console.log('ERR', x.message); process.exit(1) } }"
+node tools/sintaxe.mjs      # app.js, handlers.js, tema.js, sw.js e testes
+node tools/lint.mjs         # ESLint (variáveis indefinidas, duplicadas...)
 ```
 
 ### 5.2 Iteração 0 — preparar o navegador headless
