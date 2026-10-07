@@ -2,6 +2,10 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <!-- CSP: nenhum script inline (handlers via data-on* + handlers.js); scripts só do próprio site e das CDNs fixadas
+         (Chart.js, Firebase; apis.google.com é o que o login do Firebase carrega; *.firebaseio.com serve o long-polling do Realtime Database, que roda como <script> num iframe). connect/frame abertos a https: para
+         não quebrar login/sync do Firebase; o ganho aqui é bloquear execução de script injetado. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://www.gstatic.com https://apis.google.com https://*.firebaseio.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https: wss:; frame-src https:; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Finances / Lucca</title>
     <!-- Histórico de mudanças: CHANGELOG.md. Testes embutidos (autoteste/fuzz): tools/testes.js, rodados por
@@ -13,10 +17,6 @@
     <script src="tema.js"></script>
     <script src="handlers.js"></script>
     <meta name="referrer" content="no-referrer">
-    <!-- CSP: nenhum script inline (handlers via data-on* + handlers.js); scripts só do próprio site e das CDNs fixadas
-         (Chart.js, Firebase; apis.google.com é o que o login do Firebase carrega). connect/frame abertos a https: para
-         não quebrar login/sync do Firebase; o ganho aqui é bloquear execução de script injetado. -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https: wss:; frame-src https:; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Finances">

@@ -10,12 +10,17 @@
 //   chamadas   := funções globais DO APP (as nativas do navegador, como alert/eval/fetch, são recusadas)
 //                 e alguns métodos de DOM/evento (click, classList.toggle/add/remove, querySelectorAll, forEach,
 //                 stopPropagation, preventDefault, focus, select)
+// Limites conhecidos: event.stopPropagation() aqui interrompe só a subida DESTA delegação (não afeta outros
+// listeners do document nem de ancestrais registrados com addEventListener); elementos fora do DOM não recebem eventos.
+// Defesa em camadas: a CSP impede script injetado; este executor, mesmo recebendo um data-on* injetado, só chama funções
+// do app com argumentos literais (sem eval, sem atribuir HTML/URL).
 // Carregado ANTES do app.js: o instantâneo abaixo guarda o que é nativo do navegador.
 (function () {
     'use strict';
     // Nativos do navegador + as bibliotecas das CDNs (carregadas depois deste arquivo, por isso listadas à mão)
     const NATIVOS = new Set([...Object.getOwnPropertyNames(window), 'Chart', 'firebase']);
     const PROPS = new Set(['value', 'checked', 'dataset', 'files', 'parentElement', 'classList', 'target', 'key', 'id', 'nextElementSibling', 'previousElementSibling', 'length']);
+    const ESCREVE = new Set(['checked', 'value']);       // únicas propriedades que um handler pode atribuir
     const METODOS = new Set(['click', 'toggle', 'add', 'remove', 'querySelectorAll', 'forEach', 'stopPropagation', 'preventDefault', 'focus', 'select']);
     const cache = new Map();
 
@@ -66,7 +71,7 @@
                 if (eh('=>')) {                        // param => alvo.prop = literal
                     p++; const alvo = posfixo(primario());
                     exige('='); const v = primario();
-                    if (alvo.t !== 'mem') throw new Error('atribuição inválida');
+                    if (alvo.t !== 'mem' || !ESCREVE.has(alvo.n)) throw new Error('atribuição inválida');   // só checked/value
                     return { t: 'arrow', param: x.v, alvo, v };
                 }
                 return { t: 'id', n: x.v };
@@ -122,7 +127,8 @@
                 const a = n.a.map(x => avaliar(x, env));
                 if (n.f.t === 'id') {
                     const nome = n.f.n;
-                    if (ehNativoRecusado(nome) || typeof dominio[nome] !== 'function') throw new Error('função não permitida "' + nome + '"');
+                    // própria de window (não herdada: addEventListener, valueOf, __defineGetter__...) e não nativa
+                    if (ehNativoRecusado(nome) || !Object.prototype.hasOwnProperty.call(dominio, nome) || typeof dominio[nome] !== 'function') throw new Error('função não permitida "' + nome + '"');
                     return dominio[nome](...a);
                 }
                 if (n.f.t === 'mem') {

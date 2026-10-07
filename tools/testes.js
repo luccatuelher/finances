@@ -303,7 +303,8 @@ function runSelfTests() {
             roda("if(event.key==='Escape')hxA('nao')").log, roda('hxA(1);hxA(2)').log, roda("event.stopPropagation();hxA('s')"),
             __hx.rodar(tmp.firstChild.getAttribute('data-onclick'), el, ev) && log.slice(-1)[0]],
           [[[1, 'a', 'b', -2, 1.5, true, null]], [['v', true, 'dv']], [['ok']], [], [[1], [2]], { log: [['s']], parou: true }, [perigoso, 3]]);
-        const ruins = ['alert(1)', 'eval("1")', 'fetch("x")', 'document.cookie', 'hxA(this.innerHTML)', 'hxA(1)+hxA(2)', 'window.hxA(1)', 'hxA(function(){})', 'new Function("1")()', 'hxA(', 'x = 1', 'el.remove()'];
+        const ruins = ['alert(1)', 'eval("1")', 'fetch("x")', 'document.cookie', 'hxA(this.innerHTML)', 'hxA(1)+hxA(2)', 'window.hxA(1)', 'hxA(function(){})', 'new Function("1")()', 'hxA(', 'x = 1', 'el.remove()',
+            "this.querySelectorAll('a').forEach(x=>x.href='https://evil')", "this.querySelectorAll('a').forEach(x=>x.innerHTML='<p>')", "addEventListener('click', hxA)", 'valueOf()', '__defineGetter__("a", hxA)'];
         eq('handlers: tudo fora do subconjunto é recusado (nada executa)', ruins.map(c => { const r = roda(c); return !!r.erro && !(r.log || []).length; }), ruins.map(() => true));
         // delegação: clique no filho sobe até o pai; stopPropagation interrompe; a seta de forEach funciona
         const raiz = document.createElement('div'); raiz.innerHTML = `<div data-onclick="hxA('pai')"><span data-onclick="hxA('filho')"><i id="hxI"></i></span><b data-onclick="event.stopPropagation();hxA('para')"></b></div>

@@ -5,11 +5,18 @@
 // Na instalação já guarda o app, o manifest e os ícones: a 1ª visita também abre offline.
 const CACHE = 'finances-v3';
 const CDNS = ['cdn.jsdelivr.net', 'www.gstatic.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
-const PRECACHE = ['./', './index.html', './app.js', './handlers.js', './tema.js', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
+// Obrigatórios: o app só vale com TODOS (versões misturadas de index.html/app.js quebrariam os handlers).
+const ESSENCIAIS = ['./', './index.html', './app.js', './handlers.js', './tema.js'];
+const OPCIONAIS = ['./manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 const MAX_ITENS = 60;   // limite do cache de terceiros (fontes/CDN) e das cópias de navegação
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => Promise.all(PRECACHE.map(u => c.add(u).catch(() => {})))).then(() => self.skipWaiting()));
+  // 'reload' ignora o cache HTTP do navegador (GitHub Pages: max-age=600), senão index.html e app.js poderiam vir de versões diferentes.
+  // Falha em qualquer essencial = instalação falha e o service worker antigo continua valendo.
+  e.waitUntil(caches.open(CACHE).then(async c => {
+    await Promise.all(ESSENCIAIS.map(u => c.add(new Request(u, { cache: 'reload' }))));
+    await Promise.all(OPCIONAIS.map(u => c.add(new Request(u, { cache: 'reload' })).catch(() => {})));
+  }).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
@@ -27,7 +34,8 @@ self.addEventListener('fetch', e => {
   if (!mesmaOrigem && !CDNS.includes(url.hostname)) return;   // Firebase/Auth/API: direto na rede
   e.respondWith((async () => {
     try {
-      const res = await fetch(req);
+      // mesma origem: sempre revalida (index.html e app.js precisam ser da mesma versão)
+      const res = await fetch(mesmaOrigem ? new Request(req, { cache: 'no-cache' }) : req);
       if (res && (res.ok || res.type === 'opaque')) { const c = await caches.open(CACHE); c.put(req, res.clone()).then(() => aparar(c)).catch(() => {}); }
       return res;
     } catch (err) {

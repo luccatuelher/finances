@@ -248,8 +248,11 @@ const cspAtiva = await page.evaluate(() => new Promise(res => {
   const b = document.createElement('button'); b.setAttribute('onclick', 'window.__ruim = 2'); document.body.appendChild(b); b.click();
   setTimeout(() => { b.remove(); s.remove(); res({ rodou: window.__ruim || null, v }); }, 300);
 }));
+// Requisitos do Firebase na política (long-polling do Realtime Database é <script> de *.firebaseio.com; login usa apis.google.com)
+const cspTexto = await page.evaluate(() => document.querySelector('meta[http-equiv="Content-Security-Policy"]').content);
+const faltaCsp = ['script-src[^;]*https://\\*\\.firebaseio\\.com', 'script-src[^;]*https://apis\\.google\\.com', 'script-src[^;]*https://www\\.gstatic\\.com', 'connect-src[^;]*wss:', 'frame-src[^;]*https:'].filter(re => !new RegExp(re).test(cspTexto));
 const cspFurada = cspAtiva.rodou || !cspAtiva.v.length ? 1 : 0;
-const cspProblemas = cspFurada + (r.csp || []).filter(x => !/cdn\.jsdelivr|gstatic/.test(x)).length;   // CDNs bloqueadas por rede no sandbox não são violação
+const cspProblemas = cspFurada + faltaCsp.length + (r.csp || []).filter(x => !/cdn\.jsdelivr|gstatic/.test(x)).length;   // CDNs bloqueadas por rede no sandbox não são violação
 const falhas = cspProblemas + fluxoProblemas + temaProblemas + navProblemas + r.self.fails.length + r.sync.length + (r.fuzz || []).length + erros.length + graficos.length + fusoFalhas.length + mobilFalhas + xssFalhas;
 console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · sync ${r.sync.length} problema(s) · fuzz ${(r.fuzz || []).length} violação(ões) · console ${erros.length} erro(s) · segurança ${xssFalhas ? xssFalhas + ' problema(s)' : 'ok (' + xss.cliques + ' cliques)'} · celular ${mobilFalhas ? mobilFalhas + ' problema(s)' : 'ok'} · fusos ${fusoFalhas.length ? fusoFalhas.length + ' problema(s)' : fusos.length + ' ok'} · csp ${cspProblemas ? cspProblemas + ' violação(ões): ' + r.csp.join('; ') : 'ok'} · fluxos ${fluxoProblemas ? fluxoProblemas + ' problema(s)' : 'ok'} · tema ${temaProblemas ? temaProblemas + ' problema(s)' : 'ok'} · navegação ${navProblemas ? navProblemas + ' problema(s)' : 'ok'} · gráficos ${chartjs ? (graficos.length ? graficos.length + ' problema(s)' : 'ok') : 'não verificados (sem tools/.cache/chart.umd.min.js)'}`);
 if (falhas) console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros, graficos, fprob, dprob, navFalhas, nerros, fusoFalhas, mobil: { ...mob, merros }, xss, xerros }, null, 2));
