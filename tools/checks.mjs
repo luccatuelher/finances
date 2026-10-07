@@ -149,6 +149,40 @@ await confere('voltar com modal fecha o modal', [await npg.evaluate(() => docume
 await nctx.close();
 const navProblemas = navFalhas.length + nerros.length;
 
+// Fluxos de ponta a ponta pela interface (cliques e campos reais): lançar, excluir (com o modal próprio), desfazer, trocar mês
+const fctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+const fpg = await fctx.newPage(); const fprob = [];
+fpg.on('pageerror', e => fprob.push('erro: ' + e.message));
+if (chartjs) await fpg.route('**/chart.umd.min.js', r => r.fulfill({ status: 200, contentType: 'text/javascript', body: chartjs }));
+await fpg.goto(url); await fpg.waitForFunction(() => typeof runSelfTests === 'function');
+await fpg.evaluate(() => { restoreState(sanitizeState({})); commitAll(); setFiltro(new Date().getMonth(), new Date().getFullYear()); });
+const nTx = () => fpg.evaluate(() => tx.length);
+await fpg.fill('#desc', 'Teste e2e <b>x</b>'); await fpg.fill('#valor', '12,34');
+await fpg.selectOption('#tipo', 'saida');
+await fpg.click('button.btn-save');
+if (await nTx() !== 1) fprob.push('lançar: não criou o lançamento');
+else {
+  const t = await fpg.evaluate(() => tx[0]);
+  if (t.valor !== 12.34 || t.desc !== 'Teste e2e <b>x</b>') fprob.push('lançar: dados errados ' + JSON.stringify(t));
+  if (!(await fpg.locator('#tbody tr', { hasText: 'Teste e2e' }).count())) fprob.push('lançar: linha não apareceu na tabela');
+  if (await fpg.locator('#tbody b').count()) fprob.push('lançar: HTML do usuário foi interpretado');
+  await fpg.locator('#tbody tr', { hasText: 'Teste e2e' }).locator('button[title="Remover"]').click();
+  if (!(await fpg.locator('#ovConfirmar.open').count())) fprob.push('excluir: modal de confirmação não abriu');
+  else {
+    await fpg.locator('#confBotoes button', { hasText: 'Remover' }).click();
+    if (await nTx() !== 0) fprob.push('excluir: não removeu');
+    await fpg.evaluate(() => undo()); if (await nTx() !== 1) fprob.push('desfazer: não restaurou');
+    await fpg.locator('#tbody tr', { hasText: 'Teste e2e' }).locator('button[title="Remover"]').click();
+    await fpg.keyboard.press('Escape');
+    if (await nTx() !== 1 || await fpg.locator('#ovConfirmar.open').count()) fprob.push('excluir: Esc deveria cancelar');
+  }
+}
+await fpg.evaluate(() => { setFiltro(0, 2025); });
+if (await fpg.evaluate(() => [$('filtroMes').value, $('filtroAno').value].join('/')) !== '0/2025') fprob.push('trocar mês: seletores não mudaram');
+if (await fpg.locator('#tbody tr', { hasText: 'Teste e2e' }).count()) fprob.push('trocar mês: lançamento de outro mês apareceu');
+await fctx.close();
+const fluxoProblemas = fprob.length;
+
 // Tema escuro: segue o sistema, o botão alterna e a escolha persiste; nenhum texto visível com contraste < 3:1
 const dctx = await browser.newContext({ colorScheme: 'dark', viewport: { width: 1280, height: 900 } });
 const dpg = await dctx.newPage(); const dprob = [];
@@ -184,9 +218,9 @@ if (await tema() !== 'claro') dprob.push('escolha do tema não persistiu');
 await dctx.close();
 const temaProblemas = dprob.length;
 
-const falhas = temaProblemas + navProblemas + r.self.fails.length + r.sync.length + (r.fuzz || []).length + erros.length + graficos.length + fusoFalhas.length + mobilFalhas + xssFalhas;
-console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · sync ${r.sync.length} problema(s) · fuzz ${(r.fuzz || []).length} violação(ões) · console ${erros.length} erro(s) · segurança ${xssFalhas ? xssFalhas + ' problema(s)' : 'ok (' + xss.cliques + ' cliques)'} · celular ${mobilFalhas ? mobilFalhas + ' problema(s)' : 'ok'} · fusos ${fusoFalhas.length ? fusoFalhas.length + ' problema(s)' : fusos.length + ' ok'} · tema ${temaProblemas ? temaProblemas + ' problema(s)' : 'ok'} · navegação ${navProblemas ? navProblemas + ' problema(s)' : 'ok'} · gráficos ${chartjs ? (graficos.length ? graficos.length + ' problema(s)' : 'ok') : 'não verificados (sem tools/.cache/chart.umd.min.js)'}`);
-if (falhas) console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros, graficos, dprob, navFalhas, nerros, fusoFalhas, mobil: { ...mob, merros }, xss, xerros }, null, 2));
+const falhas = fluxoProblemas + temaProblemas + navProblemas + r.self.fails.length + r.sync.length + (r.fuzz || []).length + erros.length + graficos.length + fusoFalhas.length + mobilFalhas + xssFalhas;
+console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · sync ${r.sync.length} problema(s) · fuzz ${(r.fuzz || []).length} violação(ões) · console ${erros.length} erro(s) · segurança ${xssFalhas ? xssFalhas + ' problema(s)' : 'ok (' + xss.cliques + ' cliques)'} · celular ${mobilFalhas ? mobilFalhas + ' problema(s)' : 'ok'} · fusos ${fusoFalhas.length ? fusoFalhas.length + ' problema(s)' : fusos.length + ' ok'} · fluxos ${fluxoProblemas ? fluxoProblemas + ' problema(s)' : 'ok'} · tema ${temaProblemas ? temaProblemas + ' problema(s)' : 'ok'} · navegação ${navProblemas ? navProblemas + ' problema(s)' : 'ok'} · gráficos ${chartjs ? (graficos.length ? graficos.length + ' problema(s)' : 'ok') : 'não verificados (sem tools/.cache/chart.umd.min.js)'}`);
+if (falhas) console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros, graficos, fprob, dprob, navFalhas, nerros, fusoFalhas, mobil: { ...mob, merros }, xss, xerros }, null, 2));
 // Sem fechar o navegador e o servidor o processo nunca terminava quando tudo passava (parecia travado)
 await browser.close(); server.close();
 process.exit(falhas ? 1 : 0);
