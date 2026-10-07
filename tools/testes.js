@@ -286,6 +286,11 @@ function runSelfTests() {
             eq('confirmar: com window.confirm trocado responde na hora', sync, 2);
         } finally { window.confirm = c0; if (ab()) $('ovConfirmar').classList.remove('open'); }
     }
+    {   // cabeçalhos ordenáveis expõem aria-sort (só a coluna ativa)
+        const c0 = sortCol, d0 = sortDir; sortCol = 'valor'; sortDir = 'desc'; _marcarSort();
+        eq('aria-sort na coluna ativa', _SORT_COLS.map(c => $('si-' + c).closest('th').getAttribute('aria-sort')), _SORT_COLS.map(c => c === 'valor' ? 'descending' : 'none'));
+        sortCol = c0; sortDir = d0; _marcarSort();
+    }
     {   // CONFIG congelado e UNDO_MAX respeitado
         const uBak = undoStack; undoStack = [];
         for (let i = 0; i < CONFIG.UNDO_MAX + 5; i++) pushUndo('t' + i);

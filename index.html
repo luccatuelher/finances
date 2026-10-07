@@ -107,6 +107,7 @@
         @media print { :root[data-tema="escuro"] { color-scheme: light; --bg: #fff; --surface: #fff; --text: #0f172a; --text-2: #4f5d70; --text-3: #687079; --border: #ecedf1; } }
 
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        .sr-only { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
         body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; }
 
         /* TOP BAR */
@@ -3742,6 +3743,7 @@ function _marcarSort() {
         $('si-' + c).textContent = '↕';
         th.classList.remove('sort-asc', 'sort-desc');
     });
+    _SORT_COLS.forEach(c => $('si-' + c).closest('th').setAttribute('aria-sort', c === sortCol ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'));
     const si = $('si-' + sortCol);
     si.textContent = sortDir === 'asc' ? '↑' : '↓';
     si.closest('th').classList.add(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
@@ -5046,8 +5048,29 @@ function destroyChart(key) { if (charts[key]) { charts[key].destroy(); delete ch
 // cada salvamento); recria quando o canvas foi trocado no DOM ou a forma mudou —
 // destruindo o anterior (sem vazar instâncias presas a canvas órfãos).
 // Sem Chart.js (CDN fora do ar) o resto da tela continua funcionando.
+// Alternativa em texto para leitor de tela: o canvas vira role="img" com resumo e uma tabela oculta
+// (rótulos × séries) ligada por aria-describedby. Tudo por textContent (rótulos podem ser texto do usuário).
+function _chartAlt(canvas, config) {
+    try {
+        const labels = _asList(config.data.labels).map(l => Array.isArray(l) ? l.join(' ') : String(l)), ds = config.data.datasets || [];
+        const nome = d => d.label || '';
+        const num = v => typeof v === 'number' && Number.isFinite(v) ? v.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : '';
+        const id = canvas.id + '-alt';
+        let tab = document.getElementById(id);
+        if (!tab) { tab = document.createElement('table'); tab.id = id; tab.className = 'sr-only'; canvas.insertAdjacentElement('afterend', tab); }
+        tab.textContent = '';
+        const cap = tab.createCaption(); cap.textContent = 'Dados do gráfico' + (ds.length === 1 && nome(ds[0]) ? ': ' + nome(ds[0]) : '');
+        const head = tab.insertRow(); ['Item', ...(ds.length === 1 ? ['Valor'] : ds.map(nome))].forEach(t => { const th = document.createElement('th'); th.scope = 'col'; th.textContent = t; head.appendChild(th); });
+        labels.slice(0, 80).forEach((l, i) => { const r = tab.insertRow(); const th = document.createElement('th'); th.scope = 'row'; th.textContent = l; r.appendChild(th);
+            ds.forEach(d => { r.insertCell().textContent = num(Array.isArray(d.data) ? d.data[i] : undefined); }); });
+        canvas.setAttribute('role', 'img');
+        canvas.setAttribute('aria-label', `Gráfico de ${config.type === 'doughnut' ? 'rosca' : config.type === 'line' ? 'linhas' : 'barras'} com ${labels.length} item(ns). Os dados estão na tabela a seguir.`);
+        canvas.setAttribute('aria-describedby', id);
+    } catch (e) {}
+}
 function upsertChart(key, canvas, config) {
     if (!canvas || typeof Chart === 'undefined') { destroyChart(key); return null; }
+    _chartAlt(canvas, config);
     const cur = charts[key];
     if (cur && cur.canvas === canvas && cur.config.type === config.type
         && cur.data.datasets.length === config.data.datasets.length) {

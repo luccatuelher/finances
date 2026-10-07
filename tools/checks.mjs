@@ -62,6 +62,11 @@ if (chartjs) {
       return true;
     }).map(c => c.id));
     const total = await page.evaluate(() => [...document.querySelectorAll('canvas')].filter(c => c.offsetParent).length);
+    // Acessibilidade: todo gráfico do Chart.js tem alternativa em texto (role=img + tabela com uma linha por rótulo)
+    const semAlt = await page.evaluate(() => [...document.querySelectorAll('canvas')].filter(c => c.offsetParent && window.Chart && Chart.getChart(c)).filter(c => {
+      const t = document.getElementById(c.getAttribute('aria-describedby') || '');
+      return c.getAttribute('role') !== 'img' || !c.getAttribute('aria-label') || !t || t.rows.length - 1 !== Chart.getChart(c).data.labels.length; }).map(c => c.id));
+    if (semAlt.length) graficos.push(`${v}: sem alternativa em texto: ${semAlt.join(',')}`);
     // Orçamento (roda) e Mensal (cascata, calendário) são desenhados sem o Chart.js
     if (v !== 'metas' && v !== 'mensal' && (!total || vazios.length)) graficos.push(`${v}: ${total} canvas, vazios: ${vazios.join(',') || '(nenhum canvas)'}`);
   }
