@@ -10,3 +10,6 @@
 - **Haiku 5.5 (subagentes):** delegue a subagentes com `model: haiku` as tarefas mecânicas, de baixo risco e bem delimitadas: buscar/mapear arquivos e ocorrências, ler e resumir código ou logs, rodar testes/lint/build e reportar o resultado, conferir links/textos/formatação, edições repetitivas em vários arquivos com instrução exata. Dê a cada um um escopo claro e peça resposta curta; você confere o resultado antes de usar.
 - Não use Haiku para decisões de design, lógica nova, segurança ou revisão de bugs — isso fica com Opus/Sonnet.
 - Pule o Opus em tarefas triviais: typo, tradução, renomear, ajuste de texto.
+
+## Language
+- **Always write in English**, even when the owner writes in Portuguese. This is about how Claude communicates (replies, explanations, commit messages); do not translate the product's existing user-facing text (the app UI stays in pt-BR) unless asked.
