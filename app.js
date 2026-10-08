@@ -53,6 +53,9 @@ const CONFIG = Object.freeze({
     VIRADA_DIA_MS: 60 * 1000,           // confere virada de dia com o app aberto
     NOTA_MAX: 500,                      // nota de meta/empréstimo
     PAYLOAD_AVISO_KB: 1500,             // avisa quando a base (enviada inteira a cada sync) passa disto
+    SYNC_DISJUNTOR_MAX: 60,             // idas ao servidor na janela abaixo que abrem o disjuntor (laço descontrolado)
+    SYNC_DISJUNTOR_JANELA_MS: 10 * 60 * 1000,
+    SYNC_DISJUNTOR_PAUSA_MS: 15 * 60 * 1000,   // pausa automática da sincronização depois que o disjuntor abre
     BAK_DIAS: 14,                       // backups diários guardados no Firebase (finances_bak)
 });
 
@@ -5305,6 +5308,22 @@ function _comPrazo(promessa, ms, msg) {
     let t;
     return Promise.race([promessa, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(msg)), ms); })]).finally(() => clearTimeout(t));
 }
+// ── DISJUNTOR DA SINCRONIZAÇÃO ────────────────────────────────────────────────
+// Cada ida ao servidor baixa (e às vezes sobe) a base inteira. Um bug que faça dois aparelhos se reativarem em laço
+// (um grava → o outro reage e grava → ...) geraria tráfego sem fim — e, em plano pago do Firebase, conta. Uso normal fica
+// longe do limite (edições são agrupadas a cada 1,5 s + 1 checagem a cada 5 min); passou de SYNC_DISJUNTOR_MAX idas em 10 min,
+// a sincronização pausa sozinha por 15 min (o botão Sync retoma na hora). Os dados continuam salvos neste aparelho.
+const _rodadasSync = [];
+let _syncPausadoAte = 0;
+function _disjuntorRegistra(agora = Date.now()) {
+    _rodadasSync.push(agora);
+    while (_rodadasSync.length && agora - _rodadasSync[0] > CONFIG.SYNC_DISJUNTOR_JANELA_MS) _rodadasSync.shift();
+    if (_rodadasSync.length < CONFIG.SYNC_DISJUNTOR_MAX) return false;
+    _syncPausadoAte = agora + CONFIG.SYNC_DISJUNTOR_PAUSA_MS; _rodadasSync.length = 0;
+    return true;
+}
+const _syncPausado = (agora = Date.now()) => agora < _syncPausadoAte;
+const _disjuntorReseta = () => { _syncPausadoAte = 0; _rodadasSync.length = 0; };
 const _offline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
 
 async function reconcile({ initial = false, manual = false, passive = false } = {}) {
@@ -5314,11 +5333,21 @@ async function reconcile({ initial = false, manual = false, passive = false } = 
         if (manual) toast('📴 Sem internet — as alterações ficam salvas neste aparelho e sobem quando a conexão voltar.', '#52525b');
         return;
     }
+    if (_syncPausado()) {
+        if (!manual) { setSyncState('err', 'Pausado'); return; }
+        _disjuntorReseta();            // o dono pediu: tenta de novo
+    }
     if (passive && Date.now() - _lastRemoteCheck < PASSIVE_SYNC_MIN_MS && !_localDirty()) return;
     if (_syncing) { _syncQueued = true; return _syncing; }   // uma rodada por vez
     setSyncState('busy', initial ? 'Carregando…' : 'Sync…');
     _syncing = (async () => {
         try {
+            if (_disjuntorRegistra()) {
+                setSyncState('err', 'Pausado');
+                toast('⏸️ Sincronização pausada: muitas idas ao servidor em pouco tempo (possível laço). Seus dados estão salvos neste aparelho — toque em Sync para tentar de novo.', '#d97706');
+                console.error('Disjuntor da sincronização aberto: ' + CONFIG.SYNC_DISJUNTOR_MAX + ' rodadas em 10 min');
+                return;
+            }
             const r = await _reconcileOnce();
             if (r !== 'stale') {      // app desatualizado não sincronizou: nada de "sincronizado agora"
                 lsSet('fb_lastSync', String(Date.now()));

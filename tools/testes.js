@@ -327,6 +327,18 @@ function runSelfTests() {
             eq('anual: comparativo com o ano anterior', [$('aKpiEntSub').textContent, $('aKpiGasSub').textContent, $('aKpiInvSub').textContent], ['▲ +50% vs 2023', '▼ 50% vs 2023', '']);
         } finally { restoreState(bk); setFiltro(f0.m, f0.a, { render: false }); }
     }
+    {   // disjuntor da sincronização: uso normal passa, laço abre e pausa, depois libera
+        _disjuntorReseta();
+        const T0 = 1e12, M = CONFIG.SYNC_DISJUNTOR_MAX;
+        const normal = Array.from({ length: M - 1 }, (_, i) => _disjuntorRegistra(T0 + i * 1000)).some(x => x);   // M-1 rodadas: ainda não abre
+        const abriu = _disjuntorRegistra(T0 + M * 1000);
+        const pausado = _syncPausado(T0 + M * 1000 + 1), livre = !_syncPausado(T0 + M * 1000 + CONFIG.SYNC_DISJUNTOR_PAUSA_MS + 1);
+        _disjuntorReseta();
+        // rodadas espaçadas (1 a cada 20 s, bem acima da janela de 10 min no total) nunca abrem
+        const espacadas = Array.from({ length: 200 }, (_, i) => _disjuntorRegistra(T0 + i * (CONFIG.SYNC_DISJUNTOR_JANELA_MS / (M - 5)) )).some(x => x);
+        _disjuntorReseta();
+        eq('disjuntor da sync', [normal, abriu, pausado, livre, espacadas], [false, true, true, true, false]);
+    }
     {   // CONFIG congelado e UNDO_MAX respeitado
         const uBak = undoStack; undoStack = [];
         for (let i = 0; i < CONFIG.UNDO_MAX + 5; i++) pushUndo('t' + i);
