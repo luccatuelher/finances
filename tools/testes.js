@@ -44,7 +44,7 @@ function runSelfTests() {
     {   // acessibilidade: rótulo associado, clicável no Tab, fundo de modal/container ignorados, glifo nomeado
         const d = document.createElement('div');
         d.innerHTML = '<div class="field"><label>Valor</label><input id="__a11yT"></div><div data-onclick="f()">Abrir</div>'
-            + '<div onclick="event.stopPropagation()"><input></div><div class="overlay" onclick="if(event.target===this)x()"></div><button>✕</button>';
+            + '<div data-onclick="event.stopPropagation()"><input></div><div class="overlay" data-onclick="if(event.target===this)x()"></div><button>✕</button>';
         _a11y(d);
         const [, clic, stop, ov] = d.children;
         eq('acessibilidade (_a11y)', [d.querySelector('label').htmlFor, clic.getAttribute('role'), clic.tabIndex, stop.hasAttribute('role'), ov.hasAttribute('tabindex'), d.querySelector('button').getAttribute('aria-label')],
