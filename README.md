@@ -26,6 +26,7 @@ Sobe um servidor local (que injeta `tools/testes.js` no `index.html`: os testes 
 - `CAIXA-DE-ENTRADA.md`: como o Claude lança gastos no app.
 - `LOOP-NUVEM.md`: manual do loop de melhoria contínua.
 - `CHANGELOG.md`: histórico de mudanças.
+- `COST-PROTOCOL.md`: steps to avoid surprise cloud bills (plan, rules, budget alert, emergency stop).
 - `MELHORIAS.md`: análise do código e melhorias pendentes.
 
 ## Arquitetura em 5 linhas
