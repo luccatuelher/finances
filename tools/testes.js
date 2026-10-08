@@ -508,6 +508,46 @@ function runSelfTests() {
     ].map(_mesTipoGasto), ['juros', 'fixos', 'juros', 'parcelas', 'juros', 'dia', 'dia']);
     eq('mensal: mês relativo atravessa o ano', [_mesRel(0, 2026, -1), _mesRel(11, 2026, 1), _mesRel(1, 2026, -5)], [[11, 2025], [0, 2027], [8, 2025]]);
 
+    {   // Filtros combinados da lista (predicado puro, sanitização, fatura no celular, filtros salvos)
+        const T = (id, o) => ({ id, desc: 'x', valor: 10, data: '2026-02-10', tipo: 'saida', cat: '', pagamento: 'debito', ...o });
+        const FL = [T(1, { desc: 'Farmácia', cat: '💊 Saúde', valor: 62 }), T(2, { desc: 'Netflix', cat: '📱 Assinaturas', valor: 44.9, pagamento: 'credito', cartaoId: 900 }),
+            T(3, { desc: 'Uber', cat: '🚗 Transporte', valor: 38, pagamento: 'credito', cartaoId: 901 }), T(4, { desc: 'Salário', tipo: 'entrada', cat: '👨‍👩‍👧 Família', valor: 5500, pagamento: null }),
+            T(5, { desc: 'Mesada', cat: '👨‍👩‍👧 Família', valor: 200 }), T(6, { desc: 'Sem cat', cat: '  ', valor: 1 }),
+            T(7, { desc: 'Estorno', tipo: 'entrada', valor: 20, pagamento: 'credito', cartaoId: 900 })];
+        const ids = c => FL.filter(txPredicate(c)).map(t => t.id);
+        eq('filtros: texto ignora acento e maiúscula', ids({ q: 'farmacia' }), [1]);
+        eq('filtros: categoria é (tipo, nome): Família de saída ≠ de entrada', [ids({ cat: { tipo: 'saida', nome: '👨‍👩‍👧 Família' } }), ids({ cat: { tipo: 'entrada', nome: '👨‍👩‍👧 Família' } }), ids({ cat: { tipo: '*', nome: '👨‍👩‍👧 Família' } })], [[5], [4], [4, 5]]);
+        eq('filtros: sem categoria (vazia ou só espaços)', ids({ cat: { tipo: '*', nome: '' } }), [6, 7]);
+        eq('filtros: faixa de valor inclusiva, em centavos', [ids({ min: 62, max: 62 }), ids({ max: 44.9 }), ids({ min: 62 }), ids({ min: 44.9, max: 62 })], [[1], [2, 3, 6, 7], [1, 4, 5], [1, 2]]);
+        eq('filtros: débito só de saídas; crédito; cartão', [ids({ pag: 'debito' }), ids({ pag: 'credito' }), ids({ cartaoId: 900 }), ids({ tab: 'saida', pag: 'credito' })], [[1, 5, 6], [2, 3, 7], [2, 7], [2, 3]]);
+        eq('filtros: critérios se somam (E)', ids({ tab: 'saida', q: 'u', pag: 'credito', min: 40 }), [2]);
+        eq('filtros: critérios vazios não filtram', ids({}), [1, 2, 3, 4, 5, 6, 7]);
+        const sf = _sanFiltrosSalvos([{ id: 'f1', nome: '  A  ' }, { id: 'x', nome: 'id ruim' }, { id: 'f1', nome: 'duplicado' }, { id: 'f2', nome: '' }, null, 'texto',
+            { id: 'f3', nome: 'n'.repeat(80), tab: 'zzz', min: -5, max: 'abc', cat: { tipo: 'hack', nome: 'x' } },
+            { id: 'f4', nome: 'M', min: 100, max: 10, cartaoId: '900', pag: 'debito', q: ' ' + 'q'.repeat(150) }]);
+        eq('filtros salvos: sanitização de dado hostil', sf.map(f => [f.id, f.nome.length, f.tab, f.min, f.max, f.cat, f.pag, f.cartaoId, f.q.length]),
+           [['f1', 1, 'all', null, null, null, '', null, 0], ['f3', 40, 'all', null, null, null, '', null, 0], ['f4', 1, 'all', 100, 10, null, 'credito', 900, 100]]);
+        eq('filtros salvos: limite de 20 e idempotência', [_sanFiltrosSalvos(Array.from({ length: 30 }, (_, i) => ({ id: 'f' + (i + 1), nome: 'n' + i }))).length, JSON.stringify(_sanFiltrosSalvos(sf)) === JSON.stringify(sf)], [FILTROS_MAX, true]);
+        const fat = [{ card: {}, items: [FL[1], FL[6]], total: 24.9 }, { card: {}, items: [FL[2]], total: 38 }];
+        const v1 = _mobFaturasVisiveis(fat, { tab: 'all', cartaoId: 900 }, true), v2 = _mobFaturasVisiveis(fat, { tab: 'all', min: 40 }, true);
+        eq('filtros: faturas do celular mostram só os itens que batem, com subtotal (estorno abate)', [v1.length, v1[0].sub, v1[0].totalItens, v2.length, v2[0].items.length, v2[0].sub, _mobFaturasVisiveis(fat, {}, false).length], [1, 24.9, 2, 1, 1, 44.9, 2]);
+        const fbak = { tx: _filtroTx, sv: _filtrosSalvos }, kf = _filtrosKey(), lsBak = kf ? localStorage.getItem(lsKey(kf)) : null;
+        try {
+            const F = (id, tipo, nome) => ({ id, nome: id, tab: 'all', q: '', cat: { tipo, nome }, pag: '', cartaoId: null, min: null, max: null });
+            _filtrosSalvos = [F('f1', 'saida', 'X'), F('f2', 'entrada', 'X')];
+            _filtroTx = { cat: { tipo: 'saida', nome: 'X' }, pag: '', cartaoId: null, min: null, max: null };
+            _filtrosRenomearCat('saida', 'X', 'Y');
+            eq('filtros: renomear categoria acompanha o filtro em uso e os salvos (só do mesmo tipo)', [_filtroTx.cat.nome, _filtrosSalvos.map(f => f.cat.nome)], ['Y', ['Y', 'X']]);
+            _filtrosRenomearCat('saida', 'Y', null);
+            eq('filtros: categoria removida sem destino desliga o filtro em uso e deixa o salvo obsoleto', [_filtroTx.cat, _filtrosSalvos[0].cat.nome, _filtroObsoleto(_filtrosSalvos[0]).length], [null, 'Y', 1]);
+            eq('filtros: obsoleto = categoria ou cartão que não existe mais', [_filtroObsoleto({ cat: { tipo: 'saida', nome: '🐉 Inexistente' }, cartaoId: 987654321 }).length, _filtroObsoleto({ cat: { tipo: '*', nome: '' }, cartaoId: null }).length], [2, 0]);
+        } finally {
+            _filtroTx = fbak.tx; _filtrosSalvos = fbak.sv;
+            if (kf) { if (lsBak == null) localStorage.removeItem(lsKey(kf)); else localStorage.setItem(lsKey(kf), lsBak); }
+        }
+        eq('apagar dados: filtros salvos pertencem à conta (uid depois do prefixo)', ['fin5_filtros_abc', 'fin5_inbox_abc_copia', 'fin5_data'].map(k => { const m = k.match(_RE_DONO_LOCAL); return m ? m[1] : null; }), ['abc', 'abc', null]);
+    }
+
     const fails = results.filter(r => !r.ok);
     console.table(results.map(r => ({ teste: r.name, ok: r.ok ? '✓' : '✗', obtido: JSON.stringify(r.got), esperado: JSON.stringify(r.exp) })));
     toast(fails.length ? `❌ Autoteste: ${fails.length} falha(s) de ${results.length} — veja o console` : `✅ Autoteste: ${results.length} verificações OK`,
@@ -567,6 +607,19 @@ async function _runFuzzImpl(seeds = [11, 23, 97, 1234], steps = 400) {
                 loan() { if (rnd() < 0.6) { abrirNovoLoan(); $('loanNome').value = 'L'; $('loanValor').value = pick(['1000', '5.000,50', 'x']); $('loanTaxa').value = pick(['', '1,5', '0', '200']);
                         $('loanN').value = pick(['2', '12', '1', '601', 'x']); $('loanParcela').value = pick(['', '100', '0']); $('loanPrimeira').value = pick([date(), '']); $('loanLancar').value = pick(['juros', 'parcela', 'nada']); salvarLoan(); closeLoan(); }
                     else if (loans.length) removerLoan(pick(loans).id); },
+                // Filtros combinados e salvos: valores válidos/inválidos nos campos reais, salvar/aplicar/excluir/limpar
+                filtros() {
+                    const r = rnd();
+                    if (r < 0.2) { const o = [...$('fCat').options]; setFiltroCampo('cat', pick(o).value); }
+                    else if (r < 0.35) { const o = [...$('fPag').options]; setFiltroCampo('pag', pick(o).value); }
+                    else if (r < 0.55) setFiltroCampo(pick(['min', 'max']), pick(['', '10', '1.000,00', 'x', '-5']));
+                    else if (r < 0.65) { $('busca').value = pick(['', 'a', 'Café']); setTab(pick(['all', 'saida', 'entrada', 'investimento', 'lixo'])); }
+                    else if (r < 0.8) { $('fNome').value = pick(["Mc'Do <b>", '', 'F' + ri(1, 30)]); salvarFiltroAtual(); }
+                    else if (r < 0.9) { if (_filtrosSalvos.length) aplicarFiltroSalvo(pick(_filtrosSalvos).id); }
+                    else if (r < 0.95) { if (_filtrosSalvos.length) removerFiltroSalvo(pick(_filtrosSalvos).id); }
+                    else limparFiltros();
+                    renderTabela();
+                },
                 undo() { undo(); },
                 nav() { setFiltro(ri(-1, 12), pick([2025, 2026])); navTo(pick(['dashboard', 'anual', 'mensal', 'metas'])); },
                 renameCat() { const tp = pick(TIPOS); if (cats[tp].length) renameCategory(tp, pick(cats[tp]), pick(['Nova', '🍕 Pizza', "Mc'Do", ''])); },
@@ -607,11 +660,18 @@ async function _runFuzzImpl(seeds = [11, 23, 97, 1234], steps = 400) {
                 for (const [sr, a] of series) if (new Set(a.map(q => q.n)).size > 1 || new Set(a.map(q => q.k)).size !== a.length) v('série de parcelas incoerente ' + sr);
                 const badL = loans.find(l => !(l.valor > 0 && l.parcela > 0 && l.n >= 2 && l.serie && l.nome));
                 if (badL) v('empréstimo inválido ' + JSON.stringify(badL));
+                // Filtros: toda linha mostrada satisfaz o predicado atual e a contagem bate com a lista; filtrar não mexe nos dados
+                if (!IS_MOBILE && act === 'filtros') {
+                    const { m: fm, a: fa } = filtro(), esperado = txFiltrados(fm, fa).length, okp = txPredicate(filtroAtual());
+                    const mostradas = [...document.querySelectorAll('#tbody tr[id^="tr-"], #txBoxes tr[id^="tr-"]')].map(r => +r.id.slice(3));
+                    if (mostradas.length !== esperado || mostradas.some(id => { const t = tx.find(x => x.id === id); return !t || !okp(t); })) v('linhas fora do filtro (' + mostradas.length + ' de ' + esperado + ')');
+                }
                 if (_stateHash() !== _stateHash(sanitizeState({ t: tx, c: cats, g: goals, k: cards, b: budget, l: loans }))) v('estado não-sanitizado');
             }
         }
     } finally {
         window.confirm = origConfirm; console.error = origErr;
+        try { limparFiltros({ render: false }); } catch (e) {}
         try { localStorage.clear(); Object.entries(savedLS).forEach(([k, val]) => localStorage.setItem(k, val)); } catch (e) {}
         restoreState(saved); undoStack = []; redoStack = []; _updateUndoBtn();
         savedForm.forEach(([el, val, chk]) => { if (el.isConnected) { el.value = val; el.checked = chk; } });

@@ -23,7 +23,7 @@ Aplicado e na `main` (bateria verde: autoteste, sync, fuzz, XSS, CSP, celular, f
 | 5.2 modo escuro, 5.3 a11y, 5.4 hash, 5.5 confirmações | ✅ |
 | 7.1–7.3, 7.5 | ✅ (README, package.json, settings.json) |
 | 9.A, 9.B, 9.C (espera + limite), 9.C (backup diário), 9.F, 9.G, 9.H | ✅ |
-| Seção 8 | ✅ comparativo com o ano anterior; já existiam: impressão, parcelas, alertas do orçamento |
+| Seção 8 | ✅ comparativo com o ano anterior; já existiam: impressão, parcelas, alertas do orçamento; ✅ busca salva / filtros combinados (08/10/2026, só no aparelho) |
 
 Não feito, de propósito:
 
@@ -124,7 +124,7 @@ Ideias de baixo custo, pois a base de dados e as telas já existem:
 
 - **Metas de gasto por categoria com alerta** ao passar de 80% (o Orçamento já calcula `pctDoLimite`).
 - **Comparativo ano a ano** na tela Anual (o índice mensal já permite).
-- **Busca salva / filtros combinados** (categoria + cartão + faixa de valor).
+- ~~**Busca salva / filtros combinados** (categoria + cartão + faixa de valor).~~ Feito em 08/10/2026 (ver `CHANGELOG.md`).
 
 ---
 

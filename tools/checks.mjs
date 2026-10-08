@@ -110,6 +110,19 @@ const mobConf = await mpg.evaluate(async () => {
   return ok;
 });
 if (!mobConf) mob.self.push({ name: 'celular: confirmação de excluir fica atrás da folha de edição' });
+// Celular: painel de filtros aberto + filtro salvo com nome comprido não estoura a largura de 375 px
+const mobFiltro = await mpg.evaluate(async () => {
+  restoreState(sanitizeState({ t: SEED })); commitAll(); setFiltro(1, 2026);
+  storeJSON(_filtrosKey(), [{ id: 'f1', nome: 'Nome muito comprido de filtro '.repeat(3), tab: 'all', q: '', cat: { tipo: 'saida', nome: '💊 Saúde' }, pag: '', cartaoId: null, min: null, max: null },
+    { id: 'f2', nome: 'B', tab: 'saida', q: '', cat: null, pag: 'credito', cartaoId: null, min: 40, max: null }]);
+  carregarFiltrosSalvos(); toggleFiltrosPainel(true); aplicarFiltroSalvo('f1'); await new Promise(r => setTimeout(r, 250));
+  const r = { larg: document.documentElement.scrollWidth, n: document.querySelectorAll('#mobTxList .mob-tx-card').length, painel: !$('filtrosPainel').hidden };
+  aplicarFiltroSalvo('f2'); await new Promise(r => setTimeout(r, 250));
+  r.faturas = document.querySelectorAll('#mobTxList .mob-fatura-card').length; r.cartoes = document.querySelectorAll('#mobTxList .mob-tx-card').length;
+  limparFiltros(); toggleFiltrosPainel(false); storeJSON(_filtrosKey(), []); carregarFiltrosSalvos(); renderTabela();
+  return r;
+});
+if (mobFiltro.larg > 375 || mobFiltro.n !== 1 || !mobFiltro.painel) mob.self.push({ name: 'celular: filtros ' + JSON.stringify(mobFiltro) });
 const mobilFalhas = (mob.mobile ? 0 : 1) + mob.self.length + (mob.fuzz || []).length + merros.length;
 await mctx.close();
 // Segurança: nomes/descrições hostis (HTML, aspas, </script>) em todas as telas + clique em tudo que os carrega no handler
@@ -146,6 +159,13 @@ const xss = await xpg.evaluate(async () => {
       catch (er) { ruinsHx.push(`${c.slice(0, 50)}: ${er.message}`); }
     }
   }
+  // Filtros salvos com nomes hostis: o chip carrega só o id; clica em aplicar, aplicar de novo (desliga) e excluir (cancela)
+  navTo('dashboard', null); await new Promise(r => setTimeout(r, 150));
+  storeJSON(_filtrosKey(), [{ id: 'f1', nome: P[0], tab: 'all', q: P[1], cat: { tipo: 'saida', nome: cat }, pag: 'credito', cartaoId: 900, min: 1, max: 99999 }]);
+  carregarFiltrosSalvos(); toggleFiltrosPainel(true); renderTabela();
+  for (const sel of ['.fs-chip', '.fs-chip', '.fs-del']) { const e = document.querySelector(sel); if (e) { e.click(); cliques++; } await new Promise(r => setTimeout(r, 120)); }
+  if ($('ovConfirmar').classList.contains('open')) _confirmarFechar(null);
+  limparFiltros();
   const injetados = [...document.querySelectorAll('img[src="x"], svg[onload], [onerror], [onmouseover], [onload]')].length;
   return { executou: window.__xss || null, injetados, cliques, ruinsHx: [...new Set(ruinsHx)] };
 });
@@ -203,6 +223,35 @@ else {
 await fpg.evaluate(() => { setFiltro(0, 2025); });
 if (await fpg.evaluate(() => [$('filtroMes').value, $('filtroAno').value].join('/')) !== '0/2025') fprob.push('trocar mês: seletores não mudaram');
 if (await fpg.locator('#tbody tr', { hasText: 'Teste e2e' }).count()) fprob.push('trocar mês: lançamento de outro mês apareceu');
+// Filtros combinados pela interface: categoria, faixa de valor, salvar, limpar, reaplicar pelo chip, persistir após recarregar
+await fpg.evaluate(() => { const d = todayLocalISO(); restoreState(sanitizeState({ t: [
+  { id: 1, desc: 'Farmácia', valor: 62, data: d, tipo: 'saida', cat: '💊 Saúde', pagamento: 'debito' },
+  { id: 2, desc: 'Cinema', valor: 30, data: d, tipo: 'saida', cat: '🎉 Lazer', pagamento: 'debito' },
+  { id: 3, desc: 'Salário', valor: 5000, data: d, tipo: 'entrada', cat: '💰 Salário' }] })); commitAll(); setFiltro(new Date().getMonth(), new Date().getFullYear()); });
+const linhas = () => fpg.locator('#tbody tr[id^="tr-"]').count();
+const espera = async (n, rot) => { for (let i = 0; i < 20 && await linhas() !== n; i++) await fpg.waitForTimeout(100); const got = await linhas(); if (got !== n) fprob.push(`filtros: ${rot} (esperava ${n} linha(s), vieram ${got})`); };
+await espera(3, 'base');
+await fpg.click('#btnFiltros');
+if (!(await fpg.locator('#filtrosPainel').isVisible()) || await fpg.getAttribute('#btnFiltros', 'aria-expanded') !== 'true') fprob.push('filtros: painel não abriu');
+await fpg.selectOption('#fCat', 'saida|💊 Saúde'); await espera(1, 'categoria');
+await fpg.selectOption('#fCat', ''); await fpg.fill('#fMin', '40'); await espera(2, 'valor mínimo');
+await fpg.fill('#fMax', '100'); await espera(1, 'faixa de valor');
+await fpg.fill('#fMax', 'abc');
+if (await fpg.getAttribute('#fMax', 'aria-invalid') !== 'true') fprob.push('filtros: valor inválido sem aria-invalid');
+await fpg.fill('#fMax', '100'); await espera(1, 'faixa de valor de novo');
+if (!/1 lançamento/.test(await fpg.textContent('#filtroResumo'))) fprob.push('filtros: resumo ausente');
+await fpg.fill('#fNome', 'Caros'); await fpg.locator('#filtrosPainel button', { hasText: 'Salvar' }).click();
+if (await fpg.locator('.fs-chip').count() !== 1) fprob.push('filtros: chip do filtro salvo não apareceu');
+await fpg.locator('#filtrosPainel button', { hasText: 'Limpar' }).click(); await espera(3, 'limpar');
+if (await fpg.getAttribute('.fs-chip', 'aria-pressed') !== 'false') fprob.push('filtros: chip deveria estar desligado');
+await fpg.click('.fs-chip'); await espera(1, 'aplicar o chip');
+if (await fpg.getAttribute('.fs-chip', 'aria-pressed') !== 'true' || !(await fpg.locator('#btnCsvFiltro').isVisible())) fprob.push('filtros: chip ligado sem aria-pressed ou sem botão de CSV');
+await fpg.fill('#fMin', '99999'); await fpg.waitForTimeout(300);
+if (!(await fpg.locator('#emptyState button', { hasText: 'Limpar filtros' }).count())) fprob.push('filtros: lista vazia sem o botão "Limpar filtros"');
+await fpg.locator('#emptyState button', { hasText: 'Limpar filtros' }).click(); await espera(3, 'limpar pela lista vazia');
+await fpg.reload(); await fpg.waitForFunction(() => typeof runSelfTests === 'function');
+if (await fpg.locator('.fs-chip').count() !== 1) fprob.push('filtros: filtro salvo não persistiu após recarregar');
+await fpg.evaluate(() => { storeJSON(_filtrosKey(), []); carregarFiltrosSalvos(); });
 await fctx.close();
 const fluxoProblemas = fprob.length;
 
@@ -215,6 +264,9 @@ await dpg.goto(url); await dpg.waitForFunction(() => typeof runSelfTests === 'fu
 const tema = () => dpg.evaluate(() => document.documentElement.getAttribute('data-tema'));
 if (await tema() !== 'escuro') dprob.push('não seguiu o sistema escuro');
 await dpg.evaluate(() => setFiltro(1, 2026));
+// Painel de filtros aberto, um chip desligado e outro ligado: entram na checagem de contraste
+await dpg.evaluate(() => { storeJSON(_filtrosKey(), [{ id: 'f1', nome: 'Saúde', tab: 'all', q: '', cat: { tipo: 'saida', nome: '💊 Saúde' }, pag: '', cartaoId: null, min: null, max: null },
+  { id: 'f2', nome: 'Caros', tab: 'saida', q: '', cat: null, pag: '', cartaoId: null, min: 40, max: null }]); carregarFiltrosSalvos(); toggleFiltrosPainel(true); aplicarFiltroSalvo('f2'); });
 for (const v of ['dashboard', 'anual', 'mensal', 'metas']) {
   await dpg.evaluate(v => navTo(v), v); await dpg.waitForTimeout(500);
   const ruins = await dpg.evaluate(() => {

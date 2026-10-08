@@ -1,5 +1,13 @@
 # Histórico de mudanças do app
 
+## Filtros combinados e filtros salvos — out/2026
+
+- **Lista de lançamentos**: botão "Filtros" (desktop e celular) com categoria, pagamento/cartão e faixa de valor, somados à aba e à busca; resumo ("N lançamentos · gastos − R$ …"), botão "Limpar" e "CSV filtrado". Os KPIs continuam do mês inteiro.
+- **Filtros salvos**: nomeie e guarde combinações (até 20); chips acima da lista aplicam/desligam com um toque. Ficam só neste aparelho (`fin5_filtros_<conta>` no `localStorage`; não vão para a nuvem, o backup nem o merge) e somem no "apagar dados" da própria conta.
+- **Obsoletos**: renomear/mover categoria atualiza os filtros; categoria ou cartão apagado em outro aparelho marca o filtro com ⚠ em vez de sumir calado.
+- **Celular**: as faturas dos cartões mostram só os itens que batem, com subtotal ("2 de 7 itens"); o botão de agrupar em caixinhas (só existe no computador) deixou de aparecer.
+- **Testes**: autoteste 180 (+14: predicado, sanitização hostil, faturas, filtros obsoletos), ação `filtros` no fuzz com invariante (linhas mostradas = predicado), fluxo ponta a ponta, XSS nos chips, largura a 375 px e contraste no tema escuro.
+
 ## Lote de melhorias — out/2026 (ver MELHORIAS.md)
 
 - **Dados**: caixa de entrada só em repositório privado; `espera` obrigatória e no máximo 10 exclusões por rodada; trava de esquema (app antigo não sobrescreve servidor mais novo); backup diário no Firebase (`finances_bak`) com "Restaurar da nuvem"; ids determinísticos das parcelas de empréstimo; token do GitHub avisa antes de vencer e some no logout; armazenamento persistente.

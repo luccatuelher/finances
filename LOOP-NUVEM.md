@@ -35,7 +35,7 @@ Pare quando eu pedir ou quando não houver mais melhoria relevante a fazer.
 
 ## 2. O projeto em 1 minuto
 
-- **`index.html`** (marcação + CSS), **`app.js`** (~6.900 linhas, todo o código), `handlers.js` (executor de `data-onclick`...; NUNCA use `onclick=` inline: a CSP bloqueia), `tema.js`. Testes em `tools/testes.js`, bateria `node tools/checks.mjs`, lint `node tools/lint.mjs`.
+- **`index.html`** (marcação + CSS), **`app.js`** (~7.200 linhas, todo o código; confira com `wc -l`), `handlers.js` (executor de `data-onclick`...; NUNCA use `onclick=` inline: a CSP bloqueia), `tema.js`. Testes em `tools/testes.js`, bateria `node tools/checks.mjs`, lint `node tools/lint.mjs`.
   Sem build, sem dependências locais. CDNs: Chart.js 4.5.1 e Firebase 10.12.2 (com SRI).
   Sem rede o app continua funcionando (sem gráficos e sem sync).
 - **Dados**: estado `{ tx, cats, goals, cards, budget }` (lançamentos, categorias, metas,
@@ -86,7 +86,7 @@ O mapa completo está nos cabeçalhos `// ── NOME ──` do script (`grep -
 
 ## 4. Passo a passo de uma iteração
 
-1. **Escolher a área**: leia o changelog no `<head>` (seção "Loop de melhoria contínua")
+1. **Escolher a área**: leia o `CHANGELOG.md` (o `<head>` não guarda mais o histórico)
    e a seção 8 deste arquivo. Pegue um candidato da lista ou um risco que você encontrou.
 2. **Ler o código da área** inteira, incluindo quem chama e quem é chamado.
 3. **Auditar riscos** (lista de verificação):
@@ -230,8 +230,7 @@ Se algum teste gravou no preview: remova as chaves com prefixo `preview:` e reca
 
 ## 6. Registro
 
-1. **Changelog no `<head>`** (comentário HTML no topo), na seção "Loop de melhoria
-   contínua", antes da linha "Ferramentas de manutenção". Formato:
+1. **`CHANGELOG.md`** (o histórico saiu do `<head>`): acrescente na seção mais recente, ou abra uma nova no topo. Formato:
    ```
          • TÍTULO EM CAIXA ALTA: o que estava errado (com o efeito para o usuário), o que
            mudou e como foi verificado. Números quando houver (antes → depois).
@@ -275,7 +274,7 @@ Se algum teste gravou no preview: remova as chaves com prefixo `preview:` e reca
 
 ## 8. Estado atual e próximos candidatos
 
-**Última iteração concluída: 58** (orçamento por período e caixa de entrada com orçamento, empréstimos e parcelas) (01/10/2026). Detalhes de cada uma no changelog do `<head>`.
+**Última iteração concluída: 59** (filtros combinados e filtros salvos na lista de lançamentos) (08/10/2026). Detalhes de cada uma no `CHANGELOG.md`.
 Iterações 40–42 foram feitas após o commit `a50cd5c`.
 
 Resumo das mais recentes:
@@ -302,8 +301,10 @@ Resumo das mais recentes:
 - 54 — caixa de entrada do Claude (pedido do dono): operações em `inbox.json` num repositório privado do GitHub, aplicadas pelo app com token fine-grained (`inboxAplicar`, `checkInbox`; ver `CAIXA-DE-ENTRADA.md`). Autoteste 104; `runSyncFuzz` inclui `_testeInbox` (GitHub simulado: gravação concorrente/409, reprocesso, cópia `estado.json`, token inválido).
 - 55 — Orçamento refeito (pedido do dono, estudo em artifact "Roda do Orçamento"): abas Orçamento/Metas, cartão azul, roda SVG editável (`_orcMudaCat`/`_orcMudaGrupo`/`_orc503020` em centavos, allocs continuam em %), tabela com planejado editável, valor fixo `budget.locks` (sanitização/merge/renomeação), entradas recolhidas. Mensal com cartão azul. `_moveBudgetKeys` só olha categorias orçáveis. Autoteste 111. O computador é a tela principal do dono: conferir 1440/1280/1024 px além do celular.
 - 56 — Mensal refeito como revisão do mês (Visão Geral = dia a dia): comparação com a média dos 3 meses anteriores com ≥ 5 lançamentos (`_mesResumo(m, a, ateDia)`; mês atual só até hoje), cascata por tipo de gasto (`_mesTipoGasto`: juros > fixos > parcelas > dia a dia), destaques, calendário, maiores gastos, lugares repetidos e "o que mudou" com sparklines. Sem Chart.js (a bateria agora só exige canvas no dashboard e no anual). Autoteste 113.
-- 57 — pedidos do dono em lote (ver o changelog do `<head>`): tabela de categorias sem reajuste + faixa "falta/passou", cadeado por linha, donut com alça nas duas pontas (`_orcMudaBorda`), excluir categoria por escopo (`budget.off`, `_catOff`), metas fixas no fim, caixinhas por categoria, patrimônio na Anual, hero plota a folga, **parcelas automáticas** (`gerarParcelas`, `tx.parcela`), **juros embutidos** (`tx.juros`) e **empréstimos** (estado `loans`, chave `l`: `_sanLoans`, `loanCronograma`, `renderLoans`). Autoteste 143. Estado novo = passar por TODOS os pontos de persistência (sanitizeState, snapshot, export/import, inbox, pendentes, hash, base do merge, `mergeStates`, payload): ver `grep -n "loans"`.
+- 57 — pedidos do dono em lote (ver o `CHANGELOG.md`): tabela de categorias sem reajuste + faixa "falta/passou", cadeado por linha, donut com alça nas duas pontas (`_orcMudaBorda`), excluir categoria por escopo (`budget.off`, `_catOff`), metas fixas no fim, caixinhas por categoria, patrimônio na Anual, hero plota a folga, **parcelas automáticas** (`gerarParcelas`, `tx.parcela`), **juros embutidos** (`tx.juros`) e **empréstimos** (estado `loans`, chave `l`: `_sanLoans`, `loanCronograma`, `renderLoans`). Autoteste 143. Estado novo = passar por TODOS os pontos de persistência (sanitizeState, snapshot, export/import, inbox, pendentes, hash, base do merge, `mergeStates`, payload): ver `grep -n "loans"`.
 - 58 — orçamento por período (`budget.allocsDe`, `allocsDoMes(ym)`, `_allocVersao`, `_mergeVersoes`; a roda grava no planejamento vigente do mês aberto) e caixa de entrada com `orcamento`, `emprestimo` e `parcela`/`serie` no update (`_inboxOrcamento`; ver CAIXA-DE-ENTRADA.md). Autoteste 149.
+
+- 59 — filtros combinados (`txPredicate`, `filtroAtual`, `_filtroTx`: categoria, pagamento/cartão, faixa de valor) e filtros salvos (`_filtrosSalvos`, `fin5_filtros_<uid>`, só no aparelho: NÃO é estado sincronizado, então não passa por sanitizeState/merge/backup; ver `_sanFiltrosSalvos`). Faturas do celular via `_mobFaturasVisiveis`; CSV `exportarCSV('filtro')`; renomear/remover categoria chama `_filtrosRenomearCat`. Autoteste 180.
 
 Áreas já revisadas: importação (CSV/OFX), exportação, backup/restauração, hero e ritmo,
 orçamento, metas/aportes, cartões/faturas, fixos, categorias, análise mensal e anual,

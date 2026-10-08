@@ -377,6 +377,28 @@
         .search-row { display: flex; gap: 8px; margin-bottom: 14px; }
         .search-row input { flex: 1; padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px; font-size: 13px; font-family: inherit; outline: none; }
         .search-row input:focus { border-color: var(--accent); }
+        /* FILTROS COMBINADOS */
+        .filtros-painel { display: grid; grid-template-columns: 1.4fr 1fr .8fr .8fr; gap: 8px 10px; margin: -4px 0 12px; padding: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
+        .filtros-painel[hidden], .fs-chips[hidden], .filtro-resumo[hidden], #btnCsvFiltro[hidden] { display: none; }
+        .filtros-painel .field { margin: 0; min-width: 0; }
+        .filtros-painel label { display: block; font-size: 11px; font-weight: 600; color: var(--text-2); margin-bottom: 3px; }
+        .filtros-painel select, .filtros-painel input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid var(--border); border-radius: 7px; font-size: 13px; font-family: inherit; background: var(--surface); color: var(--text); }
+        .filtros-painel input[aria-invalid="true"] { border-color: var(--danger); }
+        .fp-acoes { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .fp-acoes input { flex: 1 1 140px; width: auto; min-width: 0; }
+        .fp-nota { font-size: 11px; color: var(--text-3); }
+        .fs-chips { display: flex; gap: 6px; overflow-x: auto; min-width: 0; margin: 0 0 10px; padding-bottom: 2px; }
+        .fs-item { display: inline-flex; flex: none; align-items: stretch; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); overflow: hidden; }
+        .fs-chip, .fs-del { border: none; background: none; font-family: inherit; font-size: 11px; font-weight: 600; color: var(--text-2); cursor: pointer; padding: 4px 8px; }
+        .fs-chip { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 4px; }
+        .fs-del { color: var(--text-3); padding-left: 4px; }
+        .fs-chip.on { background: var(--accent); color: #fff; }
+        .filtro-resumo { font-size: 12px; color: var(--text-2); margin: 0 0 10px; }
+        body.mobile #btnGroupCat, body.mobile #groupSort { display: none; }   /* agrupar em caixinhas só existe no computador */
+        body.mobile .search-row #busca { min-width: 0; }
+        body.mobile .filtros-painel { grid-template-columns: 1fr 1fr; }
+        body.mobile .filtros-painel .fp-cat { grid-column: 1 / -1; }
+        body.mobile .fs-chip, body.mobile .fs-del { padding-top: 8px; padding-bottom: 8px; }
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
         th { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text-3); padding: 12px 14px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; background: var(--bg); }
         th.sortable { cursor: pointer; user-select: none; }
@@ -1186,7 +1208,7 @@
             body { -webkit-print-color-adjust: exact; print-color-adjust: exact; font-size: 12px; }
             .sidebar, .nav-pills, .btn-undo, .sync-btn, .user-chip, .month-nav-btn,
             .mob-month-bar, .mob-bottom-nav, .mob-form-sheet, .mob-edit-sheet, .overlay, .toast, #toast,
-            .tabs, .search-row, .group-toggle, #offlineBanner { display: none !important; }
+            .tabs, .search-row, .group-toggle, .filtros-painel, .fs-chips, #offlineBanner { display: none !important; }
             .topbar { position: static; height: auto; padding: 0 0 8px; margin-bottom: 8px; border-bottom: 1px solid #999; background: none; }
             .app { display: block; min-height: 0; }
             .view { min-height: 0; }
@@ -1599,6 +1621,7 @@
                 </div>
                 <div class="search-row" style="display:flex;gap:8px;align-items:center">
                     <input autocomplete="off" type="text" id="busca" placeholder="Buscar..." style="flex:1">
+                    <button type="button" class="group-toggle" id="btnFiltros" aria-expanded="false" aria-controls="filtrosPainel" data-onclick="toggleFiltrosPainel()" title="Filtrar por categoria, pagamento e valor">⚙ Filtros<span id="filtrosBadge"></span></button>
                     <button class="group-toggle" id="btnGroupCat" data-onclick="toggleGroupMode()" title="Agrupar por categoria em caixinhas">⊞ Categoria</button>
                     <select id="groupSort" class="group-sort" data-onchange="setGroupSort(this.value)" style="display:none" aria-label="Ordenar as caixinhas de categoria" title="Ordenar as caixinhas">
                         <option value="valor_desc">Maior valor</option>
@@ -1609,6 +1632,21 @@
                         <option value="grupo_valor">Grupo + maior valor</option>
                     </select>
                 </div>
+                <div class="filtros-painel" id="filtrosPainel" hidden>
+                    <div class="field fp-cat"><label for="fCat">Categoria</label><select id="fCat" data-onchange="setFiltroCampo('cat', this.value)"></select></div>
+                    <div class="field"><label for="fPag">Pagamento</label><select id="fPag" data-onchange="setFiltroCampo('pag', this.value)"></select></div>
+                    <div class="field"><label for="fMin">Valor mínimo</label><input autocomplete="off" type="text" inputmode="decimal" id="fMin" placeholder="0,00" data-oninput="setFiltroCampo('min', this.value)"></div>
+                    <div class="field"><label for="fMax">Valor máximo</label><input autocomplete="off" type="text" inputmode="decimal" id="fMax" placeholder="sem limite" data-oninput="setFiltroCampo('max', this.value)"></div>
+                    <div class="fp-acoes">
+                        <button type="button" class="group-toggle" data-onclick="limparFiltros()">Limpar</button>
+                        <button type="button" class="group-toggle" id="btnCsvFiltro" data-onclick="exportarCSV('filtro')" hidden>⇪ CSV filtrado</button>
+                        <input autocomplete="off" type="text" id="fNome" maxlength="40" placeholder="Nome do filtro" aria-label="Nome para salvar o filtro atual">
+                        <button type="button" class="group-toggle" data-onclick="salvarFiltroAtual()">Salvar</button>
+                        <small class="fp-nota">Salvo só neste aparelho</small>
+                    </div>
+                </div>
+                <div class="fs-chips" id="filtrosSalvos" hidden></div>
+                <div class="filtro-resumo" id="filtroResumo" role="status" hidden></div>
             </div>
             <div class="fatura-section" id="faturaSection" style="display:none">
                 <div class="fatura-section-label">💳 Faturas do Mês</div>

@@ -490,6 +490,24 @@ function mobEditDelete() {
     remover(toId($('mob-edit-id').value), () => closeMobEdit());
 }
 
+// Faturas do mês (mobile) com só os itens que batem no critério. Sem filtro, devolve tudo.
+// Filtrando, `sub` é o subtotal assinado dos itens visíveis (estorno abate) e `totalItens` o total.
+function _mobFaturasVisiveis(faturas, crit, filtrando) {
+    if (!filtrando) return faturas.filter(f => f.items.length);
+    const match = txPredicate(crit);
+    return faturas.map(f => {
+        const items = f.items.filter(match);
+        return { ...f, items, totalItens: f.items.length,
+            sub: roundMoney(items.reduce((s, t) => s + (t.tipo === 'entrada' ? -t.valor : t.valor), 0)) };
+    }).filter(f => f.items.length);
+}
+// Texto da lista vazia: com filtro ligado, oferece limpar
+function _vazioHtml() {
+    return _filtroAtivo(filtroAtual())
+        ? 'Nenhum lançamento com estes filtros. <button type="button" class="link-btn" data-onclick="limparFiltros()">Limpar filtros</button>'
+        : 'Nenhum lançamento encontrado.';
+}
+
 function renderMobList() {
     const { m, a } = filtro();
     const lista = txFiltrados(m, a);
@@ -499,23 +517,22 @@ function renderMobList() {
     // Build fatura cards for mobile
     let faturaHtml = '';
     if (activeTab === 'all' || activeTab === 'saida') {
-        // Com busca ativa, a fatura mostra só os itens que batem (e some se nenhum bater)
-        const match = buscaPredicate(), buscando = !!$('busca').value.trim();
-        const faturas = getFaturasForMonth(m, a)
-            .map(f => buscando ? { ...f, items: f.items.filter(match) } : f)
-            .filter(f => f.items.length);
+        // Com busca/filtro ativo, a fatura mostra só os itens que batem (e some se nenhum bater)
+        const crit = filtroAtual(), buscando = _filtroAtivo(crit);
+        const faturas = _mobFaturasVisiveis(getFaturasForMonth(m, a), { ...crit, tab: 'all' }, buscando);
         faturaHtml = faturas.map((f, idx) => {
             const [vy, vm, vd] = f.faturaDate.split('-');
             const key = faturaKey(f);
+            const parcial = f.sub != null;   // filtrando: subtotal só dos itens que batem
             return `<div class="mob-fatura-card ${_faturaOpen.has(key) || buscando ? 'open' : ''}" id="mobFaturaCard-${idx}">
                 <div class="mob-fatura-header" data-onclick="toggleFaturaOpen(this.parentElement, ${jsStr(key)})">
                     <div class="mob-tx-dot" style="background:${f.card.cor}22;border-radius:10px"><span style="font-size:16px">💳</span></div>
                     <div class="mob-tx-info">
                         <div class="mob-tx-desc" style="color:var(--accent)">${escHtml(f.card.nome)}</div>
-                        <div class="mob-tx-meta">Fatura · vence ${vd}/${vm} · ${f.items.length} itens</div>
+                        <div class="mob-tx-meta">Fatura · vence ${vd}/${vm} · ${parcial ? `${f.items.length} de ${f.totalItens} itens` : `${f.items.length} itens`}</div>
                     </div>
                     <div class="mob-tx-right">
-                        <div class="mob-tx-val" style="color:var(--danger)">− ${fmt(f.total)}</div>
+                        <div class="mob-tx-val" style="color:var(--danger)">− ${fmt(parcial ? f.sub : f.total)}</div>
                         <div class="mob-tx-date">▼</div>
                     </div>
                 </div>
@@ -538,7 +555,7 @@ function renderMobList() {
     }
 
     if (!lista.length && !faturaHtml) {
-        container.innerHTML = '<div class="empty-state" style="padding:30px;text-align:center;color:var(--text-3);font-size:13px">Nenhum lançamento encontrado.</div>';
+        container.innerHTML = `<div class="empty-state" style="padding:30px;text-align:center;color:var(--text-3);font-size:13px">${_vazioHtml()}</div>`;
         return;
     }
     container.innerHTML = faturaHtml + lista.map(t => {
@@ -664,6 +681,32 @@ function _sanCats(c) {
 const VALOR_MAX = 1e11, DESC_MAX = 200, CAT_MAX = 60, CARD_MAX = 40;
 const PARCELAS_MAX = 120, LOAN_N_MAX = 600;   // parcelas numa compra / num empréstimo
 const _valorOk = v => Number.isFinite(v) && Math.abs(v) <= VALOR_MAX;
+// Filtros salvos da lista de lançamentos (localStorage, por conta): lista de
+// { id, nome, tab, q, cat, pag, cartaoId, min, max }. Dado externo → sempre passa por aqui.
+const FILTROS_MAX = 20, FILTRO_NOME_MAX = 40, FILTRO_Q_MAX = 100;
+function _sanFiltroCrit(f) {
+    f = f && typeof f === 'object' ? f : {};
+    let cat = null;
+    if (f.cat && typeof f.cat === 'object' && typeof f.cat.nome === 'string' && (f.cat.tipo === '*' || TIPOS.includes(f.cat.tipo)))
+        cat = { tipo: f.cat.tipo, nome: f.cat.nome.trim().slice(0, CAT_MAX) };
+    const pag = f.pag === 'debito' || f.pag === 'credito' ? f.pag : '';
+    const cartaoId = toId(f.cartaoId);
+    const lim = v => { const n = v == null || v === '' ? NaN : Number(v); return Number.isFinite(n) && n >= 0 && n <= VALOR_MAX ? roundMoney(n) : null; };
+    return { cat, pag: cartaoId ? 'credito' : pag, cartaoId, min: lim(f.min), max: lim(f.max) };
+}
+function _sanFiltrosSalvos(raw) {
+    const seen = new Set(), out = [];
+    _asList(raw).forEach(f => {
+        if (!f || typeof f !== 'object' || out.length >= FILTROS_MAX) return;
+        const id = String(f.id == null ? '' : f.id);
+        const nome = typeof f.nome === 'string' ? f.nome.trim().slice(0, FILTRO_NOME_MAX) : '';
+        if (!/^f\d{1,16}$/.test(id) || seen.has(id) || !nome) return;
+        seen.add(id);
+        out.push({ id, nome, tab: f.tab === 'all' || TIPOS.includes(f.tab) ? f.tab : 'all',
+            q: typeof f.q === 'string' ? f.q.trim().slice(0, FILTRO_Q_MAX) : '', ..._sanFiltroCrit(f) });
+    });
+    return out;
+}
 function _sanTx(list, cardList, fromVersion, report) {
     const seen = new Set();
     const cardById = new Map(cardList.map(c => [c.id, c]));
@@ -874,6 +917,12 @@ const _SORT_COLS = ['data', 'desc', 'cat', 'valor'];
 let sortCol   = _SORT_COLS.includes(lsGet('fin5_sortCol')) ? lsGet('fin5_sortCol') : 'data';
 let sortDir   = lsGet('fin5_sortDir') === 'asc' ? 'asc' : 'desc';
 let activeTab = 'all';
+// Filtros combinados da lista de lançamentos (além da aba e da busca por texto).
+// cat: null | { tipo: 'saida'|'entrada'|'investimento'|'*', nome } (nome '' = sem categoria);
+// pag: '' | 'debito' | 'credito'; cartaoId: id | null (implica crédito); min/max em reais.
+let _filtroTx = { cat: null, pag: '', cartaoId: null, min: null, max: null };
+let _filtrosSalvos = [];     // filtros nomeados, só neste aparelho (fin5_filtros_<uid>)
+let _filtroSig = '';         // assinatura das listas do painel (evita reconstruir selects abertos)
 let charts    = {};
 let currentView = 'dashboard';
 let selectedGoalColor = GOAL_COLORS[0];
@@ -1014,6 +1063,7 @@ function init() {
         safeRender(_setupA11y);   // acessibilidade nunca pode impedir o app de abrir
         // Outra aba do app salvou → recarrega o estado em vez de sobrescrever depois
         window.addEventListener('storage', e => {
+            if (_filtrosKey() && e.key === lsKey(_filtrosKey())) { carregarFiltrosSalvos(); renderTabela(); return; }   // filtros salvos em outra aba
             if (!e.key || !e.key.startsWith(LS_PREFIX) || !/^fin5_(data|cats|goals|cards|budget|loans)$/.test(e.key.slice(LS_PREFIX.length))) return;
             loadLocalState();
             undoStack = []; redoStack = []; _updateUndoBtn();   // snapshots antigos desfariam a mudança da outra aba
@@ -1107,7 +1157,8 @@ function _onGlobalKey(e) {
     }
     const ie = el.id.match(/^ie-(?:desc|valor|data)-(\d+)$/);
     if (ie) { e.preventDefault(); saveInlineEdit(+ie[1]); return; }
-    if (['desc', 'valor', 'data'].includes(el.id)) { e.preventDefault(); adicionar(); }
+    if (['desc', 'valor', 'data'].includes(el.id)) { e.preventDefault(); adicionar(); return; }
+    if (el.id === 'fNome') { e.preventDefault(); salvarFiltroAtual(); }
 }
 
 // ── ACESSIBILIDADE ──────────────────────────────────────────────────────────────
@@ -1391,26 +1442,199 @@ function sorted(list) {
 // cópias. A busca ignora acentos/maiúsculas ("farmacia" acha "Farmácia") e procura
 // em descrição, categoria, nome do cartão e valor ("44,90").
 function txFiltrados(m, a) {
-    const match = buscaPredicate();
-    return sorted(txMes(m, a).filter(t => (activeTab === 'all' || t.tipo === activeTab) && match(t)));
+    return sorted(txMes(m, a).filter(txPredicate(filtroAtual())));
 }
-// Critério da busca atual — reaproveitado pela lista e pelos cards de fatura (mobile)
-function buscaPredicate() {
-    const q = fold($('busca').value.trim());
-    if (!q) return () => true;
-    const cardName = new Map(cards.map(c => [c.id, fold(c.nome)]));
-    return t => fold(t.desc).includes(q) || fold(catLabel(t)).includes(q)
-        || (t.cartaoId && (cardName.get(t.cartaoId) || '').includes(q))
-        || fmtValorInput(t.valor).includes(q);
+// Critérios atuais da lista: aba + busca por texto + filtros combinados
+function filtroAtual() {
+    const b = $('busca');
+    return { tab: activeTab, q: b ? b.value.trim() : '', ..._filtroTx };
+}
+// Predicado puro de um critério { tab, q, cat, pag, cartaoId, min, max } — reaproveitado pela
+// lista, pelos cards de fatura (mobile), pelo CSV filtrado e pelos testes. Todos os critérios
+// presentes têm que bater (E). Valores comparados em centavos (inclusivo nas pontas).
+function txPredicate(c) {
+    const q = fold(String(c.q || '').trim());
+    const cardName = new Map(cards.map(k => [k.id, fold(k.nome)]));
+    const min = c.min == null ? null : Math.round(c.min * 100), max = c.max == null ? null : Math.round(c.max * 100);
+    const catNome = c.cat ? c.cat.nome : null;
+    return t => {
+        if (c.tab && c.tab !== 'all' && t.tipo !== c.tab) return false;
+        if (q && !(fold(t.desc).includes(q) || fold(catLabel(t)).includes(q)
+            || (t.cartaoId && (cardName.get(t.cartaoId) || '').includes(q))
+            || fmtValorInput(t.valor).includes(q))) return false;
+        if (c.cat && ((c.cat.tipo !== '*' && t.tipo !== c.cat.tipo) || (t.cat || '').trim() !== catNome)) return false;
+        if (c.cartaoId) { if (t.cartaoId !== c.cartaoId) return false; }
+        else if (c.pag === 'debito') { if (!(t.tipo === 'saida' && (t.pagamento || 'debito') === 'debito')) return false; }
+        else if (c.pag === 'credito') { if (t.pagamento !== 'credito') return false; }
+        const v = Math.round(t.valor * 100);
+        return (min == null || v >= min) && (max == null || v <= max);
+    };
+}
+// Há algum filtro além da aba? (busca, categoria, pagamento/cartão ou faixa de valor)
+const _filtroAtivo = c => !!(c.q || c.cat || c.pag || c.cartaoId || c.min != null || c.max != null);
+// Quantos filtros do painel (sem a busca e a aba) estão ligados — número do botão "Filtros"
+const _nCriterios = c => (c.cat ? 1 : 0) + (c.pag || c.cartaoId ? 1 : 0) + (c.min != null || c.max != null ? 1 : 0);
+
+// ── FILTROS COMBINADOS + FILTROS SALVOS ──────────────────────────────────────
+// Painel "Filtros" da lista: categoria, pagamento/cartão e faixa de valor, somados à aba e à
+// busca. Filtros nomeados ficam só neste aparelho (localStorage por conta) — preferência de
+// tela, não dado financeiro; por isso não passam por sync, backup nem merge.
+const _filtrosKey = () => _currentUser ? 'fin5_filtros_' + _currentUser.uid : null;
+function carregarFiltrosSalvos() {
+    const key = _filtrosKey();
+    _filtrosSalvos = key ? _sanFiltrosSalvos(loadJSON(key, [])) : [];
+}
+function _gravarFiltrosSalvos() { const key = _filtrosKey(); if (key) storeJSON(key, _filtrosSalvos); }
+// Conta nova na sessão (login): filtros em memória não vazam para outra conta
+function _filtrosNovaSessao() { limparFiltros({ render: false }); carregarFiltrosSalvos(); }
+
+const _critKey = c => JSON.stringify([c.tab || 'all', fold(String(c.q || '').trim()), c.cat ? [c.cat.tipo, c.cat.nome] : null,
+    c.cartaoId ? 'credito' : (c.pag || ''), c.cartaoId || null, c.min == null ? null : c.min, c.max == null ? null : c.max]);
+const _renderTabelaDeb = debounce(() => renderTabela(), 150);
+
+function toggleFiltrosPainel(abrir) {
+    const p = $('filtrosPainel'), b = $('btnFiltros');
+    if (!p || !b) return;
+    const abre = typeof abrir === 'boolean' ? abrir : p.hidden;
+    p.hidden = !abre;
+    b.setAttribute('aria-expanded', abre ? 'true' : 'false');
+}
+// Entrada única dos campos do painel (categoria, pagamento, min, max)
+function setFiltroCampo(campo, valor) {
+    valor = String(valor == null ? '' : valor);
+    if (campo === 'cat') {
+        const i = valor.indexOf('|'), tipo = i < 0 ? '' : valor.slice(0, i);
+        _filtroTx.cat = i >= 0 && (tipo === '*' || TIPOS.includes(tipo)) ? { tipo, nome: valor.slice(i + 1) } : null;
+    } else if (campo === 'pag') {
+        if (valor === 'debito' || valor === 'credito') { _filtroTx.pag = valor; _filtroTx.cartaoId = null; }
+        else if (/^c:\d+$/.test(valor)) { _filtroTx.cartaoId = toId(valor.slice(2)); _filtroTx.pag = _filtroTx.cartaoId ? 'credito' : ''; }
+        else { _filtroTx.pag = ''; _filtroTx.cartaoId = null; }
+    } else if (campo === 'min' || campo === 'max') {
+        const v = valor.trim() ? parseValor(valor) : null;
+        const ok = v == null || (Number.isFinite(v) && v >= 0 && v <= VALOR_MAX);
+        _filtroTx[campo] = ok && v != null ? roundMoney(v) : null;
+        const el = $(campo === 'min' ? 'fMin' : 'fMax');
+        if (el) el.setAttribute('aria-invalid', ok ? 'false' : 'true');
+        _renderTabelaDeb();
+        return;
+    } else return;
+    renderTabela();
+}
+// Campos de texto refletem o estado (usado ao limpar/aplicar; nunca durante a digitação)
+function _filtroParaCampos(q) {
+    if ($('busca')) $('busca').value = q || '';
+    const set = (id, v) => { const el = $(id); if (el) { el.value = v == null ? '' : fmtValorInput(v); el.setAttribute('aria-invalid', 'false'); } };
+    set('fMin', _filtroTx.min); set('fMax', _filtroTx.max);
+}
+function limparFiltros({ render = true } = {}) {
+    _filtroTx = { cat: null, pag: '', cartaoId: null, min: null, max: null };
+    _filtroParaCampos('');
+    setTab('all', { render: false });
+    if (render) renderTabela();
+}
+function salvarFiltroAtual() {
+    if (!_filtrosKey()) { toast('⚠️ Entre na conta para salvar filtros.', '#b45309'); return; }
+    const campo = $('fNome'), nome = ((campo && campo.value) || '').trim().slice(0, FILTRO_NOME_MAX), crit = filtroAtual();
+    if (!nome) { toast('⚠️ Dê um nome ao filtro.', '#b45309'); return; }
+    if (!_filtroAtivo(crit)) { toast('⚠️ Ligue ao menos um filtro (busca, categoria, pagamento ou valor).', '#b45309'); return; }
+    const igual = _filtrosSalvos.find(f => fold(f.nome) === fold(nome));
+    if (!igual && _filtrosSalvos.length >= FILTROS_MAX) { toast(`⚠️ Limite de ${FILTROS_MAX} filtros salvos. Exclua algum.`, '#b45309'); return; }
+    const id = igual ? igual.id : 'f' + newId();
+    const [novo] = _sanFiltrosSalvos([{ ...crit, id, nome }]);
+    if (!novo) return;
+    _filtrosSalvos = igual ? _filtrosSalvos.map(f => f === igual ? novo : f) : [..._filtrosSalvos, novo];
+    _gravarFiltrosSalvos();
+    if (campo) campo.value = '';
+    toast(igual ? `Filtro "${nome}" atualizado.` : `Filtro "${nome}" salvo neste aparelho.`);
+    renderTabela();
+}
+function aplicarFiltroSalvo(id) {
+    const f = _filtrosSalvos.find(x => x.id === id);
+    if (!f) return;
+    if (_critKey(filtroAtual()) === _critKey(f)) { limparFiltros(); return; }   // clicar de novo desliga
+    setTab(f.tab, { render: false });
+    _filtroTx = { cat: f.cat ? { ...f.cat } : null, pag: f.pag, cartaoId: f.cartaoId, min: f.min, max: f.max };
+    _filtroParaCampos(f.q);
+    const velho = _filtroObsoleto(f);
+    if (velho.length) toast(`⚠️ ${velho.join(' e ')} não existe${velho.length > 1 ? 'm' : ''} mais. Escolha outro e salve de novo.`, '#b45309');
+    renderTabela();
+}
+function removerFiltroSalvo(id) {
+    const f = _filtrosSalvos.find(x => x.id === id);
+    if (!f) return;
+    confirmar(`Excluir o filtro "${f.nome}"?`, { ok: 'Excluir', perigo: true }, () => {
+        _filtrosSalvos = _filtrosSalvos.filter(x => x.id !== id);
+        _gravarFiltrosSalvos();
+        renderTabela();
+    });
+}
+// Motivos pelos quais um filtro salvo ficou obsoleto (categoria/cartão apagados em outro aparelho)
+function _filtroObsoleto(f) {
+    const out = [];
+    if (f.cat && f.cat.tipo !== '*' && f.cat.nome && !(cats[f.cat.tipo] || []).includes(f.cat.nome)) out.push(`a categoria "${f.cat.nome}"`);
+    if (f.cartaoId && !cards.some(c => c.id === f.cartaoId)) out.push('o cartão');
+    return out;
+}
+// Renomear/mover categoria acompanha o filtro em uso e os salvos (remoção sem destino deixa o salvo obsoleto)
+function _filtrosRenomearCat(tipo, velho, novo) {
+    const bate = f => f.cat && f.cat.tipo === tipo && f.cat.nome === velho;
+    if (bate(_filtroTx)) _filtroTx = { ..._filtroTx, cat: novo ? { tipo, nome: novo } : null };
+    let mudou = false;
+    _filtrosSalvos = _filtrosSalvos.map(f => bate(f) && novo ? (mudou = true, { ...f, cat: { tipo, nome: novo } }) : f);
+    if (mudou) _gravarFiltrosSalvos();
+}
+function _resumoFiltro(lista) {
+    const soma = tp => roundMoney(lista.filter(t => t.tipo === tp).reduce((s, t) => s + t.valor, 0));
+    const parte = (tp, rot, pre) => lista.some(t => t.tipo === tp) ? ` · ${rot} ${pre} ${fmt(soma(tp))}` : '';
+    return `${lista.length} lançamento${lista.length !== 1 ? 's' : ''}${parte('saida', 'gastos', '−')}${parte('entrada', 'ganhos', '+')}${parte('investimento', 'investido', '−')}`;
+}
+// Mantém o painel coerente com o estado: opções, contador, chips, resumo e botão de CSV.
+// Só reconstrói os <select> quando categorias/cartões mudam (não fecha um select aberto).
+function _syncFiltrosUI(lista) {
+    const selCat = $('fCat'), selPag = $('fPag');
+    if (!selCat || !selPag) return;
+    const crit = filtroAtual();
+    const catVal = crit.cat ? `${crit.cat.tipo}|${crit.cat.nome}` : '';
+    const pagVal = crit.cartaoId ? 'c:' + crit.cartaoId : crit.pag;
+    const sig = JSON.stringify([cats.saida, cats.entrada, cats.investimento, cards.map(c => [c.id, c.nome]), catVal, pagVal]);
+    if (sig !== _filtroSig) {
+        _filtroSig = sig;
+        const opt = (v, rot) => `<option value="${escHtml(v)}">${escHtml(rot)}</option>`;
+        const grupo = (rot, tp) => (cats[tp] || []).length ? `<optgroup label="${rot}">${cats[tp].map(c => opt(tp + '|' + c, c)).join('')}</optgroup>` : '';
+        selCat.innerHTML = opt('', 'Todas') + grupo('Gastos', 'saida') + grupo('Ganhos', 'entrada') + grupo('Investimentos', 'investimento') + opt('*|', '(sem categoria)');
+        selPag.innerHTML = opt('', 'Todos') + opt('debito', 'Débito') + opt('credito', 'Crédito (todos)') + cards.map(c => opt('c:' + c.id, '💳 ' + c.nome)).join('');
+        // Valor do filtro que não existe mais nas listas: opção extra marcada, em vez de sumir calado
+        if (catVal && ![...selCat.options].some(o => o.value === catVal)) selCat.add(new Option(`⚠ ${crit.cat.nome} (não existe mais)`, catVal));
+        if (pagVal && ![...selPag.options].some(o => o.value === pagVal)) selPag.add(new Option('⚠ Cartão (não existe mais)', pagVal));
+    }
+    selCat.value = catVal; selPag.value = pagVal;
+    const n = _nCriterios(crit), badge = $('filtrosBadge'), btn = $('btnFiltros');
+    if (badge) badge.textContent = n ? ` (${n})` : '';
+    if (btn) btn.classList.toggle('active', n > 0);
+    const ativo = _filtroAtivo(crit);
+    const resumo = $('filtroResumo');
+    if (resumo) { resumo.hidden = !ativo; resumo.textContent = ativo ? _resumoFiltro(lista) : ''; }
+    const csv = $('btnCsvFiltro'); if (csv) csv.hidden = !ativo;
+    const chips = $('filtrosSalvos');
+    if (chips) {
+        const chave = _critKey(crit);
+        chips.hidden = !_filtrosSalvos.length;
+        chips.innerHTML = [..._filtrosSalvos].sort((x, y) => cmpText(x.nome, y.nome)).map(f => {
+            const velho = _filtroObsoleto(f), on = _critKey(f) === chave;
+            const tip = velho.length ? `${f.nome} — ${velho.join(' e ')} não existe${velho.length > 1 ? 'm' : ''} mais` : f.nome;
+            return `<span class="fs-item"><button type="button" class="fs-chip${on ? ' on' : ''}" aria-pressed="${on}" title="${escHtml(tip)}" data-onclick="aplicarFiltroSalvo('${f.id}')">${velho.length ? '⚠ ' : ''}${escHtml(f.nome)}</button><button type="button" class="fs-del" aria-label="Excluir filtro ${escHtml(f.nome)}" data-onclick="removerFiltroSalvo('${f.id}')">✕</button></span>`;
+        }).join('');
+    }
 }
 
 // ── TABS ──────────────────────────────────────────────────────────────────────
-function setTab(tab) {
+const _TAB_IDS = { all: 'tab-all', entrada: 'tab-entrada', saida: 'tab-saida', investimento: 'tab-invest' };
+function setTab(tab, { render = true } = {}) {
+    if (!_TAB_IDS[tab]) tab = 'all';
     activeTab = tab;
     document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
-    const map = { all: 'tab-all', entrada: 'tab-entrada', saida: 'tab-saida', investimento: 'tab-invest' };
-    $(map[tab]).classList.add('active');
-    renderTabela();
+    $(_TAB_IDS[tab]).classList.add('active');
+    if (render) renderTabela();
 }
 
 // ── TIPO / PAGAMENTO ──────────────────────────────────────────────────────────
@@ -1872,6 +2096,7 @@ function renameCategory(tipo, oldName, newName) {
     pushUndo(`Renomear categoria "${oldName}"`);
     list[idx] = newName;
     tx = tx.map(t => t.tipo === tipo && t.cat === oldName ? { ...t, cat: newName } : t);
+    _filtrosRenomearCat(tipo, oldName, newName);
     _moveBudgetKeys(oldName, newName);
     commitAll();
     return true;
@@ -1942,6 +2167,7 @@ function _performCatDelete(tipo, catName, target) {
     // Reatribui (ou limpa) só os lançamentos DESTE tipo
     tx = tx.map(t => t.tipo === tipo && t.cat === catName ? { ...t, cat: target || '' } : t);
     cats[tipo] = (cats[tipo] || []).filter(c => c !== catName);
+    _filtrosRenomearCat(tipo, catName, target || null);
     _moveBudgetKeys(catName, null);
     commitAll();
     toast(target ? `Categoria removida. Lançamentos movidos para "${target}".` : 'Categoria removida.', '#52525b');
@@ -2073,6 +2299,7 @@ const _csvDesfaz = s => s.replace(/^'(?=[=+\-@\t\r])/, '');
 
 // Lançamentos do mês filtrado ou do ano inteiro (por data da compra), em ordem de data
 function _listaCSV(escopo, m, a) {
+    if (escopo === 'filtro') return [...txFiltrados(m, a)].sort((x, y) => x.data.localeCompare(y.data));   // o que a lista mostra agora
     const meses = escopo === 'ano' ? Array.from({ length: 12 }, (_, i) => i) : [m];
     return meses.flatMap(k => txMes(k, a)).sort((x, y) => x.data.localeCompare(y.data));
 }
@@ -2090,12 +2317,14 @@ function _csvDe(lista) {
 // Exporta o mês filtrado (ou o ano inteiro) como CSV (BOM + ';' = abre direto no Excel/Sheets pt-BR)
 function exportarCSV(escopo = 'mes') {
     const { m, a } = filtro();
-    const ano = escopo === 'ano';
+    const ano = escopo === 'ano', filtrado = escopo === 'filtro';
     const lista = _listaCSV(escopo, m, a);
-    if (!lista.length) { toast(ano ? `Nada para exportar em ${a}.` : 'Nada para exportar neste mês.', '#52525b'); return; }
+    if (!lista.length) { toast(filtrado ? 'Nada para exportar com estes filtros.' : ano ? `Nada para exportar em ${a}.` : 'Nada para exportar neste mês.', '#52525b'); return; }
     const BOM = String.fromCharCode(0xFEFF);
-    downloadBlob(new Blob([BOM + _csvDe(lista)], { type: 'text/csv;charset=utf-8' }), ano ? `financas-${a}.csv` : `financas-${ymKey(m, a)}.csv`);
-    toast(ano ? `CSV de ${a} exportado!` : `CSV de ${MESES[m]} exportado!`);
+    const salvo = filtrado && _filtrosSalvos.find(f => _critKey(f) === _critKey(filtroAtual()));
+    const slug = salvo ? fold(salvo.nome).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) : '';
+    downloadBlob(new Blob([BOM + _csvDe(lista)], { type: 'text/csv;charset=utf-8' }), ano ? `financas-${a}.csv` : `financas-${ymKey(m, a)}${filtrado ? '-' + (slug || 'filtrado') : ''}.csv`);
+    toast(filtrado ? `CSV filtrado de ${MESES[m]} exportado!` : ano ? `CSV de ${a} exportado!` : `CSV de ${MESES[m]} exportado!`);
 }
 
 // Partes ausentes no arquivo mantêm o estado atual; tudo passa pela sanitização
@@ -2524,13 +2753,14 @@ function _inlineEditorHtml(t) {
 function renderTabela() {
     const { m, a } = filtro();
     const lista = txFiltrados(m, a);
+    safeRender(_syncFiltrosUI, lista);
     const tbody = $('tbody'), empty = $('emptyState'), caixas = $('txBoxes'), tabela = $('txTable');
     // Agrupado por categoria (só no computador): a tabela única dá lugar às caixinhas
     const agrupado = groupMode === 'cat' && !IS_MOBILE && lista.length > 0;
     tabela.style.display = agrupado ? 'none' : '';
     caixas.style.display = agrupado ? '' : 'none';
     if (!agrupado) caixas.innerHTML = '';
-    if (!lista.length) { tbody.innerHTML = ''; _openInlineId = null; if (IS_MOBILE) { empty.style.display = 'none'; renderMobList(); } else { empty.style.display = 'block'; } return; }
+    if (!lista.length) { tbody.innerHTML = ''; _openInlineId = null; if (IS_MOBILE) { empty.style.display = 'none'; renderMobList(); } else { empty.innerHTML = _vazioHtml(); empty.style.display = 'block'; } return; }
     empty.style.display = 'none';
     if (IS_MOBILE) { renderMobList(); return; }
 
@@ -2636,8 +2866,8 @@ function openInlineEdit(id) {
     // seção Débito) — limpa os filtros e re-renderiza antes de abrir.
     if (!$('ie-' + id)) {
         if (!tx.some(t => t.id === id)) return;
-        $('busca').value = '';
-        setTab('all');
+        limparFiltros({ render: false });
+        renderTabela();
     }
     const row = $('ie-' + id), t = tx.find(x => x.id === id);
     if (!row || !t) return;
@@ -4819,6 +5049,7 @@ function bootApp() {
     if (PREVIEW_MODE) {
         const previewUser = { uid: 'preview', displayName: 'Preview', email: 'preview@local', photoURL: null };
         _currentUser = previewUser;
+        _filtrosNovaSessao();
         init();                 // selects/listeners ANTES do 1º render (showApp → navTo)
         showApp(previewUser);
         console.info('%cFinances preview mode — no login, no cloud sync.', 'color:#0b62f0;font-weight:600');
@@ -4836,6 +5067,7 @@ function bootApp() {
         if (user) {
             _currentUser = user;
             _claimLocalData(user.uid);
+            _filtrosNovaSessao();
             init();             // selects/listeners ANTES do 1º render (showApp → navTo)
             showApp(user);
             // Caixa de entrada do Claude: só depois da 1ª sync (aplica sobre o estado da nuvem)
@@ -5001,12 +5233,14 @@ async function signOut() {
 // Remove do navegador os dados do app (do namespace atual) e zera o estado em memória.
 // Preserva o que é de OUTRA conta (alterações pendentes e metadados de sync dela): não
 // estão na nuvem, e "apagar os dados deste navegador" é sobre a conta que está saindo.
+// Chaves locais que pertencem a UMA conta (o uid vem depois do prefixo)
+const _RE_DONO_LOCAL = /^(?:fin5_pendente_|fb_sync_|fb_base_|fin5_inbox_|fin5_filtros_)(.+?)(?:_copia)?$/;
 function wipeLocalData(uid = null) {
     const keys = [];
     for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (!k || !k.startsWith(LS_PREFIX)) continue;
-        const nome = k.slice(LS_PREFIX.length), dono = nome.match(/^(?:fin5_pendente_|fb_sync_|fb_base_|fin5_inbox_)(.+?)(?:_copia)?$/);
+        const nome = k.slice(LS_PREFIX.length), dono = nome.match(_RE_DONO_LOCAL);
         if (dono && dono[1] !== uid) continue;
         if (/^(fin5_|fb_)/.test(nome)) keys.push(k);
     }
