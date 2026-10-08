@@ -3,6 +3,7 @@
 ## Lote de melhorias — out/2026 (ver MELHORIAS.md)
 
 - **Dados**: caixa de entrada só em repositório privado; `espera` obrigatória e no máximo 10 exclusões por rodada; trava de esquema (app antigo não sobrescreve servidor mais novo); backup diário no Firebase (`finances_bak`) com "Restaurar da nuvem"; ids determinísticos das parcelas de empréstimo; token do GitHub avisa antes de vencer e some no logout; armazenamento persistente.
+- **Custo**: disjuntor na sincronização (pausa automática se aparelhos entrarem em laço de gravação/leitura; a pausa dobra a cada reincidência) — proteção contra conta surpresa no Firebase.
 - **Sync**: a versão (`ts`) de cada gravação agora é sempre maior que a substituída — dois envios no mesmo milissegundo (ou relógio atrasado) davam `ts` igual e o outro aparelho perdia a alteração; achado pelo CI, coberto por teste com relógio parado.
 - **Segurança**: CSP sem script inline (código em `app.js`, handlers em `data-on*` executados por `handlers.js`); referrer desligado; regras do Firebase versionadas (`database.rules.json`) e checagem de escrita aberta.
 - **Interface**: modo escuro (automático/claro/escuro); confirmações em modal próprio (no lugar de `confirm()`); navegação por URL (`#mensal`...) com botão voltar; comparativo com o ano anterior na Visão Anual; zoom por pinça liberado; tamanho da base no painel de backup.

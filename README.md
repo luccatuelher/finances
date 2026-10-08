@@ -35,3 +35,10 @@ Sobe um servidor local (que injeta `tools/testes.js` no `index.html`: os testes 
 - `handlers.js`: executor de `data-onclick`/`data-onchange`/... (subconjunto restrito de JS, sem eval) — é por isso que o HTML não usa `onclick=`.
 - `sw.js`: service worker (rede primeiro, pré-cache do app para abrir offline). `database.rules.json`: regras do Firebase para publicar no console.
 - `tools/`: bateria (`checks.mjs`), testes embutidos (`testes.js`), lint, capturas de tela.
+
+## Custos e limites (evitar conta surpresa)
+
+- Hospedagem: GitHub Pages (estático, sem cobrança por uso). CI: GitHub Actions em repositório público (grátis).
+- Firebase: **use o plano Spark (gratuito, sem cartão)** — ao passar do limite ele para em vez de cobrar. No plano Blaze não existe teto automático: configure alerta de orçamento no Google Cloud (Billing → Budgets & alerts) e um limite baixo.
+- O app tem um **disjuntor** na sincronização (`SYNC_DISJUNTOR_*` em `CONFIG`): se aparelhos entrarem em laço de leitura/gravação, a sincronização pausa sozinha (a pausa dobra a cada nova abertura) e avisa na tela.
+- A base inteira é enviada/baixada a cada sincronização; o painel Backup mostra o tamanho e avisa acima de 1,5 MB.

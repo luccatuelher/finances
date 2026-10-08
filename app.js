@@ -53,7 +53,9 @@ const CONFIG = Object.freeze({
     VIRADA_DIA_MS: 60 * 1000,           // confere virada de dia com o app aberto
     NOTA_MAX: 500,                      // nota de meta/empréstimo
     PAYLOAD_AVISO_KB: 1500,             // avisa quando a base (enviada inteira a cada sync) passa disto
-    SYNC_DISJUNTOR_MAX: 60,             // idas ao servidor na janela abaixo que abrem o disjuntor (laço descontrolado)
+    SYNC_DISJUNTOR_MAX: 60,             // rodadas disparadas pelo observador remoto que gravaram, na janela abaixo, abrem o disjuntor
+    SYNC_DISJUNTOR_MAX_TOTAL: 400,      // ... ou qualquer ida ao servidor (limite alto: laços que não passam pelo observador)
+    SYNC_DISJUNTOR_MAX_PAUSA_MS: 6 * 60 * 60 * 1000,   // a pausa dobra a cada nova abertura, até isto
     SYNC_DISJUNTOR_JANELA_MS: 10 * 60 * 1000,
     SYNC_DISJUNTOR_PAUSA_MS: 15 * 60 * 1000,   // pausa automática da sincronização depois que o disjuntor abre
     BAK_DIAS: 14,                       // backups diários guardados no Firebase (finances_bak)
@@ -2416,7 +2418,7 @@ function _inboxStatus(msg) { _inboxMsg = msg; const el = $('inboxStatus'); if (e
 async function checkInbox({ manual = false } = {}) {
     const cfg = inboxCfg();
     if (!cfg || !cfg.repo || !cfg.token || !SYNC_ENABLED || !_currentUser || _conflictOpen || _offline()) return null;
-    if (_appDesatualizado) return null;   // não marca operações como processadas num app que não consegue sincronizar
+    if (_appDesatualizado || _syncPausado()) return null;   // sem sincronizar não aplica nem marca operações como processadas num app que não consegue sincronizar
     if (!manual && Date.now() - _inboxUltima < INBOX_MIN_MS) return null;
     if (_inboxRodando) return _inboxRodando;
     _inboxRodando = (async () => {
@@ -4837,6 +4839,7 @@ function bootApp() {
             init();             // selects/listeners ANTES do 1º render (showApp → navTo)
             showApp(user);
             // Caixa de entrada do Claude: só depois da 1ª sync (aplica sobre o estado da nuvem)
+            _disjuntorResetaTudo();   // conta nova na sessão: começa limpo
             reconcile({ initial: true }).then(() => checkInbox());
             checkDbRules();
             setupAutoSync();
@@ -5227,7 +5230,7 @@ let _bakEmCurso = false;
 async function _backupDiario(remote) {
     if (!_currentUser || !remote || _remotoMaisNovo(remote) || _bakEmCurso) return;   // um por vez: o 2º veria já o estado enviado
     const hoje = todayLocalISO(), marca = 'fin5_bak_' + _currentUser.uid;
-    if (lsGet(marca) === hoje) return;
+    if (lsGet(marca) === hoje || Date.now() - (+lsGet('fb_bakFalha') || 0) < 3600000) return;
     _bakEmCurso = true;
     try {
         const ref = _bakRef();
@@ -5241,7 +5244,7 @@ async function _backupDiario(remote) {
     } catch (e) {
         if (_erroPermissao(e)) {      // regra ainda não publicada no console do Firebase
             if (lsGet('fb_bakAviso') !== hoje) { lsSet('fb_bakAviso', hoje); console.warn('Backup diário indisponível: publique database.rules.json (inclui finances_bak).'); }
-        } else if (!(e && e.message === 'backup indisponível')) console.warn('Backup diário falhou:', e && e.message);
+        } else if (!(e && e.message === 'backup indisponível')) { lsSet('fb_bakFalha', String(Date.now())); console.warn('Backup diário falhou:', e && e.message); }   // espera 1 h antes de tentar de novo
     } finally { _bakEmCurso = false; }
 }
 function closeBackups() { $('ovBackups').classList.remove('open'); }
@@ -5310,23 +5313,36 @@ function _comPrazo(promessa, ms, msg) {
 }
 // ── DISJUNTOR DA SINCRONIZAÇÃO ────────────────────────────────────────────────
 // Cada ida ao servidor baixa (e às vezes sobe) a base inteira. Um bug que faça dois aparelhos se reativarem em laço
-// (um grava → o outro reage e grava → ...) geraria tráfego sem fim — e, em plano pago do Firebase, conta. Uso normal fica
-// longe do limite (edições são agrupadas a cada 1,5 s + 1 checagem a cada 5 min); passou de SYNC_DISJUNTOR_MAX idas em 10 min,
-// a sincronização pausa sozinha por 15 min (o botão Sync retoma na hora). Os dados continuam salvos neste aparelho.
-const _rodadasSync = [];
+// (um grava → o outro reage e grava → ...) geraria tráfego sem fim — e, em plano pago do Firebase, conta. Dois contadores
+// numa janela de 10 min: (a) rodadas disparadas pelo OBSERVADOR remoto que terminam em gravação (é o sinal do laço; edição
+// local e simples recebimento não contam) e (b) todas as idas ao servidor, com limite alto (pega laços que não passam pelo
+// observador). Abriu → a sincronização pausa; cada nova abertura dentro de 6 h dobra a pausa (até 6 h), então um laço
+// persistente não volta a gastar. O botão Sync retoma na hora; entrar na conta zera tudo. Os dados ficam salvos no aparelho.
+const _rodadasSync = { remoto: [], todas: [] }, _aberturasSync = [];
 let _syncPausadoAte = 0;
-function _disjuntorRegistra(agora = Date.now()) {
-    _rodadasSync.push(agora);
-    while (_rodadasSync.length && agora - _rodadasSync[0] > CONFIG.SYNC_DISJUNTOR_JANELA_MS) _rodadasSync.shift();
-    if (_rodadasSync.length < CONFIG.SYNC_DISJUNTOR_MAX) return false;
-    _syncPausadoAte = agora + CONFIG.SYNC_DISJUNTOR_PAUSA_MS; _rodadasSync.length = 0;
+const _limiteDisjuntor = tipo => tipo === 'remoto' ? CONFIG.SYNC_DISJUNTOR_MAX : CONFIG.SYNC_DISJUNTOR_MAX_TOTAL;
+function _disjuntorRegistra(tipo, agora = Date.now()) {
+    const arr = _rodadasSync[tipo];
+    arr.push(agora);
+    while (arr.length && agora - arr[0] > CONFIG.SYNC_DISJUNTOR_JANELA_MS) arr.shift();
+    if (arr.length < _limiteDisjuntor(tipo)) return false;
+    while (_aberturasSync.length && agora - _aberturasSync[0] > CONFIG.SYNC_DISJUNTOR_MAX_PAUSA_MS) _aberturasSync.shift();
+    _aberturasSync.push(agora);
+    _syncPausadoAte = agora + Math.min(CONFIG.SYNC_DISJUNTOR_PAUSA_MS * 2 ** (_aberturasSync.length - 1), CONFIG.SYNC_DISJUNTOR_MAX_PAUSA_MS);
+    _rodadasSync.remoto.length = _rodadasSync.todas.length = 0;
     return true;
 }
 const _syncPausado = (agora = Date.now()) => agora < _syncPausadoAte;
-const _disjuntorReseta = () => { _syncPausadoAte = 0; _rodadasSync.length = 0; };
+const _disjuntorReseta = () => { _syncPausadoAte = 0; _rodadasSync.remoto.length = _rodadasSync.todas.length = 0; };   // Sync manual (escalada continua)
+const _disjuntorResetaTudo = () => { _disjuntorReseta(); _aberturasSync.length = 0; };                                 // entrar na conta
+function _disjuntorAviso() {
+    setSyncState('err', 'Pausado');
+    toast('⏸️ Sincronização pausada: muitas idas ao servidor em pouco tempo (possível laço). Seus dados estão salvos neste aparelho — toque em Sync para tentar de novo.', '#d97706');
+    console.error('Disjuntor da sincronização aberto (pausa até ' + new Date(_syncPausadoAte).toLocaleTimeString('pt-BR') + ')');
+}
 const _offline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
 
-async function reconcile({ initial = false, manual = false, passive = false } = {}) {
+async function reconcile({ initial = false, manual = false, passive = false, remoto = false } = {}) {
     if (!SYNC_ENABLED || !_currentUser || _conflictOpen) return;
     if (_offline()) {
         setSyncState('err', 'Offline');
@@ -5342,13 +5358,9 @@ async function reconcile({ initial = false, manual = false, passive = false } = 
     setSyncState('busy', initial ? 'Carregando…' : 'Sync…');
     _syncing = (async () => {
         try {
-            if (_disjuntorRegistra()) {
-                setSyncState('err', 'Pausado');
-                toast('⏸️ Sincronização pausada: muitas idas ao servidor em pouco tempo (possível laço). Seus dados estão salvos neste aparelho — toque em Sync para tentar de novo.', '#d97706');
-                console.error('Disjuntor da sincronização aberto: ' + CONFIG.SYNC_DISJUNTOR_MAX + ' rodadas em 10 min');
-                return;
-            }
+            if (_disjuntorRegistra('todas')) { _disjuntorAviso(); return; }
             const r = await _reconcileOnce();
+            if (remoto && (r === 'pushed' || r === 'merged') && _disjuntorRegistra('remoto')) _disjuntorAviso();   // reagiu ao remoto E gravou
             if (r !== 'stale') {      // app desatualizado não sincronizou: nada de "sincronizado agora"
                 lsSet('fb_lastSync', String(Date.now()));
                 updateSyncTime();
@@ -5583,7 +5595,7 @@ function _watchRemoteTs() {
     _tsRef.on('value', snap => {
         const ts = snap.val(), meta = _getSyncMeta();
         if (ts == null || ts === _pushingTs || (meta && meta.ts === ts)) return;   // nada novo / gravação nossa
-        reconcile();
+        reconcile({ remoto: true });
     }, err => console.warn('Firebase: falha ao observar mudanças remotas', err));
 }
 function stopRemoteWatch() { if (_tsRef) { _tsRef.off(); _tsRef = null; } }

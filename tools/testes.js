@@ -327,17 +327,23 @@ function runSelfTests() {
             eq('anual: comparativo com o ano anterior', [$('aKpiEntSub').textContent, $('aKpiGasSub').textContent, $('aKpiInvSub').textContent], ['▲ +50% vs 2023', '▼ 50% vs 2023', '']);
         } finally { restoreState(bk); setFiltro(f0.m, f0.a, { render: false }); }
     }
-    {   // disjuntor da sincronização: uso normal passa, laço abre e pausa, depois libera
-        _disjuntorReseta();
-        const T0 = 1e12, M = CONFIG.SYNC_DISJUNTOR_MAX;
-        const normal = Array.from({ length: M - 1 }, (_, i) => _disjuntorRegistra(T0 + i * 1000)).some(x => x);   // M-1 rodadas: ainda não abre
-        const abriu = _disjuntorRegistra(T0 + M * 1000);
-        const pausado = _syncPausado(T0 + M * 1000 + 1), livre = !_syncPausado(T0 + M * 1000 + CONFIG.SYNC_DISJUNTOR_PAUSA_MS + 1);
-        _disjuntorReseta();
-        // rodadas espaçadas (1 a cada 20 s, bem acima da janela de 10 min no total) nunca abrem
-        const espacadas = Array.from({ length: 200 }, (_, i) => _disjuntorRegistra(T0 + i * (CONFIG.SYNC_DISJUNTOR_JANELA_MS / (M - 5)) )).some(x => x);
-        _disjuntorReseta();
-        eq('disjuntor da sync', [normal, abriu, pausado, livre, espacadas], [false, true, true, true, false]);
+    {   // disjuntor da sincronização: gravações reativas em laço abrem; edição/recebimento normal não; pausa dobra; reseta
+        _disjuntorResetaTudo();
+        const T0 = 1e12, M = CONFIG.SYNC_DISJUNTOR_MAX, P = CONFIG.SYNC_DISJUNTOR_PAUSA_MS;
+        const antes = Array.from({ length: M - 1 }, (_, i) => _disjuntorRegistra('remoto', T0 + i * 1000)).some(x => x);   // M-1: ainda não abre
+        const abriu1 = _disjuntorRegistra('remoto', T0 + M * 1000), pausado = _syncPausado(T0 + M * 1000 + 1), livre = !_syncPausado(T0 + M * 1000 + P + 1);
+        // 2ª abertura dentro de 6 h: pausa dobra
+        Array.from({ length: M - 1 }, (_, i) => _disjuntorRegistra('remoto', T0 + P + 2000 + i * 1000));
+        const T2 = T0 + P + 2000 + M * 1000; _disjuntorRegistra('remoto', T2);
+        const dobrou = _syncPausado(T2 + P + 1) && !_syncPausado(T2 + 2 * P + 1);
+        _disjuntorResetaTudo();
+        // ritmo espaçado (1 gravação reativa a cada ~11 s: 55 por janela) nunca abre; o total tem limite próprio bem mais alto
+        const passo = CONFIG.SYNC_DISJUNTOR_JANELA_MS / (M - 5);
+        const espacadas = Array.from({ length: 300 }, (_, i) => _disjuntorRegistra('remoto', T0 + i * passo)).some(x => x);
+        _disjuntorResetaTudo();
+        const totalAbre = Array.from({ length: CONFIG.SYNC_DISJUNTOR_MAX_TOTAL }, (_, i) => _disjuntorRegistra('todas', T0 + i * 100)).some(x => x);
+        _disjuntorResetaTudo();
+        eq('disjuntor da sync', [antes, abriu1, pausado, livre, dobrou, espacadas, totalAbre, _syncPausado()], [false, true, true, true, true, false, true, false]);
     }
     {   // CONFIG congelado e UNDO_MAX respeitado
         const uBak = undoStack; undoStack = [];
