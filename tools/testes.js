@@ -540,6 +540,17 @@ function runSelfTests() {
             eq('filtros: renomear categoria acompanha o filtro em uso e os salvos (só do mesmo tipo)', [_filtroTx.cat.nome, _filtrosSalvos.map(f => f.cat.nome)], ['Y', ['Y', 'X']]);
             _filtrosRenomearCat('saida', 'Y', null);
             eq('filtros: categoria removida sem destino desliga o filtro em uso e deixa o salvo obsoleto', [_filtroTx.cat, _filtrosSalvos[0].cat.nome, _filtroObsoleto(_filtrosSalvos[0]).length], [null, 'Y', 1]);
+            // Desfazer/refazer de renomear levam os filtros junto (pela entrada da pilha, sem snapshot de filtros)
+            const sU = snapshotState(), uBak = [undoStack, redoStack]; undoStack = []; redoStack = [];
+            try {
+                const cn = cats.saida[0], novo = '🆕 ' + cn;
+                _filtrosSalvos = [F('f1', 'saida', cn)]; _filtroTx = { cat: { tipo: 'saida', nome: cn }, pag: '', cartaoId: null, min: null, max: null };
+                renameCategory('saida', cn, novo);
+                const a = [_filtroTx.cat.nome === novo, _filtrosSalvos[0].cat.nome === novo];
+                undo(); const b = [_filtroTx.cat.nome === cn, _filtrosSalvos[0].cat.nome === cn];
+                redo(); const c = [_filtroTx.cat.nome === novo, _filtrosSalvos[0].cat.nome === novo];
+                eq('filtros: renomear, desfazer e refazer a categoria levam os filtros junto', [a, b, c], [[true, true], [true, true], [true, true]]);
+            } finally { restoreState(sU); commitAll(); undoStack = uBak[0]; redoStack = uBak[1]; _updateUndoBtn(); }
             eq('filtros: obsoleto = categoria ou cartão que não existe mais', [_filtroObsoleto({ cat: { tipo: 'saida', nome: '🐉 Inexistente' }, cartaoId: 987654321 }).length, _filtroObsoleto({ cat: { tipo: '*', nome: '' }, cartaoId: null }).length], [2, 0]);
         } finally {
             _filtroTx = fbak.tx; _filtrosSalvos = fbak.sv;

@@ -532,7 +532,7 @@ function renderMobList() {
                         <div class="mob-tx-meta">Fatura · vence ${vd}/${vm} · ${parcial ? `${f.items.length} de ${f.totalItens} itens` : `${f.items.length} itens`}</div>
                     </div>
                     <div class="mob-tx-right">
-                        <div class="mob-tx-val" style="color:var(--danger)">− ${fmt(parcial ? f.sub : f.total)}</div>
+                        ${(v => `<div class="mob-tx-val" style="color:var(--${v < 0 ? 'success' : 'danger'})">${v < 0 ? '+' : '−'} ${fmt(Math.abs(v))}</div>`)(parcial ? f.sub : f.total)}
                         <div class="mob-tx-date">▼</div>
                     </div>
                 </div>
@@ -1382,9 +1382,10 @@ function _updateUndoBtn() {
 }
 function undo() {
     if (!undoStack.length) return;
-    const { snap, label } = undoStack.pop();
-    redoStack.push({ snap: snapshotState(), label });   // estado de agora, para poder refazer
+    const { snap, label, fren } = undoStack.pop();
+    redoStack.push({ snap: snapshotState(), label, fren });   // estado de agora, para poder refazer
     restoreState(snap);
+    (fren || []).slice().reverse().forEach(x => _filtrosRenomearCat(x.tipo, x.novo, x.velho));   // filtros acompanham o nome de volta
     commitAll();
     renderGoals(); renderCartoesMini();
     toast(`↩ Desfeito: ${label}`, '#6d28d9');
@@ -1392,9 +1393,10 @@ function undo() {
 }
 function redo() {
     if (!redoStack.length) return;
-    const { snap, label } = redoStack.pop();
-    undoStack.push({ snap: snapshotState(), label, grupo: null, at: 0 });
+    const { snap, label, fren } = redoStack.pop();
+    undoStack.push({ snap: snapshotState(), label, grupo: null, at: 0, fren });
     restoreState(snap);
+    (fren || []).forEach(x => _filtrosRenomearCat(x.tipo, x.velho, x.novo));
     commitAll();
     renderGoals(); renderCartoesMini();
     toast(`↪ Refeito: ${label}`, '#6d28d9');
@@ -1575,7 +1577,8 @@ function _filtroObsoleto(f) {
     if (f.cartaoId && !cards.some(c => c.id === f.cartaoId)) out.push('o cartão');
     return out;
 }
-// Renomear/mover categoria acompanha o filtro em uso e os salvos (remoção sem destino deixa o salvo obsoleto)
+// Renomear categoria acompanha o filtro em uso e os salvos (desfazer/refazer repetem o mapa ao contrário/para frente).
+// novo = null (categoria removida): só o filtro em uso desliga; os salvos ficam obsoletos (⚠)
 function _filtrosRenomearCat(tipo, velho, novo) {
     const bate = f => f.cat && f.cat.tipo === tipo && f.cat.nome === velho;
     if (bate(_filtroTx)) _filtroTx = { ..._filtroTx, cat: novo ? { tipo, nome: novo } : null };
@@ -1613,17 +1616,20 @@ function _syncFiltrosUI(lista) {
     if (btn) btn.classList.toggle('active', n > 0);
     const ativo = _filtroAtivo(crit);
     const resumo = $('filtroResumo');
-    if (resumo) { resumo.hidden = !ativo; resumo.textContent = ativo ? _resumoFiltro(lista) : ''; }
+    if (resumo) { resumo.hidden = !ativo; resumo.textContent = ativo ? _resumoFiltro(lista) + (!IS_MOBILE && _nCriterios(crit) ? ' · Faturas e Débito acima mostram o mês inteiro' : '') : ''; }
     const csv = $('btnCsvFiltro'); if (csv) csv.hidden = !ativo;
     const chips = $('filtrosSalvos');
     if (chips) {
         const chave = _critKey(crit);
         chips.hidden = !_filtrosSalvos.length;
+        const ae = document.activeElement, foco = ae && chips.contains(ae) && ae.dataset.fid ? [ae.dataset.fid, ae.classList.contains('fs-del') ? 'fs-del' : 'fs-chip'] : null;
         chips.innerHTML = [..._filtrosSalvos].sort((x, y) => cmpText(x.nome, y.nome)).map(f => {
             const velho = _filtroObsoleto(f), on = _critKey(f) === chave;
             const tip = velho.length ? `${f.nome} — ${velho.join(' e ')} não existe${velho.length > 1 ? 'm' : ''} mais` : f.nome;
-            return `<span class="fs-item"><button type="button" class="fs-chip${on ? ' on' : ''}" aria-pressed="${on}" title="${escHtml(tip)}" data-onclick="aplicarFiltroSalvo('${f.id}')">${velho.length ? '⚠ ' : ''}${escHtml(f.nome)}</button><button type="button" class="fs-del" aria-label="Excluir filtro ${escHtml(f.nome)}" data-onclick="removerFiltroSalvo('${f.id}')">✕</button></span>`;
+            return `<span class="fs-item"><button type="button" class="fs-chip${on ? ' on' : ''}" data-fid="${f.id}" aria-pressed="${on}" title="${escHtml(tip)}" data-onclick="aplicarFiltroSalvo('${f.id}')">${velho.length ? '⚠ ' : ''}${escHtml(f.nome)}</button><button type="button" class="fs-del" data-fid="${f.id}" aria-label="Excluir filtro ${escHtml(f.nome)}" data-onclick="removerFiltroSalvo('${f.id}')">✕</button></span>`;
         }).join('');
+        // A lista é refeita a cada render: devolve o foco ao mesmo botão (ou ao 1º chip/botão Filtros se ele sumiu)
+        if (foco) (chips.querySelector(`.${foco[1]}[data-fid="${foco[0]}"]`) || chips.querySelector('.fs-chip') || btn)?.focus({ preventScroll: true });
     }
 }
 
@@ -2097,6 +2103,7 @@ function renameCategory(tipo, oldName, newName) {
     list[idx] = newName;
     tx = tx.map(t => t.tipo === tipo && t.cat === oldName ? { ...t, cat: newName } : t);
     _filtrosRenomearCat(tipo, oldName, newName);
+    undoStack[undoStack.length - 1].fren = [{ tipo, velho: oldName, novo: newName }];   // desfazer/refazer levam os filtros junto
     _moveBudgetKeys(oldName, newName);
     commitAll();
     return true;
@@ -2167,7 +2174,7 @@ function _performCatDelete(tipo, catName, target) {
     // Reatribui (ou limpa) só os lançamentos DESTE tipo
     tx = tx.map(t => t.tipo === tipo && t.cat === catName ? { ...t, cat: target || '' } : t);
     cats[tipo] = (cats[tipo] || []).filter(c => c !== catName);
-    _filtrosRenomearCat(tipo, catName, target || null);
+    _filtrosRenomearCat(tipo, catName, null);   // filtro em uso desliga; os salvos ficam obsoletos (⚠) — desfazer volta a valer
     _moveBudgetKeys(catName, null);
     commitAll();
     toast(target ? `Categoria removida. Lançamentos movidos para "${target}".` : 'Categoria removida.', '#52525b');
