@@ -3073,12 +3073,30 @@ function renderFaturas() {
     const section = $('faturaSection');
     const container = $('faturaAccordion');
 
-    if (!faturas.length) {
+    // Débito entra junto dos cartões (computador), como mais um cartão de lista
+    const debitos = IS_MOBILE ? [] : txMes(m, a).filter(t => t.tipo === 'saida' && (t.pagamento || 'debito') === 'debito').sort((x, y) => y.valor - x.valor);
+    if (!faturas.length && !debitos.length) {
         section.style.display = 'none';
         return;
     }
     section.style.display = '';
-    container.innerHTML = faturas.map((f, idx) => {
+    const debHtml = !debitos.length ? '' : `<div class="fatura-card ${_faturaOpen.has('debito') ? 'open' : ''}" id="faturaCard-debito">
+            <div class="fatura-card-header" data-onclick="toggleFaturaOpen($('faturaCard-debito'), 'debito')">
+                <div class="fatura-card-dot" style="background:var(--debit)"></div>
+                <div class="fatura-card-name">Débito</div>
+                <div class="fatura-card-due">${debitos.length} ${debitos.length === 1 ? 'lançamento' : 'lançamentos'}</div>
+                <div class="fatura-card-total">${fmt(roundMoney(debitos.reduce((s, t) => s + t.valor, 0)))}</div>
+                <div class="fatura-card-arrow">▼</div>
+            </div>
+            <div class="fatura-card-body">${debitos.map(t => {
+                const [y2, m2, d2] = t.data.split('-');
+                return `<div class="fatura-item" data-onclick="openInlineEdit(${t.id})" style="cursor:pointer">
+                    <div><div class="fatura-item-desc">${escHtml(t.desc)}${t.fixo ? '<span class="tag-fixo">FIXO</span>' : ''}</div>
+                    <div class="fatura-item-meta">${d2}/${m2} · ${escHtml(catLabel(t))}</div></div>
+                    <div class="fatura-item-val">− ${fmt(t.valor)}</div></div>`;
+            }).join('')}</div>
+        </div>`;
+    container.innerHTML = debHtml && !faturas.length ? debHtml : faturas.map((f, idx) => {
         const [vy, vm, vd] = f.faturaDate.split('-');
         return `<div class="fatura-card ${_faturaOpen.has(faturaKey(f)) ? 'open' : ''}" id="faturaCard-${idx}">
             <div class="fatura-card-header" data-onclick="toggleFaturaCard(${idx})">
@@ -3101,7 +3119,7 @@ function renderFaturas() {
                 }).join('')}
             </div>
         </div>`;
-    }).join('');
+    }).join('') + debHtml;
 }
 
 // Cards de fatura abertos (desktop e mobile) sobrevivem aos re-renders
@@ -3126,7 +3144,7 @@ function renderDebito() {
     const section = $('debitoSection');
     const div = $('txSectionDivider');
 
-    if (!debitos.length) {
+    if (!debitos.length || !IS_MOBILE) {   // no computador o débito fica junto dos cartões (renderFaturas)
         section.style.display = 'none';
         if (div) div.style.display = 'none';
         return;
