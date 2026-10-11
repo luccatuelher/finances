@@ -558,7 +558,7 @@ function renderMobList() {
         container.innerHTML = `<div class="empty-state" style="padding:30px;text-align:center;color:var(--text-3);font-size:13px">${_vazioHtml()}</div>`;
         return;
     }
-    container.innerHTML = faturaHtml + lista.map(t => {
+    container.innerHTML = faturaHtml + _secoesHoje(lista, t => {
         const [y, mo, d] = t.data.split('-');
         const cor = txCor(t);
         const pre = txPre(t);
@@ -578,7 +578,7 @@ function renderMobList() {
                 <div class="mob-tx-date">${d}/${mo}</div>
             </div>
         </div>`;
-    }).join('');
+    }, (rot, n, tot) => `<div class="tx-hoje-mob">${rot}<span>${n} · ${tot}</span></div>`);
 }
 
 
@@ -2798,8 +2798,19 @@ function renderTabela() {
         tbody.innerHTML = '';
         caixas.innerHTML = _caixinhasHtml(lista, _rowHtml);
     } else {
-        tbody.innerHTML = lista.map(_rowHtml).join('');
+        tbody.innerHTML = _secoesHoje(lista, _rowHtml, (rot, n, tot) => `<tr class="tx-hoje-row"><td colspan="5">${rot}<span>${n} · ${tot}</span></td></tr>`);
     }
+}
+
+// Mês em andamento: primeiro o que já aconteceu (até hoje), depois o que ainda vem no mês
+// (fixos, parcelas, agendados). Mantém a ordem escolhida dentro de cada parte.
+function _secoesHoje(lista, itemHtml, cabHtml) {
+    const hoje = todayLocalISO(), ate = lista.filter(t => t.data <= hoje), depois = lista.filter(t => t.data > hoje);
+    if (!ate.length || !depois.length) return lista.map(itemHtml).join('');
+    const tot = l => { const v = roundMoney(l.reduce((s, t) => s + (t.tipo === 'entrada' ? t.valor : -t.valor), 0)); return (v < 0 ? '− ' : '+ ') + fmt(Math.abs(v)); };
+    const n = l => `${l.length} ${l.length === 1 ? 'lançamento' : 'lançamentos'}`;
+    return cabHtml('Até hoje', n(ate), tot(ate)) + ate.map(itemHtml).join('')
+         + cabHtml('Ainda neste mês', n(depois), tot(depois)) + depois.map(itemHtml).join('');
 }
 
 // ── AGRUPAR POR CATEGORIA: caixinhas ─────────────────────────────────────────
