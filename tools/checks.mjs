@@ -12,16 +12,23 @@ const TIPOS = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '
 const server = createServer(async (req, res) => {
   try {
     const p = join(process.cwd(), decodeURIComponent(new URL(req.url, 'http://x').pathname));
-    const body = await readFile(p.endsWith('/') ? p + 'index.html' : p);
+    // Só os arquivos do app: nada de .git/.claude nem caminhos fora da pasta
+    if (!p.startsWith(process.cwd() + '/') || /\/\.(git|claude)(\/|$)/.test(p)) { res.writeHead(404); res.end(); return; }
+    let body = await readFile(p.endsWith('/') ? p + 'index.html' : p);
+    // Os testes (tools/testes.js) não fazem parte do app publicado: entram só aqui, como <script> comum
+    // depois do script do app (escopo global compartilhado com as funções e variáveis do app)
+    if (extname(p) === '.html') body = Buffer.from(body.toString().replace('</body>', '<script src="/tools/testes.js"></script>\n</body>'));
     res.writeHead(200, { 'content-type': TIPOS[extname(p)] || 'application/octet-stream' }); res.end(body);
   } catch { res.writeHead(404); res.end(); }
-}).listen(5577);
+}).listen(5577, '127.0.0.1');
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const page = await browser.newPage();
+// CSP: nenhuma violação (script inline, origem não permitida) em nenhuma das cargas desta página
+await page.addInitScript(() => { window.__csp = []; document.addEventListener('securitypolicyviolation', e => window.__csp.push(`${e.violatedDirective} ${e.blockedURI}`)); });
 const erros = [];
 // Falha de rede (CDN bloqueada no sandbox) não conta como erro
-page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource: net::/.test(m.text())) erros.push(m.text()); });
+page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource: net::|Refused to execute inline (script|event handler)|Executing inline (script|event handler) violates/.test(m.text())) erros.push(m.text()); });
 page.on('pageerror', e => erros.push(e.message));
 const url = 'http://localhost:5577/index.html?preview=1';
 
@@ -38,9 +45,9 @@ await page.evaluate(() => { localStorage.clear(); localStorage.setItem('preview:
 await page.goto(url);
 await page.waitForFunction(() => typeof runSelfTests === 'function');
 
-const r = await page.evaluate(async () => ({
+const r = await page.evaluate(async () => ({ csp: window.__csp,
   self: await runSelfTests(),
-  sync: await runSyncFuzz(),
+  sync: [...(await runSyncFuzz()), ...(await runSyncFuzz([1, 2, 3, 4, 5, 6, 7, 8], 120, { relogioParado: true })).map(x => '[relógio parado] ' + x)],
   fuzz: await runFuzz(),
 }));
 
@@ -49,7 +56,7 @@ const graficos = [];
 if (chartjs) {
   await page.evaluate(() => setFiltro(1, 2026));   // mês dos dados de exemplo
   for (const v of ['dashboard', 'anual', 'mensal', 'metas']) {
-    await page.evaluate(v => navTo(v, [...document.querySelectorAll('.nav-pill')].find(b => (b.getAttribute('onclick') || '').includes("'" + v + "'"))), v);
+    await page.evaluate(v => navTo(v, [...document.querySelectorAll('.nav-pill')].find(b => (b.getAttribute('data-onclick') || '').includes("'" + v + "'"))), v);
     await page.waitForTimeout(600);
     const vazios = await page.evaluate(() => [...document.querySelectorAll('canvas')].filter(c => c.offsetParent).filter(c => {
       const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
@@ -57,6 +64,11 @@ if (chartjs) {
       return true;
     }).map(c => c.id));
     const total = await page.evaluate(() => [...document.querySelectorAll('canvas')].filter(c => c.offsetParent).length);
+    // Acessibilidade: todo gráfico do Chart.js tem alternativa em texto (role=img + tabela com uma linha por rótulo)
+    const semAlt = await page.evaluate(() => [...document.querySelectorAll('canvas')].filter(c => c.offsetParent && window.Chart && Chart.getChart(c)).filter(c => {
+      const t = document.getElementById(c.getAttribute('aria-describedby') || '');
+      return c.getAttribute('role') !== 'img' || !c.getAttribute('aria-label') || !t || t.rows.length - 1 !== Chart.getChart(c).data.labels.length; }).map(c => c.id));
+    if (semAlt.length) graficos.push(`${v}: sem alternativa em texto: ${semAlt.join(',')}`);
     // Orçamento (roda) e Mensal (cascata, calendário) são desenhados sem o Chart.js
     if (v !== 'metas' && v !== 'mensal' && (!total || vazios.length)) graficos.push(`${v}: ${total} canvas, vazios: ${vazios.join(',') || '(nenhum canvas)'}`);
   }
@@ -87,6 +99,30 @@ mpg.on('console', m => { if (m.type() === 'error' && !/Failed to load resource: 
 if (chartjs) await mpg.route('**/chart.umd.min.js', r => r.fulfill({ status: 200, contentType: 'text/javascript', body: chartjs }));
 await mpg.goto(url); await mpg.waitForFunction(() => typeof runSelfTests === 'function');
 const mob = await mpg.evaluate(async () => ({ mobile: IS_MOBILE, self: (await runSelfTests()).fails, fuzz: await runFuzz() }));
+// Celular: a confirmação de excluir abre POR CIMA da folha de edição (z-index) e dá para tocar nos botões
+const mobConf = await mpg.evaluate(async () => {
+  restoreState(sanitizeState({ t: SEED })); commitAll(); setFiltro(1, 2026);
+  openMobEdit(tx[0].id); mobEditDelete(); await new Promise(r => setTimeout(r, 300));
+  const b = document.querySelector('#confBotoes button:last-child'), r = b.getBoundingClientRect();
+  const topo = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+  const ok = !!topo && !!topo.closest('#ovConfirmar');
+  _confirmarFechar(null); closeMobEdit();
+  return ok;
+});
+if (!mobConf) mob.self.push({ name: 'celular: confirmação de excluir fica atrás da folha de edição' });
+// Celular: painel de filtros aberto + filtro salvo com nome comprido não estoura a largura de 375 px
+const mobFiltro = await mpg.evaluate(async () => {
+  restoreState(sanitizeState({ t: SEED })); commitAll(); setFiltro(1, 2026);
+  storeJSON(_filtrosKey(), [{ id: 'f1', nome: 'Nome muito comprido de filtro '.repeat(3), tab: 'all', q: '', cat: { tipo: 'saida', nome: '💊 Saúde' }, pag: '', cartaoId: null, min: null, max: null },
+    { id: 'f2', nome: 'B', tab: 'saida', q: '', cat: null, pag: 'credito', cartaoId: null, min: 40, max: null }]);
+  carregarFiltrosSalvos(); toggleFiltrosPainel(true); aplicarFiltroSalvo('f1'); await new Promise(r => setTimeout(r, 250));
+  const r = { larg: document.documentElement.scrollWidth, n: document.querySelectorAll('#mobTxList .mob-tx-card').length, painel: !$('filtrosPainel').hidden };
+  aplicarFiltroSalvo('f2'); await new Promise(r => setTimeout(r, 250));
+  r.faturas = document.querySelectorAll('#mobTxList .mob-fatura-card').length; r.cartoes = document.querySelectorAll('#mobTxList .mob-tx-card').length;
+  limparFiltros(); toggleFiltrosPainel(false); storeJSON(_filtrosKey(), []); carregarFiltrosSalvos(); renderTabela();
+  return r;
+});
+if (mobFiltro.larg > 375 || mobFiltro.n !== 1 || !mobFiltro.painel) mob.self.push({ name: 'celular: filtros ' + JSON.stringify(mobFiltro) });
 const mobilFalhas = (mob.mobile ? 0 : 1) + mob.self.length + (mob.fuzz || []).length + merros.length;
 await mctx.close();
 // Segurança: nomes/descrições hostis (HTML, aspas, </script>) em todas as telas + clique em tudo que os carrega no handler
@@ -103,8 +139,8 @@ const xss = await xpg.evaluate(async () => {
   renderAll(); renderGoals(); renderCartoesMini();
   let cliques = 0;
   for (const v of ['dashboard', 'anual', 'mensal', 'metas']) {
-    navTo(v, [...document.querySelectorAll('.nav-pill')].find(b => (b.getAttribute('onclick') || '').includes("'" + v + "'")) || null); await new Promise(r => setTimeout(r, 250));
-    for (const e of [...document.querySelectorAll('[onclick], [onchange]')].filter(e => /xss|img|svg|script/i.test((e.getAttribute('onclick') || '') + (e.getAttribute('onchange') || '')))) { try { e.click(); cliques++; } catch {} }
+    navTo(v, [...document.querySelectorAll('.nav-pill')].find(b => (b.getAttribute('data-onclick') || '').includes("'" + v + "'")) || null); await new Promise(r => setTimeout(r, 250));
+    for (const e of [...document.querySelectorAll('[data-onclick], [data-onchange]')].filter(e => /xss|img|svg|script/i.test((e.getAttribute('data-onclick') || '') + (e.getAttribute('data-onchange') || '')))) { try { e.click(); cliques++; } catch {} }
     // Orçamento: sem handlers inline (delegação por índice); clica nas linhas, fatias e ações que levam os nomes hostis
     if (v === 'metas') for (const sel of ['#budgetCatList .orc-row', '#orcSlices path[data-kind]', '#orcSel [data-act]:not([data-act="excluir"])', '#orcEntradasList [data-ent-act="renomear"]'])
       for (let i = 0, n = document.querySelectorAll(sel).length; i < n; i++) {   // cada clique redesenha: busca de novo
@@ -113,15 +149,165 @@ const xss = await xpg.evaluate(async () => {
       }
     await new Promise(r => setTimeout(r, 150));
   }
+  // Todo handler declarativo (inclusive com os nomes hostis) precisa ser aceito pelo executor e chamar função existente
+  const ruinsHx = [];
+  for (const v of ['dashboard', 'anual', 'mensal', 'metas']) {
+    navTo(v, null); await new Promise(r => setTimeout(r, 120));
+    for (const e of document.querySelectorAll('*')) for (const at of e.getAttributeNames().filter(n => /^data-on(click|change|input|keydown|focus|mouseenter)$/.test(n))) {
+      const c = e.getAttribute(at); if (!c) continue;
+      try { const ast = __hx.analisar(c); for (const st of ast) { const f = st.t === 'if' ? st.s : st; if (f.t === 'call' && f.f.t === 'id' && typeof window[f.f.n] !== 'function') ruinsHx.push(`${c.slice(0, 40)} → função "${f.f.n}" não existe`); } }
+      catch (er) { ruinsHx.push(`${c.slice(0, 50)}: ${er.message}`); }
+    }
+  }
+  // Filtros salvos com nomes hostis: o chip carrega só o id; clica em aplicar, aplicar de novo (desliga) e excluir (cancela)
+  navTo('dashboard', null); await new Promise(r => setTimeout(r, 150));
+  storeJSON(_filtrosKey(), [{ id: 'f1', nome: P[0], tab: 'all', q: P[1], cat: { tipo: 'saida', nome: cat }, pag: 'credito', cartaoId: 900, min: 1, max: 99999 }]);
+  carregarFiltrosSalvos(); toggleFiltrosPainel(true); renderTabela();
+  for (const sel of ['.fs-chip', '.fs-chip', '.fs-del']) { const e = document.querySelector(sel); if (e) { e.click(); cliques++; } await new Promise(r => setTimeout(r, 120)); }
+  if ($('ovConfirmar').classList.contains('open')) _confirmarFechar(null);
+  limparFiltros();
   const injetados = [...document.querySelectorAll('img[src="x"], svg[onload], [onerror], [onmouseover], [onload]')].length;
-  return { executou: window.__xss || null, injetados, cliques };
+  return { executou: window.__xss || null, injetados, cliques, ruinsHx: [...new Set(ruinsHx)] };
 });
 await xctx.close();
-const xssFalhas = (xss.executou ? 1 : 0) + xss.injetados + xerros.length + (xss.cliques ? 0 : 1);
+const xssFalhas = (xss.executou ? 1 : 0) + xss.injetados + xerros.length + (xss.cliques ? 0 : 1) + xss.ruinsHx.length;
 
-const falhas = r.self.fails.length + r.sync.length + (r.fuzz || []).length + erros.length + graficos.length + fusoFalhas.length + mobilFalhas + xssFalhas;
-console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · sync ${r.sync.length} problema(s) · fuzz ${(r.fuzz || []).length} violação(ões) · console ${erros.length} erro(s) · segurança ${xssFalhas ? xssFalhas + ' problema(s)' : 'ok (' + xss.cliques + ' cliques)'} · celular ${mobilFalhas ? mobilFalhas + ' problema(s)' : 'ok'} · fusos ${fusoFalhas.length ? fusoFalhas.length + ' problema(s)' : fusos.length + ' ok'} · gráficos ${chartjs ? (graficos.length ? graficos.length + ' problema(s)' : 'ok') : 'não verificados (sem tools/.cache/chart.umd.min.js)'}`);
-if (falhas) console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros, graficos, fusoFalhas, mobil: { ...mob, merros }, xss, xerros }, null, 2));
+// Navegação: URL com hash restaura a tela; voltar/avançar troca de tela; modal fecha antes de voltar de tela
+const nctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+const npg = await nctx.newPage(); const nerros = [], navFalhas = [];
+npg.on('pageerror', e => nerros.push(e.message));
+if (chartjs) await npg.route('**/chart.umd.min.js', r => r.fulfill({ status: 200, contentType: 'text/javascript', body: chartjs }));
+await npg.goto(url + '#mensal'); await npg.waitForFunction(() => typeof runSelfTests === 'function');
+const cv = () => npg.evaluate(() => currentView), hash = () => npg.evaluate(() => location.hash), ativa = () => npg.evaluate(() => (document.querySelector('.nav-pill.active') || {}).textContent);
+const confere = async (nome, got, exp) => { if (JSON.stringify(got) !== JSON.stringify(exp)) navFalhas.push(`${nome}: ${JSON.stringify(got)} ≠ ${JSON.stringify(exp)}`); };
+await confere('abre no hash', [await cv(), await ativa()], ['mensal', 'Mensal']);
+await npg.evaluate(() => navTo('anual')); await confere('navTo muda o hash', [await cv(), await hash()], ['anual', '#anual']);
+await npg.evaluate(() => navTo('metas')); await npg.goBack(); await npg.waitForTimeout(150); await confere('voltar → anual', [await cv(), await hash()], ['anual', '#anual']);
+await npg.goBack(); await npg.waitForTimeout(150); await confere('voltar → mensal', await cv(), 'mensal');
+await npg.goForward(); await npg.waitForTimeout(150); await confere('avançar → anual', await cv(), 'anual');
+// modal: voltar fecha o modal e não muda de tela
+await npg.evaluate(() => document.getElementById('ovCartoes').classList.add('open')); await npg.waitForTimeout(100);
+await npg.goBack(); await npg.waitForTimeout(150);
+await confere('voltar com modal fecha o modal', [await npg.evaluate(() => document.getElementById('ovCartoes').classList.contains('open')), await cv()], [false, 'anual']);
+await nctx.close();
+const navProblemas = navFalhas.length + nerros.length;
+
+// Fluxos de ponta a ponta pela interface (cliques e campos reais): lançar, excluir (com o modal próprio), desfazer, trocar mês
+const fctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+const fpg = await fctx.newPage(); const fprob = [];
+fpg.on('pageerror', e => fprob.push('erro: ' + e.message));
+if (chartjs) await fpg.route('**/chart.umd.min.js', r => r.fulfill({ status: 200, contentType: 'text/javascript', body: chartjs }));
+await fpg.goto(url); await fpg.waitForFunction(() => typeof runSelfTests === 'function');
+await fpg.evaluate(() => { restoreState(sanitizeState({})); commitAll(); setFiltro(new Date().getMonth(), new Date().getFullYear()); });
+const nTx = () => fpg.evaluate(() => tx.length);
+await fpg.fill('#desc', 'Teste e2e <b>x</b>'); await fpg.fill('#valor', '12,34');
+await fpg.selectOption('#tipo', 'saida');
+await fpg.click('button.btn-save');
+if (await nTx() !== 1) fprob.push('lançar: não criou o lançamento');
+else {
+  const t = await fpg.evaluate(() => tx[0]);
+  if (t.valor !== 12.34 || t.desc !== 'Teste e2e <b>x</b>') fprob.push('lançar: dados errados ' + JSON.stringify(t));
+  if (!(await fpg.locator('#tbody tr', { hasText: 'Teste e2e' }).count())) fprob.push('lançar: linha não apareceu na tabela');
+  if (await fpg.locator('#tbody b').count()) fprob.push('lançar: HTML do usuário foi interpretado');
+  await fpg.locator('#tbody tr', { hasText: 'Teste e2e' }).locator('button[title="Remover"]').click();
+  if (!(await fpg.locator('#ovConfirmar.open').count())) fprob.push('excluir: modal de confirmação não abriu');
+  else {
+    await fpg.locator('#confBotoes button', { hasText: 'Remover' }).click();
+    if (await nTx() !== 0) fprob.push('excluir: não removeu');
+    await fpg.evaluate(() => undo()); if (await nTx() !== 1) fprob.push('desfazer: não restaurou');
+    await fpg.locator('#tbody tr', { hasText: 'Teste e2e' }).locator('button[title="Remover"]').click();
+    await fpg.keyboard.press('Escape');
+    if (await nTx() !== 1 || await fpg.locator('#ovConfirmar.open').count()) fprob.push('excluir: Esc deveria cancelar');
+  }
+}
+await fpg.evaluate(() => { setFiltro(0, 2025); });
+if (await fpg.evaluate(() => [$('filtroMes').value, $('filtroAno').value].join('/')) !== '0/2025') fprob.push('trocar mês: seletores não mudaram');
+if (await fpg.locator('#tbody tr', { hasText: 'Teste e2e' }).count()) fprob.push('trocar mês: lançamento de outro mês apareceu');
+// Filtros combinados pela interface: categoria, faixa de valor, salvar, limpar, reaplicar pelo chip, persistir após recarregar
+await fpg.evaluate(() => { const d = todayLocalISO(); restoreState(sanitizeState({ t: [
+  { id: 1, desc: 'Farmácia', valor: 62, data: d, tipo: 'saida', cat: '💊 Saúde', pagamento: 'debito' },
+  { id: 2, desc: 'Cinema', valor: 30, data: d, tipo: 'saida', cat: '🎉 Lazer', pagamento: 'debito' },
+  { id: 3, desc: 'Salário', valor: 5000, data: d, tipo: 'entrada', cat: '💰 Salário' }] })); commitAll(); setFiltro(new Date().getMonth(), new Date().getFullYear()); });
+const linhas = () => fpg.locator('#tbody tr[id^="tr-"]').count();
+const espera = async (n, rot) => { for (let i = 0; i < 20 && await linhas() !== n; i++) await fpg.waitForTimeout(100); const got = await linhas(); if (got !== n) fprob.push(`filtros: ${rot} (esperava ${n} linha(s), vieram ${got})`); };
+await espera(3, 'base');
+await fpg.click('#btnFiltros');
+if (!(await fpg.locator('#filtrosPainel').isVisible()) || await fpg.getAttribute('#btnFiltros', 'aria-expanded') !== 'true') fprob.push('filtros: painel não abriu');
+await fpg.selectOption('#fCat', 'saida|💊 Saúde'); await espera(1, 'categoria');
+await fpg.selectOption('#fCat', ''); await fpg.fill('#fMin', '40'); await espera(2, 'valor mínimo');
+await fpg.fill('#fMax', '100'); await espera(1, 'faixa de valor');
+await fpg.fill('#fMax', 'abc');
+if (await fpg.getAttribute('#fMax', 'aria-invalid') !== 'true') fprob.push('filtros: valor inválido sem aria-invalid');
+await fpg.fill('#fMax', '100'); await espera(1, 'faixa de valor de novo');
+if (!/1 lançamento/.test(await fpg.textContent('#filtroResumo'))) fprob.push('filtros: resumo ausente');
+await fpg.fill('#fNome', 'Caros'); await fpg.locator('#filtrosPainel button', { hasText: 'Salvar' }).click();
+if (await fpg.locator('.fs-chip').count() !== 1) fprob.push('filtros: chip do filtro salvo não apareceu');
+await fpg.locator('#filtrosPainel button', { hasText: 'Limpar' }).click(); await espera(3, 'limpar');
+if (await fpg.getAttribute('.fs-chip', 'aria-pressed') !== 'false') fprob.push('filtros: chip deveria estar desligado');
+await fpg.click('.fs-chip'); await espera(1, 'aplicar o chip');
+if (await fpg.getAttribute('.fs-chip', 'aria-pressed') !== 'true' || !(await fpg.locator('#btnCsvFiltro').isVisible())) fprob.push('filtros: chip ligado sem aria-pressed ou sem botão de CSV');
+await fpg.fill('#fMin', '99999'); await fpg.waitForTimeout(300);
+if (!(await fpg.locator('#emptyState button', { hasText: 'Limpar filtros' }).count())) fprob.push('filtros: lista vazia sem o botão "Limpar filtros"');
+await fpg.locator('#emptyState button', { hasText: 'Limpar filtros' }).click(); await espera(3, 'limpar pela lista vazia');
+await fpg.reload(); await fpg.waitForFunction(() => typeof runSelfTests === 'function');
+if (await fpg.locator('.fs-chip').count() !== 1) fprob.push('filtros: filtro salvo não persistiu após recarregar');
+await fpg.evaluate(() => { storeJSON(_filtrosKey(), []); carregarFiltrosSalvos(); });
+await fctx.close();
+const fluxoProblemas = fprob.length;
+
+// Tema escuro: segue o sistema, o botão alterna e a escolha persiste; nenhum texto visível com contraste < 3:1
+const dctx = await browser.newContext({ colorScheme: 'dark', viewport: { width: 1280, height: 900 } });
+const dpg = await dctx.newPage(); const dprob = [];
+dpg.on('pageerror', e => dprob.push('erro: ' + e.message));
+if (chartjs) await dpg.route('**/chart.umd.min.js', r => r.fulfill({ status: 200, contentType: 'text/javascript', body: chartjs }));
+await dpg.goto(url); await dpg.waitForFunction(() => typeof runSelfTests === 'function');
+const tema = () => dpg.evaluate(() => document.documentElement.getAttribute('data-tema'));
+if (await tema() !== 'escuro') dprob.push('não seguiu o sistema escuro');
+await dpg.evaluate(() => setFiltro(1, 2026));
+// Painel de filtros aberto, um chip desligado e outro ligado: entram na checagem de contraste
+await dpg.evaluate(() => { storeJSON(_filtrosKey(), [{ id: 'f1', nome: 'Saúde', tab: 'all', q: '', cat: { tipo: 'saida', nome: '💊 Saúde' }, pag: '', cartaoId: null, min: null, max: null },
+  { id: 'f2', nome: 'Caros', tab: 'saida', q: '', cat: null, pag: '', cartaoId: null, min: 40, max: null }]); carregarFiltrosSalvos(); toggleFiltrosPainel(true); aplicarFiltroSalvo('f2'); });
+for (const v of ['dashboard', 'anual', 'mensal', 'metas']) {
+  await dpg.evaluate(v => navTo(v), v); await dpg.waitForTimeout(500);
+  const ruins = await dpg.evaluate(() => {
+    const parse = c => { const m = c.match(/rgba?\(([^)]+)\)/); if (!m) return null; const [r, g, b, a = 1] = m[1].split(/[ ,\/]+/).filter(Boolean).map(Number); return [r, g, b, a]; };
+    const lum = ([r, g, b]) => { const f = v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }; return .2126 * f(r) + .7152 * f(g) + .0722 * f(b); };
+    const bgOf = el => { const L = []; for (let e = el; e; e = e.parentElement) { const c = parse(getComputedStyle(e).backgroundColor); if (c && c[3] > 0) { L.push(c); if (c[3] >= .99) break; } }
+      const base = L.length && L[L.length - 1][3] >= .99 ? [0, 0, 0] : [11, 16, 32]; return L.reverse().reduce((acc, c) => acc.map((x, i) => x * (1 - c[3]) + c[i] * c[3]), base); };
+    const out = [];
+    for (const el of document.querySelectorAll('body *')) {
+      if (!el.offsetParent && getComputedStyle(el).position !== 'fixed') continue;
+      const t = [...el.childNodes].filter(n => n.nodeType === 3 && n.textContent.trim()).map(n => n.textContent.trim()).join(' '); if (!t) continue;
+      const fg = parse(getComputedStyle(el).color); if (!fg) continue; const bg = bgOf(el);
+      const L1 = lum(fg.slice(0, 3).map((x, i) => x * fg[3] + bg[i] * (1 - fg[3]))), L2 = lum(bg), cr = (Math.max(L1, L2) + .05) / (Math.min(L1, L2) + .05);
+      if (cr < 3) out.push(cr.toFixed(1) + ' ' + (el.className || el.tagName) + ' "' + t.slice(0, 24) + '"');
+    }
+    return out;
+  });
+  if (ruins.length) dprob.push(`${v}: contraste baixo em ${ruins.length}: ${ruins.slice(0, 3).join(' | ')}`);
+}
+await dpg.evaluate(() => ciclarTema());   // auto → claro
+if (await tema() !== 'claro') dprob.push('botão não mudou para claro');
+await dpg.reload(); await dpg.waitForFunction(() => typeof runSelfTests === 'function');
+if (await tema() !== 'claro') dprob.push('escolha do tema não persistiu');
+await dctx.close();
+const temaProblemas = dprob.length;
+
+// A política está valendo de verdade: script inline injetado e handler onclick inline são bloqueados
+const cspAtiva = await page.evaluate(() => new Promise(res => {
+  const v = []; document.addEventListener('securitypolicyviolation', e => v.push(e.violatedDirective));
+  const s = document.createElement('script'); s.textContent = 'window.__ruim = 1'; document.head.appendChild(s);
+  const b = document.createElement('button'); b.setAttribute('onclick', 'window.__ruim = 2'); document.body.appendChild(b); b.click();
+  setTimeout(() => { b.remove(); s.remove(); res({ rodou: window.__ruim || null, v }); }, 300);
+}));
+// Requisitos do Firebase na política (long-polling do Realtime Database é <script> de *.firebaseio.com; login usa apis.google.com)
+const cspTexto = await page.evaluate(() => document.querySelector('meta[http-equiv="Content-Security-Policy"]').content);
+const faltaCsp = ['script-src[^;]*https://\\*\\.firebaseio\\.com', 'script-src[^;]*https://apis\\.google\\.com', 'script-src[^;]*https://www\\.gstatic\\.com', 'connect-src[^;]*wss:', 'frame-src[^;]*https:'].filter(re => !new RegExp(re).test(cspTexto));
+const cspFurada = cspAtiva.rodou || !cspAtiva.v.length ? 1 : 0;
+const cspProblemas = cspFurada + faltaCsp.length + (r.csp || []).filter(x => !/cdn\.jsdelivr|gstatic/.test(x)).length;   // CDNs bloqueadas por rede no sandbox não são violação
+const falhas = cspProblemas + fluxoProblemas + temaProblemas + navProblemas + r.self.fails.length + r.sync.length + (r.fuzz || []).length + erros.length + graficos.length + fusoFalhas.length + mobilFalhas + xssFalhas;
+console.log(`autoteste ${r.self.total - r.self.fails.length}/${r.self.total} · sync ${r.sync.length} problema(s) · fuzz ${(r.fuzz || []).length} violação(ões) · console ${erros.length} erro(s) · segurança ${xssFalhas ? xssFalhas + ' problema(s)' : 'ok (' + xss.cliques + ' cliques)'} · celular ${mobilFalhas ? mobilFalhas + ' problema(s)' : 'ok'} · fusos ${fusoFalhas.length ? fusoFalhas.length + ' problema(s)' : fusos.length + ' ok'} · csp ${cspProblemas ? cspProblemas + ' violação(ões): ' + r.csp.join('; ') : 'ok'} · fluxos ${fluxoProblemas ? fluxoProblemas + ' problema(s)' : 'ok'} · tema ${temaProblemas ? temaProblemas + ' problema(s)' : 'ok'} · navegação ${navProblemas ? navProblemas + ' problema(s)' : 'ok'} · gráficos ${chartjs ? (graficos.length ? graficos.length + ' problema(s)' : 'ok') : 'não verificados (sem tools/.cache/chart.umd.min.js)'}`);
+if (falhas) console.log(JSON.stringify({ fails: r.self.fails, sync: r.sync, fuzz: r.fuzz, erros, graficos, fprob, dprob, navFalhas, nerros, fusoFalhas, mobil: { ...mob, merros }, xss, xerros }, null, 2));
 // Sem fechar o navegador e o servidor o processo nunca terminava quando tudo passava (parecia travado)
 await browser.close(); server.close();
 process.exit(falhas ? 1 : 0);

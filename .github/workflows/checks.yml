@@ -1,0 +1,31 @@
+name: checks
+on:
+  push:
+  pull_request:
+jobs:
+  bateria:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Playwright + Chromium
+        run: |
+          npm install --no-save playwright@1
+          npx playwright install --with-deps chromium
+      - name: Chart.js local (mesmos bytes do SRI do app)
+        run: |
+          mkdir -p tools/.cache && cd tools/.cache
+          npm pack chart.js@4.5.1 && tar xzf chart.js-4.5.1.tgz && cp package/dist/chart.umd.min.js .
+      - name: "Lint (ESLint: variáveis indefinidas, duplicadas, código morto)"
+        run: node tools/lint.mjs
+      - name: Bateria
+        run: node tools/checks.mjs
+      - name: Capturas de tela (claro/escuro, desktop/celular)
+        if: always()
+        run: node tools/capturas.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capturas
+          path: tools/.cache/capturas/
