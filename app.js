@@ -3006,7 +3006,7 @@ function getFaturasForMonth(m, a) {
 }
 
 // ── PRÓXIMOS VENCIMENTOS (30 dias) ───────────────────────────────────────────
-// Junta fixos (saídas) e faturas de cartão que vencem nos próximos 30 dias,
+// Junta fixos (saídas), faturas de cartão e parcelas de empréstimos que vencem nos próximos 30 dias,
 // independente do mês filtrado — visão de fluxo de caixa real.
 function renderVencimentos() {
     const box = $('vencBox');
@@ -3035,6 +3035,14 @@ function renderVencimentos() {
                 items.push({ data: f.faturaDate, desc: 'Fatura ' + f.card.nome, valor: f.total, badge: 'FATURA', cor: f.card.cor || 'var(--credit)' });
         });
     }
+    // Parcelas de empréstimos / faturas parceladas na janela: o valor cheio da parcela, com a taxa ao lado
+    loans.forEach(l => {
+        const taxa = loanTaxaMensal(l);
+        loanCronograma(l).forEach(p => {
+            if (p.data && p.data >= hojeStr && p.data <= limStr)
+                items.push({ data: p.data, desc: `${l.nome} - parcela ${p.k}/${l.n}${taxa ? ' · ' + _fmtTaxa(taxa) : ''}`, valor: p.valor, badge: 'EMPRÉSTIMO', cor: 'var(--invest)' });
+        });
+    });
     items.sort((x, y) => x.data.localeCompare(y.data));
 
     if (!items.length) { box.style.display = 'none'; return; }
@@ -3067,7 +3075,8 @@ function renderVencimentos() {
     };
     const fixos   = items.filter(i => i.badge === 'FIXO');
     const faturas = items.filter(i => i.badge === 'FATURA');
-    $('vencList').innerHTML = sectionHtml('Fixos', fixos) + sectionHtml('Faturas', faturas)
+    const emprest = items.filter(i => i.badge === 'EMPRÉSTIMO');
+    $('vencList').innerHTML = sectionHtml('Fixos', fixos) + sectionHtml('Faturas', faturas) + sectionHtml('Empréstimos', emprest)
         + `<div style="display:flex;justify-content:space-between;padding:8px 2px 0;font-size:11px;color:var(--text-3)">
         <span>${items.length} vencimento${items.length !== 1 ? 's' : ''} até ${String(limite.getDate()).padStart(2,'0')}/${String(limite.getMonth()+1).padStart(2,'0')}</span>
         <span>total <strong style="color:var(--danger)">${fmt(total)}</strong></span>
@@ -6693,6 +6702,20 @@ function loanPmt(valor, taxaPct, n) {
     if (!(valor > 0) || !(n >= 1)) return 0;
     return roundMoney(i > 0 ? valor * i / (1 - Math.pow(1 + i, -n)) : valor / n);
 }
+// Taxa de juros do contrato, em % ao mês. Com taxa informada vale ela; sem taxa (juros rateados, fatura
+// parcelada) é a taxa implícita que faz a tabela Price de valor/n parcelas chegar na parcela cobrada
+// — por isso marcada como estimada. Sem juros (parcelas × n ≤ valor) não há taxa.
+function loanTaxaMensal(l) {
+    if (l.taxa > 0) return { pct: l.taxa, estimada: false };
+    if (!(l.valor > 0) || !(l.n >= 1) || !(l.parcela * l.n > l.valor + 0.005)) return null;
+    const pmt = i => l.valor * i / (1 - Math.pow(1 + i, -l.n));   // i > 0 (n = 1 dá valor × (1 + i))
+    let lo = 1e-9, hi = 1;
+    if (pmt(hi) <= l.parcela) return { pct: 100, estimada: true };
+    for (let k = 0; k < 60; k++) { const mid = (lo + hi) / 2; if (pmt(mid) < l.parcela) lo = mid; else hi = mid; }
+    return { pct: +(((lo + hi) / 2) * 100).toFixed(4), estimada: true };
+}
+const loanTaxaAnual = pct => (Math.pow(1 + pct / 100, 12) - 1) * 100;
+const _fmtTaxa = (t, anual) => !t ? '—' : `${t.estimada ? '~' : ''}${fmtPct(anual ? loanTaxaAnual(t.pct) : t.pct)}${anual ? ' a.a.' : ' a.m.'}`;
 // Parcelas do contrato, cada uma com os juros que carrega: saldo × taxa quando há taxa; sem ela,
 // o total de juros (parcelas − valor emprestado) é rateado igualmente
 function loanCronograma(l) {
@@ -6755,7 +6778,7 @@ function renderLoans() {
         <div class="loan-tile"><small>Já pago</small><b>${fmt(soma(x => x.r.pago))}</b><span>de ${fmt(soma(x => x.r.total))} no total</span></div>
         <div class="loan-tile"><small>Juros no total</small><b>${fmt(soma(x => x.r.jurosTotal))}</b><span>${fmt(soma(x => x.r.jurosFalta))} ainda por pagar</span></div>`;
     grid.innerHTML = infos.map(({ l, r }) => {
-        const pct = l.n ? Math.min(100, Math.floor(r.pagas / l.n * 100)) : 0, quitado = r.faltam === 0;
+        const pct = l.n ? Math.min(100, Math.floor(r.pagas / l.n * 100)) : 0, quitado = r.faltam === 0, taxa = loanTaxaMensal(l);
         return `<div class="goal-card">
             <div class="goal-accent" style="background:var(--invest)"></div>
             <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:10px">
@@ -6772,8 +6795,10 @@ function renderLoans() {
             <div class="loan-facts">
                 <div><small>Parcela</small><b>${fmt(l.parcela)}</b></div>
                 <div><small>Emprestado</small><b>${fmt(l.valor)}</b></div>
-                <div><small>Juros no total</small><b>${fmt(r.jurosTotal)}${l.taxa ? ` · ${escHtml(fmtPct(l.taxa))} a.m.` : ''}</b></div>
+                <div><small>Juros no total</small><b>${fmt(r.jurosTotal)}</b></div>
                 <div><small>Total a pagar</small><b>${fmt(r.total)}</b></div>
+                <div><small>Taxa de juros</small><b title="${taxa && taxa.estimada ? 'Estimada pela parcela cobrada (contrato sem taxa informada)' : ''}">${_fmtTaxa(taxa)}</b></div>
+                <div><small>Taxa anual</small><b>${_fmtTaxa(taxa, true)}</b></div>
                 <div><small>${quitado ? 'Quitado em' : 'Próxima parcela'}</small><b>${quitado ? _mesAno(r.fim) : _dataBR(r.proxima && r.proxima.data)}</b></div>
                 <div><small>Termina em</small><b>${_mesAno(r.fim)}</b></div>
             </div>
