@@ -1014,7 +1014,7 @@ const txExtraBadges = t => (t.parcela ? `<span class="tag-parc" title="Parcela $
 // Type colour + sign — shared across renders
 const txCor  = t => t.tipo === 'entrada' ? 'var(--success)' : t.tipo === 'investimento' ? 'var(--invest)' : 'var(--danger)';
 const catLabel = t => t.cat && t.cat.trim() ? t.cat : '(sem categoria)';
-// Balão dos cards "Entradas" e "Despesas": total por categoria, maiores primeiro. Sem lançamentos, o balão some.
+// Balão dos cards "Entradas", "Despesas" e "Investido": total por categoria, maiores primeiro. Sem lançamentos, o balão some.
 function renderKpiPop(popId, porCat) {
     const pop = $(popId); if (!pop) return;
     const linhas = Object.entries(porCat).sort((x, y) => y[1] - x[1]);
@@ -3275,6 +3275,7 @@ function atualizar() {
     $('kpiGas').textContent = fmt(gas);
     renderKpiPop('kpiGasPop', catD);
     $('kpiInv').textContent = fmt(inv);
+    renderKpiPop('kpiInvPop', catI);
     const kpiSal = $('kpiSal');
     kpiSal.textContent = fmt(saldo); kpiSal.className = 'kpi-val ' + (saldo < 0 ? 'red' : '');
 
@@ -3447,7 +3448,7 @@ function renderAnual() {
     const yearLabel = $('anualYearLabel');
     if (yearLabel) yearLabel.textContent = a;
     let aEnt = 0, aGas = 0, aInv = 0, aCred = 0, aDeb = 0;
-    const catAnual = {}, catEntAnual = {}, rows = [];
+    const catAnual = {}, catEntAnual = {}, catInvAnual = {}, rows = [];
 
     const nowDate = new Date();
     const curMonth = nowDate.getMonth(), curYear = nowDate.getFullYear();
@@ -3464,7 +3465,7 @@ function renderAnual() {
         lista.forEach(t => {
             const ateHoje = t.data <= hoje;
             if (t.tipo === 'entrada') { ent += t.valor; if (ateHoje) sNowEnt += t.valor; catEntAnual[catLabel(t)] = (catEntAnual[catLabel(t)] || 0) + t.valor; }
-            else if (t.tipo === 'investimento') { inv += t.valor; if (ateHoje) sNowInv += t.valor; }
+            else if (t.tipo === 'investimento') { inv += t.valor; if (ateHoje) sNowInv += t.valor; catInvAnual[catLabel(t)] = (catInvAnual[catLabel(t)] || 0) + t.valor; }
             else {
                 gas += t.valor; if (ateHoje) sNowGas += t.valor;
                 catAnual[catLabel(t)] = (catAnual[catLabel(t)] || 0) + t.valor;
@@ -3498,6 +3499,7 @@ function renderAnual() {
     $('aKpiGas').textContent = fmt(aGas);
     renderKpiPop('aKpiGasPop', catAnual);
     $('aKpiInv').textContent = fmt(aInv);
+    renderKpiPop('aKpiInvPop', catInvAnual);
     const aKpiSaldo = $('aKpiSaldo');
     aKpiSaldo.textContent = fmt(aSaldo); aKpiSaldo.className = 'kpi-val ' + (aSaldo < 0 ? 'red' : '');
 

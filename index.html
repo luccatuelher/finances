@@ -170,13 +170,14 @@
         .kpi-val.blue { color: var(--credit); }
         .kpi-val.teal { color: var(--debit); }
         .kpi-sub { font-size: 11px; color: var(--text-3); margin-top: 4px; }
-        /* Balão dos cards "Entradas" e "Despesas": mostra o total por categoria ao passar o mouse / tocar */
+        /* Balão dos cards "Entradas", "Despesas" e "Investido": mostra o total por categoria ao passar o mouse / tocar */
         .kpi.has-pop { position: relative; cursor: default; }
         .kpi.has-pop:hover, .kpi.has-pop:focus-within { z-index: 30; }
         .kpi-pop { display: none; position: absolute; left: 0; top: calc(100% + 6px); min-width: 220px; max-width: min(320px, 90vw); padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.18); font-size: 12px; color: var(--text-2); }
         .kpi.has-pop:hover .kpi-pop, .kpi.has-pop:focus .kpi-pop, .kpi.has-pop:focus-within .kpi-pop { display: block; }
         .kpi-pop-row { display: flex; justify-content: space-between; gap: 16px; padding: 2px 0; }
         .kpi-pop.neg .kpi-pop-row b { color: var(--danger); }
+        .kpi-pop.inv .kpi-pop-row b { color: var(--invest); }
         .kpi-pop-row span { min-width: 0; overflow-wrap: anywhere; }
         .kpi-pop-row b { color: var(--success); font-weight: 600; white-space: nowrap; }
         .savings-track { height: 5px; background: var(--border); border-radius: 3px; margin-top: 10px; overflow: hidden; }
@@ -1597,10 +1598,11 @@
                 <div class="kpi-sub" id="kpiGasSub"></div>
                 <div class="kpi-pop neg" id="kpiGasPop" role="tooltip"></div>
             </div>
-            <div class="kpi">
+            <div class="kpi has-pop" id="kpiInvCard" tabindex="0">
                 <div class="kpi-label">Investido</div>
                 <div class="kpi-val purple" id="kpiInv">—</div>
                 <div class="kpi-sub" id="kpiInvSub"></div>
+                <div class="kpi-pop inv" id="kpiInvPop" role="tooltip"></div>
             </div>
             <div class="kpi" id="kpiSalCard">
                 <div class="kpi-label">Saldo</div>
@@ -1728,7 +1730,7 @@
         <div class="annual-kpis">
             <div class="kpi al-green has-pop" id="aKpiEntCard" tabindex="0">  <div class="kpi-label">Entradas</div>  <div class="kpi-val green"  id="aKpiEnt">—</div><div class="kpi-sub" id="aKpiEntSub"></div><div class="kpi-pop" id="aKpiEntPop" role="tooltip"></div></div>
             <div class="kpi al-red has-pop" id="aKpiGasCard" tabindex="0">    <div class="kpi-label">Despesas</div>  <div class="kpi-val red"    id="aKpiGas">—</div><div class="kpi-sub" id="aKpiGasSub"></div><div class="kpi-pop neg" id="aKpiGasPop" role="tooltip"></div></div>
-            <div class="kpi al-purple"> <div class="kpi-label">Investido</div> <div class="kpi-val purple" id="aKpiInv">—</div><div class="kpi-sub" id="aKpiInvSub"></div></div>
+            <div class="kpi al-purple has-pop" id="aKpiInvCard" tabindex="0"> <div class="kpi-label">Investido</div> <div class="kpi-val purple" id="aKpiInv">—</div><div class="kpi-sub" id="aKpiInvSub"></div><div class="kpi-pop inv" id="aKpiInvPop" role="tooltip"></div></div>
             <div class="kpi al-dark">   <div class="kpi-label">Saldo Anual</div><div class="kpi-val" id="aKpiSaldo">—</div><div class="kpi-sub">Jan → Dez (projeção)</div></div>
             <div class="kpi al-amber">  <div class="kpi-label">Saldo Até Agora</div><div class="kpi-val" id="aKpiSaldoNow">—</div><div class="kpi-sub" id="aKpiSaldoNowSub"></div></div>
         </div>
