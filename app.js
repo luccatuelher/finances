@@ -1014,8 +1014,8 @@ const txExtraBadges = t => (t.parcela ? `<span class="tag-parc" title="Parcela $
 // Type colour + sign — shared across renders
 const txCor  = t => t.tipo === 'entrada' ? 'var(--success)' : t.tipo === 'investimento' ? 'var(--invest)' : 'var(--danger)';
 const catLabel = t => t.cat && t.cat.trim() ? t.cat : '(sem categoria)';
-// Balão do card "Entradas": total por categoria (salário e demais), maiores primeiro. Sem entradas, o balão some.
-function renderEntPop(popId, porCat) {
+// Balão dos cards "Entradas" e "Despesas": total por categoria, maiores primeiro. Sem lançamentos, o balão some.
+function renderKpiPop(popId, porCat) {
     const pop = $(popId); if (!pop) return;
     const linhas = Object.entries(porCat).sort((x, y) => y[1] - x[1]);
     pop.innerHTML = linhas.map(([nome, v]) => `<div class="kpi-pop-row"><span>${escHtml(nome)}</span><b>${fmt(v)}</b></div>`).join('');
@@ -3271,8 +3271,9 @@ function atualizar() {
 
     const saldo = roundMoney(ent - gas - inv);
     $('kpiEnt').textContent = fmt(ent);
-    renderEntPop('kpiEntPop', catE);
+    renderKpiPop('kpiEntPop', catE);
     $('kpiGas').textContent = fmt(gas);
+    renderKpiPop('kpiGasPop', catD);
     $('kpiInv').textContent = fmt(inv);
     const kpiSal = $('kpiSal');
     kpiSal.textContent = fmt(saldo); kpiSal.className = 'kpi-val ' + (saldo < 0 ? 'red' : '');
@@ -3493,8 +3494,9 @@ function renderAnual() {
         [['aKpiEntSub', cEnt, pEnt], ['aKpiGasSub', cGas, pGas], ['aKpiInvSub', cInv, pInv]].forEach(([id, c, o]) => { const el = $(id); if (el) el.textContent = dlt(c, o); });
     }
     $('aKpiEnt').textContent = fmt(aEnt);
-    renderEntPop('aKpiEntPop', catEntAnual);
+    renderKpiPop('aKpiEntPop', catEntAnual);
     $('aKpiGas').textContent = fmt(aGas);
+    renderKpiPop('aKpiGasPop', catAnual);
     $('aKpiInv').textContent = fmt(aInv);
     const aKpiSaldo = $('aKpiSaldo');
     aKpiSaldo.textContent = fmt(aSaldo); aKpiSaldo.className = 'kpi-val ' + (aSaldo < 0 ? 'red' : '');
