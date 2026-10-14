@@ -90,6 +90,12 @@ por conta Google) e nunca vai para o Firebase nem para o chat.
   `update` + `parcela: { "serie": "E<id do empréstimo>", "k", "n" }`). `taxa` = % ao mês (0 = juros
   rateados: parcelas × n − valor). `acao: "update"` com `loanId` e `muda: { nome, nota }`;
   `acao: "delete"` com `loanId` (os lançamentos ficam).
+- `cartao` (cria um cartão; lançamentos da mesma rodada já podem apontar para ele em `cartaoId`):
+  ```json
+  { "id": "2026-10-14-003", "op": "cartao",
+    "card": { "id": 1850000000011, "nome": "Mercado Pago", "fechamento": 11, "vencimento": 16, "cor": "#00a1e0" } }
+  ```
+  `card.id` obrigatório e novo; id que já existe → `ignorado: já existe`. Só cria: editar/remover cartão é pela tela.
 - Tudo é idempotente: reprocessar o mesmo arquivo não duplica nem desfaz nada.
 - Não apague `processados`: é o histórico do que o app aplicou (o app guarda os últimos 300).
 - Ao gravar, **acrescente** em `ops` (o app pode estar processando ao mesmo tempo; ele relê e

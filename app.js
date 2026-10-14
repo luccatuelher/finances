@@ -2478,6 +2478,7 @@ function inboxAplicar(state, ops, { maxDel = INBOX_MAX_DEL } = {}) {
         k === 'valor' ? Math.abs(roundMoney(+t.valor) - roundMoney(+v)) < 0.005 : JSON.stringify(t[k] ?? null) === JSON.stringify(v ?? null));
     const budgetN = _sanBudget(JSON.parse(JSON.stringify(state.budget || {})));
     let loansN = _asList(state.loans).map(l => ({ ...l }));
+    let cardsN = _asList(state.cards).map(c => ({ ...c }));
     const resultados = [], adicionados = new Map(), removidos = new Set();
     _asList(ops).forEach(o => {
         const id = String((o && o.id) || '');
@@ -2513,6 +2514,13 @@ function inboxAplicar(state, ops, { maxDel = INBOX_MAX_DEL } = {}) {
             if ((chaves.includes('data') || chaves.includes('cartaoId')) && !chaves.includes('faturaData')) t.faturaData = null;
             return res('aplicado');
         }
+        if (o.op === 'cartao') {   // cria um cartão (lançamentos podem apontar para ele na mesma rodada)
+            const c = o.card && typeof o.card === 'object' ? o.card : null, cid = c && toId(c.id);
+            if (!cid) return res('ignorado: cartão sem id');
+            if (cardsN.some(x => x.id === cid)) return res('ignorado: já existe');
+            cardsN = cardsN.concat(_sanCards([{ ...c, id: cid }]));
+            return res('aplicado');
+        }
         if (o.op === 'orcamento') return res(_inboxOrcamento(budgetN, o, lista.filter(t => !removidos.has(t))));
         if (o.op === 'emprestimo') {
             if (o.acao === 'add') {
@@ -2544,7 +2552,7 @@ function inboxAplicar(state, ops, { maxDel = INBOX_MAX_DEL } = {}) {
         }
         res('ignorado: operação desconhecida');
     });
-    const s = sanitizeState({ t: lista.filter(t => !removidos.has(t)), c: state.cats, g: state.goals, k: state.cards, b: budgetN, l: loansN });
+    const s = sanitizeState({ t: lista.filter(t => !removidos.has(t)), c: state.cats, g: state.goals, k: cardsN, b: budgetN, l: loansN });
     // Lançamento recusado pela sanitização (sem data/valor) vai para a quarentena, não conta como aplicado
     const ids = new Set(s.tx.map(t => t.id));
     adicionados.forEach((i, tid) => { if (!ids.has(tid)) resultados[i].resultado = 'ignorado: inválido (quarentena)'; });
@@ -6733,7 +6741,8 @@ function loanCronograma(l) {
     return cron;
 }
 function loanResumo(l, hoje = todayLocalISO()) {
-    const cron = loanCronograma(l), venceu = x => !!x.data && x.data <= hoje;
+    // Parcela com vencimento hoje ainda conta como a pagar: só vira paga no dia seguinte
+    const cron = loanCronograma(l), venceu = x => !!x.data && x.data < hoje;
     const pagas = cron.filter(venceu), faltam = cron.filter(x => !venceu(x));
     const soma = (arr, f = x => x.valor) => roundMoney(arr.reduce((s, x) => s + f(x), 0));
     return { cron, pagas: pagas.length, faltam: faltam.length, total: soma(cron), pago: soma(pagas), falta: soma(faltam),

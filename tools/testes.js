@@ -269,6 +269,14 @@ function runSelfTests() {
         eq('caixa de entrada: empréstimo e parcelas ligadas', [r3.resultados.map(x => x.resultado), r3.state.loans.length, r3.state.tx.filter(t => t.parcela && t.parcela.serie === 'E801').length,
             r3.state.tx.filter(t => t.parcela && t.parcela.serie === 'P9').map(t => t.parcela.k)],
            [['aplicado', 'aplicado', 'ignorado: já existe', 'aplicado', 'aplicado', 'ignorado: planejamento inválido'], 1, 4, [1, 2]]);
+        // Cartão novo pela caixa: o lançamento da mesma rodada já entra na fatura certa (fecha 11, vence 16)
+        const r4 = inboxAplicar(sanitizeState({}), [
+            { id: 'k1', op: 'cartao', card: { id: 1850000000002, nome: 'Mercado Pago', fechamento: 11, vencimento: 16, cor: '#00a1e0' } },
+            { id: 'k2', op: 'cartao', card: { id: 1850000000002, nome: 'Outro', fechamento: 1, vencimento: 2 } },
+            { id: 'k3', op: 'cartao', card: { nome: 'Sem id' } },
+            { id: 'k4', op: 'add', tx: { id: 1850000000003, desc: 'Compra', valor: 10, data: '2026-10-12', tipo: 'saida', cat: 'C', pagamento: 'credito', cartaoId: 1850000000002 } }]);
+        eq('caixa de entrada: cartão novo e compra na fatura dele', [r4.resultados.map(x => x.resultado), r4.state.cards.map(c => [c.nome, c.fechamento, c.vencimento]), r4.state.tx[0].faturaData],
+           [['aplicado', 'ignorado: já existe', 'ignorado: cartão sem id', 'aplicado'], [['Mercado Pago', 11, 16]], '2026-11-16']);
     }
     {   // modal de confirmação próprio: Enter/botão escolhe, Cancelar/Esc devolve null, mensagem como texto
         const c0 = window.confirm; window.confirm = _confirmNativo;
@@ -480,8 +488,9 @@ function runSelfTests() {
         const lo = { valor: 10000, taxa: 1.99, n: 12, parcela: 945.02, primeira: '2026-01-31' }, cr = loanCronograma(lo);
         eq('empréstimo: datas e soma dos juros = parcelas − emprestado', [cr.slice(0, 3).map(x => x.data), soma(cr.map(x => x.juros)), cr.every(x => x.juros >= 0 && x.juros <= x.valor)],
            [['2026-01-31', '2026-02-28', '2026-03-31'], roundMoney(945.02 * 12 - 10000), true]);
-        const rs = loanResumo(lo, '2026-03-31');
+        const rs = loanResumo(lo, '2026-04-01');   // vence em 31/03: só conta como paga no dia seguinte
         eq('empréstimo: pago/falta pela data', [rs.pagas, rs.faltam, rs.falta, rs.pago, rs.fim], [3, 9, roundMoney(945.02 * 9), roundMoney(945.02 * 3), '2026-12-31']);
+        eq('empréstimo: parcela que vence hoje ainda não está paga', [loanResumo(lo, '2026-03-31').pagas, loanResumo(lo, '2026-03-31').proxima.data], [2, '2026-03-31']);
         eq('empréstimo sem taxa: juros rateados', soma(loanCronograma({ valor: 1000, taxa: 0, n: 4, parcela: 300, primeira: '2026-01-10' }).map(x => x.juros)), 200);
         const lt = loanTx({ ...lo, id: 7, nome: 'Carro', serie: 'E7' }, 'parcela');
         eq('empréstimo: parcela inteira com os juros embutidos', [lt.length, lt[0].desc, lt[0].cat, lt[0].parcela, soma(lt.map(t => t.juros))], [12, 'Carro - Parcela 1/12', LOAN_CAT, { serie: 'E7', k: 1, n: 12 }, roundMoney(945.02 * 12 - 10000)]);
