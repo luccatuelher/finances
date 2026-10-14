@@ -1014,6 +1014,13 @@ const txExtraBadges = t => (t.parcela ? `<span class="tag-parc" title="Parcela $
 // Type colour + sign — shared across renders
 const txCor  = t => t.tipo === 'entrada' ? 'var(--success)' : t.tipo === 'investimento' ? 'var(--invest)' : 'var(--danger)';
 const catLabel = t => t.cat && t.cat.trim() ? t.cat : '(sem categoria)';
+// Balão do card "Entradas": total por categoria (salário e demais), maiores primeiro. Sem entradas, o balão some.
+function renderEntPop(popId, porCat) {
+    const pop = $(popId); if (!pop) return;
+    const linhas = Object.entries(porCat).sort((x, y) => y[1] - x[1]);
+    pop.innerHTML = linhas.map(([nome, v]) => `<div class="kpi-pop-row"><span>${escHtml(nome)}</span><b>${fmt(v)}</b></div>`).join('');
+    pop.parentElement.classList.toggle('has-pop', linhas.length > 0);
+}
 const txPre  = t => t.tipo === 'entrada' ? '+' : '−';
 
 function toast(msg, bg = '#18181b') {
@@ -3250,11 +3257,11 @@ function renderOverlapBanner(m, a) {
 function atualizar() {
     const { m, a } = filtro(), lista = txMes(m, a);
     let ent = 0, gas = 0, inv = 0;
-    const catD = {}, catI = {};
+    const catD = {}, catI = {}, catE = {};
 
     lista.forEach(t => {
         if (t.tipo === 'entrada') {
-            ent += t.valor;
+            ent += t.valor; catE[catLabel(t)] = (catE[catLabel(t)] || 0) + t.valor;
         } else if (t.tipo === 'investimento') {
             inv += t.valor; catI[catLabel(t)] = (catI[catLabel(t)] || 0) + t.valor;
         } else {
@@ -3264,6 +3271,7 @@ function atualizar() {
 
     const saldo = roundMoney(ent - gas - inv);
     $('kpiEnt').textContent = fmt(ent);
+    renderEntPop('kpiEntPop', catE);
     $('kpiGas').textContent = fmt(gas);
     $('kpiInv').textContent = fmt(inv);
     const kpiSal = $('kpiSal');
@@ -3438,7 +3446,7 @@ function renderAnual() {
     const yearLabel = $('anualYearLabel');
     if (yearLabel) yearLabel.textContent = a;
     let aEnt = 0, aGas = 0, aInv = 0, aCred = 0, aDeb = 0;
-    const catAnual = {}, rows = [];
+    const catAnual = {}, catEntAnual = {}, rows = [];
 
     const nowDate = new Date();
     const curMonth = nowDate.getMonth(), curYear = nowDate.getFullYear();
@@ -3454,7 +3462,7 @@ function renderAnual() {
         let ent = 0, gas = 0, inv = 0, cred = 0, deb = 0;
         lista.forEach(t => {
             const ateHoje = t.data <= hoje;
-            if (t.tipo === 'entrada') { ent += t.valor; if (ateHoje) sNowEnt += t.valor; }
+            if (t.tipo === 'entrada') { ent += t.valor; if (ateHoje) sNowEnt += t.valor; catEntAnual[catLabel(t)] = (catEntAnual[catLabel(t)] || 0) + t.valor; }
             else if (t.tipo === 'investimento') { inv += t.valor; if (ateHoje) sNowInv += t.valor; }
             else {
                 gas += t.valor; if (ateHoje) sNowGas += t.valor;
@@ -3485,6 +3493,7 @@ function renderAnual() {
         [['aKpiEntSub', cEnt, pEnt], ['aKpiGasSub', cGas, pGas], ['aKpiInvSub', cInv, pInv]].forEach(([id, c, o]) => { const el = $(id); if (el) el.textContent = dlt(c, o); });
     }
     $('aKpiEnt').textContent = fmt(aEnt);
+    renderEntPop('aKpiEntPop', catEntAnual);
     $('aKpiGas').textContent = fmt(aGas);
     $('aKpiInv').textContent = fmt(aInv);
     const aKpiSaldo = $('aKpiSaldo');
