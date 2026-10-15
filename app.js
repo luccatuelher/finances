@@ -1300,7 +1300,6 @@ function _marcarAbaAtiva(view) {
     document.querySelectorAll('.nav-pill').forEach(el => el.classList.toggle('active', (el.getAttribute('data-onclick') || '').includes(`'${view}'`)));
     document.querySelectorAll('.mob-nav-tab:not(.mob-add-tab)').forEach(t => t.classList.toggle('active', t.id === 'mob-tab-' + view));
     const label = $('mobViewLabel'); if (label) label.textContent = MOB_VIEW_LABELS[view] || '';
-    const bar = $('mobMonthBar'); if (bar) bar.style.display = 'flex';
 }
 // hist: 'push' (padrão: nova entrada no histórico), 'replace' (boot), 'none' (veio do botão voltar)
 function _historicoDaView(view, hist) {
