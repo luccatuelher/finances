@@ -1300,7 +1300,7 @@ function _marcarAbaAtiva(view) {
     document.querySelectorAll('.nav-pill').forEach(el => el.classList.toggle('active', (el.getAttribute('data-onclick') || '').includes(`'${view}'`)));
     document.querySelectorAll('.mob-nav-tab:not(.mob-add-tab)').forEach(t => t.classList.toggle('active', t.id === 'mob-tab-' + view));
     const label = $('mobViewLabel'); if (label) label.textContent = MOB_VIEW_LABELS[view] || '';
-    const bar = $('mobMonthBar'); if (bar) bar.style.display = (view === 'anual' || view === 'metas') ? 'none' : 'flex';
+    const bar = $('mobMonthBar'); if (bar) bar.style.display = 'flex';
 }
 // hist: 'push' (padrão: nova entrada no histórico), 'replace' (boot), 'none' (veio do botão voltar)
 function _historicoDaView(view, hist) {
@@ -1322,11 +1322,6 @@ function navTo(view, btn, { hist = 'push' } = {}) {
     $('view-dashboard').style.display = isDash ? (IS_MOBILE ? 'flex' : 'grid') : 'none';
     ['anual','mensal','metas'].forEach(v => $('view-' + v).classList.toggle('active', v === view));
 
-    const hideMes = view === 'anual' || view === 'metas';
-    const navBar = $('monthNavBar');
-    if (navBar) navBar.style.display = hideMes ? 'none' : '';
-    const yearNav = $('yearNavBar');
-    if (yearNav) yearNav.style.display = hideMes ? 'none' : '';
 
     if (view === 'dashboard' && _dashDirty) { _dashDirty = false; safeRender(atualizar); }
     renderCurrentView();
@@ -2135,7 +2130,7 @@ function deleteCategoryFlow(tipo, catName) {
         return;
     }
     _catDeletePending = { tipo, name: catName };
-    const mesTxt = `${MESES[_budgetMonth]} de ${_budgetYear}`;
+    const mesTxt = `${MESES[filtro().m]} de ${filtro().a}`;
     $('catDeleteScopes').style.display = comEscopo ? '' : 'none';
     $('catDeleteLblMes').textContent = `Só em ${mesTxt}`;
     $('catDeleteNotaMes').textContent = 'Sai do orçamento deste mês; continua nos outros meses.';
@@ -2150,9 +2145,9 @@ function deleteCategoryFlow(tipo, catName) {
 // Texto, contagem de lançamentos e destinos possíveis conforme o escopo escolhido
 function catDeleteRefresh() {
     const p = _catDeletePending; if (!p) return;
-    const escopo = _catEscopo(), ym = ymKey(_budgetMonth, _budgetYear);
+    const escopo = _catEscopo(), ym = ymKey(filtro().m, filtro().a);
     const count = _catLancamentosNoEscopo(p.tipo, p.name, escopo, ym).length;
-    const onde = escopo === 'mes' ? ` em ${MESES[_budgetMonth]} de ${_budgetYear}` : escopo === 'desde' ? ` de ${MESES[_budgetMonth]} de ${_budgetYear} em diante` : '';
+    const onde = escopo === 'mes' ? ` em ${MESES[filtro().m]} de ${filtro().a}` : escopo === 'desde' ? ` de ${MESES[filtro().m]} de ${filtro().a} em diante` : '';
     $('catDeleteSub').innerHTML = count
         ? `<strong>${count}</strong> lançamento(s)${onde} usam "${escHtml(p.name)}". Para onde movê-los antes de remover?`
         : `"${escHtml(p.name)}" não tem lançamentos${onde}.`;
@@ -2188,14 +2183,14 @@ function _performCatDelete(tipo, catName, target) {
 }
 // "Só neste mês" / "daqui pra frente": a categoria sai do orçamento a partir do mês aberto
 function _performCatHide(tipo, catName, escopo, target) {
-    const ym = ymKey(_budgetMonth, _budgetYear), onde = escopo === 'mes' ? `${MESES[_budgetMonth]}/${_budgetYear}` : `${MESES[_budgetMonth]}/${_budgetYear} em diante`;
+    const ym = ymKey(filtro().m, filtro().a), onde = escopo === 'mes' ? `${MESES[filtro().m]}/${filtro().a}` : `${MESES[filtro().m]}/${filtro().a} em diante`;
     pushUndo(`Tirar "${catName}" do orçamento (${onde})`);
     const movidos = _catLancamentosNoEscopo(tipo, catName, escopo, ym);
     const ids = new Set(movidos.map(t => t.id));
     tx = tx.map(t => ids.has(t.id) ? { ...t, cat: target || '' } : t);
     ocultarCategoriaNoOrcamento(catName, ym, escopo === 'mes' ? ym : null);
     commitAll();
-    toast(`"${catName}" saiu do orçamento ${escopo === 'mes' ? 'de ' + MESES[_budgetMonth] : 'daqui pra frente'}.${movidos.length ? (target ? ` Lançamentos movidos para "${target}".` : ' Lançamentos ficaram sem categoria.') : ''} Desfazer volta tudo.`, '#52525b');
+    toast(`"${catName}" saiu do orçamento ${escopo === 'mes' ? 'de ' + MESES[filtro().m] : 'daqui pra frente'}.${movidos.length ? (target ? ` Lançamentos movidos para "${target}".` : ' Lançamentos ficaram sem categoria.') : ''} Desfazer volta tudo.`, '#52525b');
 }
 
 // ── NOVA CATEGORIA (linha "adicionar" do Orçamento) ──────────────────────────
@@ -3013,42 +3008,40 @@ function getFaturasForMonth(m, a) {
     return result;
 }
 
-// ── PRÓXIMOS VENCIMENTOS (30 dias) ───────────────────────────────────────────
-// Junta fixos (saídas), faturas de cartão e parcelas de empréstimos que vencem nos próximos 30 dias,
-// independente do mês filtrado — visão de fluxo de caixa real.
+// ── PRÓXIMOS VENCIMENTOS (mês selecionado) ───────────────────────────────────
+// Junta fixos (saídas), faturas de cartão e parcelas de empréstimos que vencem no mês
+// escolhido no seletor universal. No mês atual só entra o que ainda vence de hoje em diante.
 function renderVencimentos() {
     const box = $('vencBox');
     if (!box) return;
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
     const _iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const limite = new Date(hoje); limite.setDate(limite.getDate() + 30);
-    const hojeStr = _iso(hoje), limStr = _iso(limite);
+    const { m, a } = filtro();
+    const ym = ymKey(m, a), hojeStr = _iso(hoje);
+    const ini = ym === hojeStr.slice(0, 7) ? hojeStr : ym + '-01';
+    const fimDia = new Date(a, m + 1, 0);
+    const limStr = _iso(fimDia), limite = fimDia;
+    const naJanela = d => d >= ini && d <= limStr;
 
     const items = [];
-    // Meses tocados pela janela (30 dias podem cruzar 2 viradas de mês, ex.: 31/jan → 02/mar)
-    const meses = [];
-    for (let d = new Date(hoje.getFullYear(), hoje.getMonth(), 1); d <= limite; d.setMonth(d.getMonth() + 1))
-        meses.push([d.getMonth(), d.getFullYear()]);
-    // Fixos (saídas) na janela — via índice mensal, sem varrer todos os lançamentos
-    meses.forEach(([m, a]) => txMes(m, a).forEach(t => {
+    // Fixos (saídas) do mês — via índice mensal, sem varrer todos os lançamentos
+    txMes(m, a).forEach(t => {
         if (!t.fixo || t.tipo !== 'saida') return;
         if (t.pagamento === 'credito' && t.cartaoId) return; // já entra via fatura
-        if (t.data >= hojeStr && t.data <= limStr) items.push({ data: t.data, desc: t.desc, valor: t.valor, badge: 'FIXO', cor: 'var(--debit)' });
-    }));
-    // Faturas de cartão que vencem na janela (antes: só mês atual e próximo)
-    for (const [m, a] of meses) {
-        getFaturasForMonth(m, a).forEach(f => {
-            // Fatura zerada/negativa (só estornos) não é conta a pagar
-            if (f.total > 0 && f.faturaDate >= hojeStr && f.faturaDate <= limStr)
-                items.push({ data: f.faturaDate, desc: 'Fatura ' + f.card.nome, valor: f.total, badge: 'FATURA', cor: f.card.cor || 'var(--credit)' });
-        });
-    }
-    // Parcelas de empréstimos / faturas parceladas na janela: o valor cheio da parcela, com a taxa ao lado
+        if (naJanela(t.data)) items.push({ data: t.data, desc: t.desc, valor: t.valor, badge: 'FIXO', cor: '#1d4ed8' });
+    });
+    // Faturas de cartão que vencem no mês
+    getFaturasForMonth(m, a).forEach(f => {
+        // Fatura zerada/negativa (só estornos) não é conta a pagar
+        if (f.total > 0 && naJanela(f.faturaDate))
+            items.push({ data: f.faturaDate, desc: 'Fatura ' + f.card.nome, valor: f.total, badge: 'FATURA', cor: f.card.cor || '#0369a1' });
+    });
+    // Parcelas de empréstimos / faturas parceladas do mês: o valor cheio da parcela, com a taxa ao lado
     loans.forEach(l => {
         const taxa = loanTaxaMensal(l);
         loanCronograma(l).forEach(p => {
-            if (p.data && p.data >= hojeStr && p.data <= limStr)
-                items.push({ data: p.data, desc: `${l.nome} - parcela ${p.k}/${l.n}${taxa ? ' · ' + _fmtTaxa(taxa) : ''}`, valor: p.valor, badge: 'EMPRÉSTIMO', cor: 'var(--invest)' });
+            if (p.data && naJanela(p.data))
+                items.push({ data: p.data, desc: `${l.nome} - parcela ${p.k}/${l.n}${taxa ? ' · ' + _fmtTaxa(taxa) : ''}`, valor: p.valor, badge: 'EMPRÉSTIMO', cor: '#6d28d9' });
         });
     });
     items.sort((x, y) => x.data.localeCompare(y.data));
@@ -3056,12 +3049,13 @@ function renderVencimentos() {
     if (!items.length) { box.style.display = 'none'; return; }
     box.style.display = 'block';
     const total = items.reduce((s, i) => s + i.valor, 0);
-    $('vencTotal').textContent = fmt(total) + ' no período';
+    $('vencTotal').textContent = fmt(total) + ' em ' + MESES[m].toLowerCase();
 
     const rowHtml = i => {
         const dt = new Date(i.data + 'T00:00:00');
         const dias = Math.round((dt - hoje) / 86400000);
         const [chipTxt, chipColor, chipBg] =
+            dias < 0   ? ['venceu', 'var(--text-3)', 'var(--bg)'] :
             dias === 0 ? ['hoje', 'var(--danger)', 'var(--t-red-bg2)'] :
             dias === 1 ? ['amanhã', 'var(--warn)', 'var(--t-amber-bg2)'] :
             dias <= 7  ? ['em ' + dias + 'd', 'var(--warn)', 'var(--t-amber-bg2)'] :
@@ -3453,7 +3447,7 @@ function _budgetMiniCats(m, a) {
 }
 function irParaOrcamento() {
     const { m, a } = filtro();
-    _budgetMonth = m; _budgetYear = a;
+    setFiltro(m, a, { render: false });
     const tabs = IS_MOBILE ? '.mob-nav-tab' : '.nav-pill', btn = [...document.querySelectorAll(tabs)].find(b => (b.getAttribute('data-onclick') || '').includes("'metas'")) || null;
     if (IS_MOBILE) mobNavTo('metas', btn); else navTo('metas', btn);
 }
@@ -3462,8 +3456,6 @@ function irParaOrcamento() {
 function renderAnual() {
     const a = filtro().a;
     $('anualSubtitle').textContent = `Resumo completo de ${a}`;
-    const yearLabel = $('anualYearLabel');
-    if (yearLabel) yearLabel.textContent = a;
     let aEnt = 0, aGas = 0, aInv = 0, aCred = 0, aDeb = 0;
     const catAnual = {}, catEntAnual = {}, catInvAnual = {}, rows = [];
 
@@ -4169,17 +4161,17 @@ function novoPlanejamentoDe(ym) {
     return true;
 }
 function orcNovoPlanejamento() {
-    const ym = ymKey(_budgetMonth, _budgetYear);
+    const ym = ymKey(filtro().m, filtro().a);
     if (budget.allocsDe && budget.allocsDe[ym]) return;
-    pushUndo(`Novo planejamento a partir de ${MESES[_budgetMonth]}/${_budgetYear}`);
+    pushUndo(`Novo planejamento a partir de ${MESES[filtro().m]}/${filtro().a}`);
     novoPlanejamentoDe(ym);
     saveBudget(); renderBudget();
-    toast(`✓ Daqui pra frente o planejamento é separado: mexer em ${MESES[_budgetMonth].toLowerCase()} não muda os meses anteriores.`, '#16a34a');
+    toast(`✓ Daqui pra frente o planejamento é separado: mexer em ${MESES[filtro().m].toLowerCase()} não muda os meses anteriores.`, '#16a34a');
 }
 function orcJuntarPlanejamento() {
-    const ym = ymKey(_budgetMonth, _budgetYear);
+    const ym = ymKey(filtro().m, filtro().a);
     if (!budget.allocsDe || !budget.allocsDe[ym]) return;
-    const mes = _budgetMonth, ano = _budgetYear;
+    const mes = filtro().m, ano = filtro().a;
     confirmar(`Apagar o planejamento que começa em ${MESES[mes].toLowerCase()}/${ano}? Esses meses voltam a usar o planejamento anterior.`, { ok: 'Apagar', perigo: true }, () => {
         if (!budget.allocsDe || !budget.allocsDe[ym]) return;
         pushUndo(`Planejamento de ${MESES[mes]}/${ano} apagado`);
@@ -4189,13 +4181,13 @@ function orcJuntarPlanejamento() {
 }
 function _orcRenderVersao() {
     const el = $('orcVersao'); if (!el) return;
-    const ym = ymKey(_budgetMonth, _budgetYear), v = _allocVersao(ym), ks = Object.keys(budget.allocsDe || {}).sort();
+    const ym = ymKey(filtro().m, filtro().a), v = _allocVersao(ym), ks = Object.keys(budget.allocsDe || {}).sort();
     const prox = ks.find(k => k > ym), ma = k => `${MES_ABREV[+k.slice(5, 7) - 1]}/${k.slice(0, 4)}`;
     const ate = prox ? ` até ${ma(_ymMais(prox, -1))}` : ' em diante';
     const desde = v ? `de ${ma(v)}${ate}` : ks.length ? `até ${ma(_ymMais(ks[0], -1))}` : 'em todos os meses';
     el.innerHTML = `<span>Planejamento valendo <b>${desde}</b></span>`
         + (v === ym ? (Object.keys(budget.allocsDe).length ? `<button class="orc-mini" data-onclick="orcJuntarPlanejamento()" title="Esses meses voltam a usar o planejamento anterior">Apagar este planejamento</button>` : '')
-                    : `<button class="orc-mini" data-onclick="orcNovoPlanejamento()" title="Copia o planejamento atual; mexer daqui pra frente não muda os meses anteriores">Novo planejamento a partir de ${MESES[_budgetMonth].toLowerCase()}</button>`);
+                    : `<button class="orc-mini" data-onclick="orcNovoPlanejamento()" title="Copia o planejamento atual; mexer daqui pra frente não muda os meses anteriores">Novo planejamento a partir de ${MESES[filtro().m].toLowerCase()}</button>`);
 }
 // As faixas de `nome` sem o período [de..ate] (ate null = para sempre)
 function _offSubtrair(nome, de, ate) {
@@ -4238,12 +4230,11 @@ function isMonthCustom(m, a) {
     return budget.monthTotals[key] != null;
 }
 
-let _budgetMonth = new Date().getMonth();
-let _budgetYear  = new Date().getFullYear();
+// Mês/ano do orçamento = seletor universal (filtro()); não há mais navegação própria
 
 function resetMonthBudget() {
     pushUndo('Voltar orçamento padrão');
-    delete budget.monthTotals[ymKey(_budgetMonth, _budgetYear)];
+    delete budget.monthTotals[ymKey(filtro().m, filtro().a)];
     saveBudget();
     renderBudget();
     toast('↩ Voltou ao orçamento padrão.', '#52525b');
@@ -4253,14 +4244,14 @@ function openAplicarMeses() {
     // Populate month checkboxes for the current budget year (all checked by default)
     const container = $('aplicarMesesGrid');
     if (!container) return;
-    const a = _budgetYear;
+    const a = filtro().a;
     container.innerHTML = MESES.map((nome, i) => `<label style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--border);border-radius:7px;cursor:pointer;font-size:13px;font-weight:500">
             <input type="checkbox" value="${i}" checked style="accent-color:var(--accent)"> ${nome.slice(0,3)}
         </label>`).join('');
 
     // Set the value input to the current month's effective total
     const inp = $('aplicarMesesValor');
-    const cur = getBudgetTotal(_budgetMonth, _budgetYear);
+    const cur = getBudgetTotal(filtro().m, filtro().a);
     if (inp) inp.value = cur > 0 ? cur.toLocaleString('pt-BR') : '';
 
     $('aplicarMesesAno').textContent = a;
@@ -4275,7 +4266,7 @@ function confirmarAplicarMeses() {
         .map(cb => parseInt(cb.value, 10));
     if (!checked.length) return toast('⚠️ Selecione ao menos um mês.', '#b45309');
 
-    const a = _budgetYear;
+    const a = filtro().a;
     const isDefault = $('aplicarComoDefault').checked;
     pushUndo('Aplicar orçamento a vários meses');
 
@@ -4292,18 +4283,6 @@ function confirmarAplicarMeses() {
     toast(`✓ Orçamento de ${fmt(val)} aplicado a ${checked.length} mese${checked.length !== 1 ? 's' : ''}!`, '#16a34a');
 }
 
-function budgetPrevMonth() {
-    _budgetMonth--;
-    if (_budgetMonth < 0) { _budgetMonth = 11; _budgetYear--; }
-    renderBudget();
-}
-
-function budgetNextMonth() {
-    _budgetMonth++;
-    if (_budgetMonth > 11) { _budgetMonth = 0; _budgetYear++; }
-    renderBudget();
-}
-
 // ── BUDGET CATEGORY CRUD ─────────────────────────────────────────────────────
 // oninput (final=false) a cada tecla; onchange (final=true) ao sair do campo.
 // Antes, apagar o campo num mês personalizado removia o override na hora e as teclas
@@ -4312,10 +4291,10 @@ const _renderBudgetSoon = debounce(() => renderBudget(), 250);
 function onBudgetTotalChange(final = false) {
     const parsed = parseValor($('budgetTotal').value);
     const v = parsed > 0 ? roundMoney(parsed) : 0;
-    const key = ymKey(_budgetMonth, _budgetYear), custom = isMonthCustom(_budgetMonth, _budgetYear);
+    const key = ymKey(filtro().m, filtro().a), custom = isMonthCustom(filtro().m, filtro().a);
     if (custom && !(v > 0) && !final) return;
     if (custom ? !(v > 0) || budget.monthTotals[key] !== v : budget.total !== v)
-        pushUndo(custom ? `Orçamento de ${MESES[_budgetMonth]}/${_budgetYear}` : 'Orçamento padrão', 'orc-total:' + (custom ? key : 'padrao'));
+        pushUndo(custom ? `Orçamento de ${MESES[filtro().m]}/${filtro().a}` : 'Orçamento padrão', 'orc-total:' + (custom ? key : 'padrao'));
     if (custom) {
         if (v > 0) budget.monthTotals[key] = v;
         else delete budget.monthTotals[key];   // campo vazio ao sair (final) = volta ao padrão
@@ -4330,7 +4309,7 @@ function onBudgetTotalChange(final = false) {
 // um total de R$ 7.777 virava 12,86% e voltava como R$ 1.000,12
 function _setAlloc(catName, pct, casas = 2) {
     pct = Number.isFinite(pct) ? Math.max(0, Math.min(100, +pct.toFixed(casas))) : 0;
-    const al = allocsDoMes(ymKey(_budgetMonth, _budgetYear));   // o planejamento que vale no mês aberto
+    const al = allocsDoMes(ymKey(filtro().m, filtro().a));   // o planejamento que vale no mês aberto
     if ((al[catName] || 0) !== pct) pushUndo(`Alocação de "${catName}"`, 'orc-alloc:' + catName);
     if (pct > 0) al[catName] = pct; else delete al[catName];
     saveBudget();
@@ -4388,7 +4367,7 @@ function _orcTom(hex, p) {
 }
 function _orcTipo(nome) { return _isBudgetCatInvest(nome) ? 'investimento' : 'saida'; }
 
-function _orcModelo(m = _budgetMonth, a = _budgetYear) {
+function _orcModelo(m = filtro().m, a = filtro().a) {
     const T = getBudgetTotal(m, a), lista = txMes(m, a);
     const saidas = lista.filter(t => t.tipo === 'saida'), invs = lista.filter(t => t.tipo === 'investimento');
     const locks = budget.locks || {}, ym = ymKey(m, a), cs = [], fora = [], al = allocsDoMes(ym);
@@ -4830,7 +4809,7 @@ function _orcRenderTudo(mod) {
 }
 function renderBudget() {
     if (currentView === 'dashboard') renderBudgetRemaining();
-    const m = _budgetMonth, a = _budgetYear;
+    const m = filtro().m, a = filtro().a;
     const monthLabel = $('budgetMonthLabel');
     if (monthLabel) monthLabel.textContent = `${MESES[m]} ${a}`;
     const custom = isMonthCustom(m, a), totalBudget = getBudgetTotal(m, a);
@@ -5012,7 +4991,7 @@ function _orcLigarListas() {
     $('orcOcultasList').addEventListener('click', e => {
         const b = e.target.closest('[data-oc]'); if (!b) return;
         const nome = _orcOcultas[+b.dataset.i]; if (nome == null) return;
-        const ym = ymKey(_budgetMonth, _budgetYear);
+        const ym = ymKey(filtro().m, filtro().a);
         pushUndo(`Voltar "${nome}" ao orçamento`);
         mostrarCategoriaNoOrcamento(nome, ym, b.dataset.oc === 'mes' ? ym : null);
         saveBudget(); renderBudget();
@@ -5082,8 +5061,6 @@ function updateMonthNavLabel() {
     if (yr) yr.textContent = a;
 }
 
-// ── ANNUAL YEAR NAV ──────────────────────────────────────────────────────────
-function anualChangeYear(delta) { changeYear(delta); }   // setFiltro já re-renderiza a view anual
 
 // ── FIREBASE INIT ────────────────────────────────────────────────────────────
 const FB_CONFIG = {
@@ -6768,7 +6745,7 @@ const _dataBR = iso => iso ? iso.split('-').reverse().join('/') : '—';
 function renderLoans() {
     const grid = $('loansGrid'), res = $('loansResumo');
     if (!grid || !res) return;
-    const hoje = todayLocalISO(), ym = ymKey(_budgetMonth, _budgetYear);
+    const hoje = todayLocalISO(), ym = ymKey(filtro().m, filtro().a);
     const infos = loans.map(l => ({ l, r: loanResumo(l, hoje) }));
     const novo = `<div class="goal-add-card" data-onclick="abrirNovoLoan()">
         <span style="font-size:32px;opacity:.25">＋</span>
@@ -6783,7 +6760,7 @@ function renderLoans() {
     const faltamN = infos.reduce((s, x) => s + x.r.faltam, 0);
     res.innerHTML = `
         <div class="loan-tile"><small>Falta pagar</small><b>${fmt(soma(x => x.r.falta))}</b><span>${faltamN ? `${faltamN} parcela${faltamN !== 1 ? 's' : ''}${fimGeral ? ` · quita tudo em ${_mesAno(fimGeral)}` : ''}` : '✓ tudo quitado'}</span></div>
-        <div class="loan-tile"><small>Parcelas de ${MESES[_budgetMonth]}</small><b>${fmt(roundMoney(doMes.reduce((s, x) => s + x.p.valor, 0)))}</b><span>${doMes.length ? `${doMes.length} parcela${doMes.length !== 1 ? 's' : ''}` : 'nenhuma neste mês'}</span></div>
+        <div class="loan-tile"><small>Parcelas de ${MESES[filtro().m]}</small><b>${fmt(roundMoney(doMes.reduce((s, x) => s + x.p.valor, 0)))}</b><span>${doMes.length ? `${doMes.length} parcela${doMes.length !== 1 ? 's' : ''}` : 'nenhuma neste mês'}</span></div>
         <div class="loan-tile"><small>Já pago</small><b>${fmt(soma(x => x.r.pago))}</b><span>de ${fmt(soma(x => x.r.total))} no total</span></div>
         <div class="loan-tile"><small>Juros no total</small><b>${fmt(soma(x => x.r.jurosTotal))}</b><span>${fmt(soma(x => x.r.jurosFalta))} ainda por pagar</span></div>`;
     grid.innerHTML = infos.map(({ l, r }) => {

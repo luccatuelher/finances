@@ -1,5 +1,10 @@
 # Histórico de mudanças do app
 
+## Seletor universal de mês e ano — out/2026
+
+- **Um só seletor** (mês e ano, no topo; no celular, na barra de mês) vale para todas as abas, inclusive Visão Anual e Orçamento. Saíram a navegação de ano própria da Visão Anual e a de mês do cartão do Orçamento (as duas sobrepunham o seletor do topo).
+- **Próximos vencimentos** agora mostra só o que vence no mês selecionado (fixos, faturas e parcelas); no mês atual, de hoje em diante. Padrão: mês atual.
+
 ## Filtros combinados e filtros salvos — out/2026
 
 - **Lista de lançamentos**: botão "Filtros" (desktop e celular) com categoria, pagamento/cartão e faixa de valor, somados à aba e à busca; resumo ("N lançamentos · gastos − R$ …"), botão "Limpar" e "CSV filtrado". Os KPIs continuam do mês inteiro.

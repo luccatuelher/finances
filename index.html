@@ -1207,7 +1207,7 @@
         .nav-pills::-webkit-scrollbar { display: none; }
         @media (max-width: 1000px) { .logo span, .user-name { display: none; } }
         /* redundantes em telas menores: o mês já mostra/atravessa o ano; extrato também está na lateral */
-        @media (max-width: 1100px) { #yearNavBar, .topbar-right > .sync-btn[data-onclick^="abrirExtrato"] { display: none !important; } }
+        @media (max-width: 1100px) { .topbar-right > .sync-btn[data-onclick^="abrirExtrato"] { display: none !important; } }
         @media (max-width: 820px)  { .btn-undo .tb-lbl, .sync-time { display: none; } .btn-undo { padding: 5px 9px; } }
 
         /* IMPRESSÃO: só o conteúdo da tela atual (antes saía o app inteiro: formulário, backup,
@@ -1705,11 +1705,6 @@
                 <div class="view-title">Visão Anual</div>
                 <div class="view-subtitle" id="anualSubtitle">Resumo completo do ano</div>
             </div>
-            <div class="year-nav">
-                <button class="year-nav-btn" data-onclick="anualChangeYear(-1)">◀</button>
-                <span class="year-nav-label" id="anualYearLabel"></span>
-                <button class="year-nav-btn" data-onclick="anualChangeYear(1)">▶</button>
-            </div>
         </div>
         <div class="hero-card" id="heroCardAnual" style="display:none;margin-bottom:16px">
             <div class="hero-left">
@@ -1860,11 +1855,7 @@
         <!-- Cartão azul: quanto ainda pode gastar no mês do orçamento + barra por grupo -->
         <div class="hero-card orc-hero" id="orcHero">
             <div class="hero-left">
-                <div class="orc-hero-nav">
-                    <button data-onclick="budgetPrevMonth()" aria-label="Mês anterior">‹</button>
-                    <span id="budgetMonthLabel"></span>
-                    <button data-onclick="budgetNextMonth()" aria-label="Próximo mês">›</button>
-                </div>
+                <div class="orc-hero-nav"><span id="budgetMonthLabel"></span></div>
                 <div class="hero-label" id="orcHeroLabel"></div>
                 <div class="hero-num" id="orcHeroNum">—</div>
                 <div class="hero-sub" id="orcHeroSub"></div>
