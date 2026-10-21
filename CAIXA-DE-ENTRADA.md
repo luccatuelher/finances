@@ -61,9 +61,9 @@ por conta Google) e nunca vai para o Firebase nem para o chat.
 - Fixo: `fixo: true` + a mesma `serie` em todos os meses (ex.: `"serie": "S<id>"`); o app replica
   12 meses quando o dono cria pela tela — pela caixa, mande um `add` por mês.
 - `delete`: remove se `espera` bater; se já não existe → `ignorado: já não existe`. **`espera` precisa ter `desc` e
-  `valor`** (senão `ignorado: delete exige espera com desc e valor`). **Limite: 10 exclusões por rodada**
+  `valor`** (senão `ignorado: delete exige espera com desc e valor`). **Limite: 30 exclusões por rodada**
   (lançamentos + empréstimos); com mais, NENHUMA exclusão é feita (`ignorado: N exclusões numa rodada…`) e
-  as demais operações seguem — confirme com o dono e reenvie em lotes de até 10.
+  as demais operações seguem — confirme com o dono e reenvie em lotes de até 30.
 - `orcamento` (aplicado nesta ordem; mande só as partes que quer mudar):
   ```json
   { "id": "2026-10-02-010", "op": "orcamento",

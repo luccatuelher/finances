@@ -40,7 +40,7 @@ const CONFIG = Object.freeze({
     UNDO_GRUPO_MS: 10000,               // edições seguidas do mesmo campo viram um passo
     QUARENTENA_MAX: 500,                // registros inválidos guardados (os mais recentes)
     INBOX_PROCESSADOS_MAX: 300,         // histórico de operações da caixa de entrada
-    INBOX_MAX_DEL: 10,                  // exclusões por rodada da caixa (acima, nenhuma é feita)
+    INBOX_MAX_DEL: 30,                  // exclusões por rodada da caixa (acima, nenhuma é feita)
     INBOX_MIN_MS: 2 * 60 * 1000,        // checagens automáticas da caixa
     ESTADO_MIN_MS: 10 * 60 * 1000,      // cópia dos dados (estado.json) no máximo a cada…
     TOKEN_AVISO_DIAS: 14,               // avisa quando o token do GitHub vence em até N dias

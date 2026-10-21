@@ -373,9 +373,9 @@ function runSelfTests() {
            ['ignorado: delete exige espera com desc e valor', 'ignorado: delete exige espera com desc e valor', 'ignorado: espera inválida', 'ignorado: delete exige espera com desc e valor']);
         eq('caixa: update sem espera / vazia', res(b, [{ id: 'u0', op: 'update', txId: 3000, muda: { valor: 1 } }, { id: 'u1', op: 'update', txId: 3001, espera: {}, muda: { valor: 1 } }]),
            ['ignorado: update exige espera', 'ignorado: update exige espera']);
-        const onze = Array.from({ length: 11 }, (_, i) => dl(i)).concat({ id: 'a1', op: 'add', tx: { id: 3500, desc: 'Novo', valor: 5, data: '2026-09-02', tipo: 'saida', cat: 'C' } });
-        const r11 = inboxAplicar(b, onze);
-        eq('caixa: 11 exclusões numa rodada não apagam nada (add segue)', [r11.resultados.filter(x => /exclusões numa rodada/.test(x.resultado)).length, r11.resultados[11].resultado, r11.state.tx.length], [11, 'aplicado', 13]);
+        const trinta1 = Array.from({ length: 31 }, (_, i) => dl(i)).concat({ id: 'a1', op: 'add', tx: { id: 3500, desc: 'Novo', valor: 5, data: '2026-09-02', tipo: 'saida', cat: 'C' } });
+        const r31 = inboxAplicar(mk(40), trinta1);
+        eq('caixa: 31 exclusões numa rodada não apagam nada (add segue)', [r31.resultados.filter(x => /exclusões numa rodada/.test(x.resultado)).length, r31.resultados[31].resultado, r31.state.tx.length], [31, 'aplicado', 41]);
         const dez = inboxAplicar(b, Array.from({ length: 10 }, (_, i) => dl(i)));
         eq('caixa: 10 exclusões passam e reaplicar é idempotente', [dez.resultados.every(x => x.resultado === 'aplicado'), dez.state.tx.length, _stateHash(inboxAplicar(dez.state, Array.from({ length: 10 }, (_, i) => dl(i))).state) === _stateHash(dez.state)], [true, 2, true]);
     }
