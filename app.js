@@ -5079,6 +5079,10 @@ let fbAuth = null, fbDb = null;
 if (FIREBASE_OK) {
     firebase.initializeApp(FB_CONFIG);
     fbAuth = firebase.auth();
+    // Keep the Google session across visits and browser restarts (IndexedDB, falling back to
+    // localStorage). It is the SDK default, set explicitly so it can't silently become per-tab.
+    // The SDK refreshes the ID token by itself; there is no separate Google OAuth token here.
+    try { fbAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {}); } catch (e) {}
     fbDb   = firebase.database();
 }
 
@@ -5097,8 +5101,12 @@ function bootApp() {
         console.info('%cFinances preview mode — no login, no cloud sync.', 'color:#0b62f0;font-weight:600');
         return;
     }
-    $('loginScreen').classList.remove('hidden');
+    // The login screen starts hidden: it only appears once Firebase says nobody is signed in
+    // (or after 6 s without an answer), so a remembered session never flashes the login form.
+    const _loginTimer = setTimeout(() => $('loginScreen').classList.remove('hidden'), 6000);
+    window._bootLoginTimer = _loginTimer;
     if (!FIREBASE_OK) {
+        $('loginScreen').classList.remove('hidden');
         $('loginError').textContent = 'Não foi possível carregar o Firebase. Verifique a conexão e recarregue a página.';
         return;
     }
@@ -5106,12 +5114,20 @@ function bootApp() {
     // onAuthStateChanged; aqui só aparece o erro, se houver
     fbAuth.getRedirectResult().catch(e => { const msg = _authErroMsg(e); if (msg) $('loginError').textContent = msg; });
     fbAuth.onAuthStateChanged(user => {
+        if (!user) clearTimeout(window._bootLoginTimer);
         if (user) {
             _currentUser = user;
-            _claimLocalData(user.uid);
-            _filtrosNovaSessao();
-            init();             // selects/listeners ANTES do 1º render (showApp → navTo)
-            showApp(user);
+            try {
+                _claimLocalData(user.uid);
+                _filtrosNovaSessao();
+                init();             // selects/listeners ANTES do 1º render (showApp → navTo)
+                showApp(user);
+                clearTimeout(window._bootLoginTimer);
+            } catch (e) {
+                // Falha ao abrir o app: mostra o login em vez de uma tela vazia
+                $('loginScreen').classList.remove('hidden');
+                throw e;
+            }
             // Caixa de entrada do Claude: só depois da 1ª sync (aplica sobre o estado da nuvem)
             _disjuntorResetaTudo();   // conta nova na sessão: começa limpo
             reconcile({ initial: true }).then(() => checkInbox());
