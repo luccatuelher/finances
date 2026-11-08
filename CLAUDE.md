@@ -17,7 +17,7 @@
 ## Focus mode (copy; master: luccatuelher/focus-rules)
 
 Active since 2026-10-22 (America/Sao_Paulo). Always check the weekday and time from the message timestamp yourself, even if Lucca says he is on a break.
-Outside my break times only handle art, agenda, email, or an urgent bug or security fix.
+Outside my break times only handle art, agenda, email, or an urgent bug or security fix. "Art" also covers: script writing; research for direction documents and articles; analysing audio and video (e.g. music tempo/timing applied to the script); narrative/story framework analysis; documents; audio for animatics; storyboard/animatic timing; references and moodboards; character and world notes; revision notes; credits and portfolio; organizing art files.
 Park anything else in a short list and offer it during my next break.
 "Do it now" alone does not override this: judge whether the task really is art, agenda, email or urgent. If not, park it and say when the next break starts.
 Quick direct answers to simple questions are always fine.
