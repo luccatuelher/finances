@@ -84,6 +84,36 @@ function runSelfTests() {
     eq('addMonths fim de mês', addMonthsISO('2026-01-31', 1), '2026-02-28');
     eq('addMonths virada de ano', addMonthsISO('2026-11-15', 3), '2027-02-15');
     eq('addMonths negativo', addMonthsISO('2026-01-15', -1), '2025-12-15');
+
+    // Contagens no singular e busca de categoria sem acento
+    eq('nDe singular/plural', [nDe(1, 'aporte', 'aportes'), nDe(2, 'aporte', 'aportes'), nDe(0, 'item', 'itens')], ['1 aporte', '2 aportes', '0 itens']);
+    {
+        const html = q => _catComboItems(['💊 Saúde', '🍔 Alimentação', 'Lazer'], q, 'x'), n = q => (html(q).match(/class="cat-combo-item"/g) || []).length;
+        eq('combo de categoria: busca ignora acento e caixa', [n('saude'), n('ALIMENTACAO'), n('saú'), n('zzz'), n('')], [1, 1, 1, 0, 3]);
+        eq('combo de categoria: "adicionar" some quando o nome já existe (sem acento)', [/cat-combo-add/.test(html('lazer')), /cat-combo-add/.test(html('Viagem'))], [false, true]);
+    }
+
+    // Campo de data dd/mm/aaaa (independe do idioma do navegador; o valor lido/gravado segue ISO)
+    eq('data BR: ISO → dd/mm/aaaa', [isoParaBR('2026-10-26'), isoParaBR(''), isoParaBR(null), isoParaBR('26/10/2026')], ['26/10/2026', '', '', '']);
+    eq('data BR: dd/mm/aaaa → ISO', [brParaISO('26/10/2026'), brParaISO('5/3/26'), brParaISO('29/02/2028')], ['2026-10-26', '2026-03-05', '2028-02-29']);
+    eq('data BR: impossível ou incompleta = vazio', ['31/02/2026', '29/02/2026', '32/01/2026', '00/10/2026', '10/13/2026', '26/10/', '', '2026-10-26', '26/10/1800', '26/10/202'].map(brParaISO), Array(10).fill(''));
+    eq('data BR: máscara', ['05032026', '5/3/2026', '0503', 'abc', '05/03/20261', '5/3/26'].map(_mascaraDataBR), ['05/03/2026', '05/03/2026', '05/03', '', '05/03/2026', '05/03/26']);
+    {
+        const campos = ['data', 'mob-data', 'mob-edit-data', 'loanPrimeira', 'goalPrazo', 'aporteData'].map(id => $(id));
+        eq('data BR: todos os campos de data viraram texto', campos.map(c => !!c && c.type === 'text' && c.classList.contains('data-br')), campos.map(() => true));
+        eq('data BR: nenhum <input type=date> visível sobrou', document.querySelectorAll('input[type="date"]:not(.data-br-picker)').length, 0);
+        const c = $('goalPrazo'), antes = c.value, cru = () => Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').get.call(c);
+        c.value = '2026-02-14';
+        eq('data BR: .value grava ISO e mostra dd/mm/aaaa', [c.value, cru()], ['2026-02-14', '14/02/2026']);
+        c.value = '';
+        eq('data BR: limpar', [c.value, cru()], ['', '']);
+        c.value = 'lixo';
+        eq('data BR: valor que não é ISO não entra', [c.value, cru()], ['', '']);
+        const pk = c.parentElement.querySelector('.data-br-picker'); let avisos = 0; const ouvir = () => avisos++;
+        c.addEventListener('input', ouvir); pk.value = '2027-01-09'; pk.dispatchEvent(new Event('change')); c.removeEventListener('input', ouvir);
+        eq('data BR: calendário preenche o campo e avisa quem escuta', [c.value, cru(), avisos], ['2027-01-09', '09/01/2027', 1]);
+        c.value = antes;
+    }
     eq('parseFlexDate formatos', ['01/02/2026', '2026-02-01 10:00', '1/2/26', '31/02/2026'].map(d => parseFlexDate(d)),
        ['2026-02-01', '2026-02-01', '2026-02-01', null]);
     const ref = new Date('2026-01-10T12:00:00');

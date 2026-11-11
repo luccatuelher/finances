@@ -134,6 +134,14 @@
         .field label { font-size: 11px; font-weight: 500; color: var(--text-2); display: block; margin-bottom: 3px; }
         .field input, .field select { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px; font-size: 13px; font-family: inherit; color: var(--text); background: var(--surface); outline: none; transition: border-color .15s; }
         .field input:focus, .field select:focus { border-color: var(--accent); }
+        /* Campo de data dd/mm/aaaa (campoDataBR em app.js): texto + botão de calendário + seletor nativo escondido */
+        .data-br-wrap { position: relative; display: block; }
+        .data-br-wrap input.data-br { padding-right: 30px; min-width: 118px; font-variant-numeric: tabular-nums; }
+        .data-br-wrap input.data-br.data-br-invalida { border-color: var(--danger); }
+        .data-br-wrap .data-br-btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; padding: 0; border: none; background: transparent; color: var(--text-2); cursor: pointer; border-radius: 6px; }
+        .data-br-wrap .data-br-btn:hover { color: var(--accent); }
+        .data-br-wrap input.data-br:disabled + .data-br-btn { opacity: .4; cursor: default; }
+        .data-br-wrap input.data-br-picker { position: absolute; right: 0; bottom: 0; width: 1px !important; height: 1px !important; min-width: 0 !important; padding: 0 !important; border: 0 !important; opacity: 0; pointer-events: none; }
         .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         .check-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px; font-size: 12px; font-weight: 500; color: var(--text-2); cursor: pointer; background: var(--bg); }
         .check-row input { width: auto; accent-color: var(--accent); }

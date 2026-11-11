@@ -1,5 +1,12 @@
 # Histórico de mudanças do app
 
+## Datas no formato brasileiro — nov/2026
+
+- **Campos de data em dd/mm/aaaa** em qualquer navegador (o campo nativo seguia o idioma do navegador e mostrava mm/dd/aaaa em inglês): novo lançamento, edição (linha e celular), aporte, prazo de meta e 1ª parcela de empréstimo. Dá para digitar só os números ("05032026"), usar ano curto ("5/3/26") ou abrir o calendário pelo botão. Data impossível fica marcada em vermelho e não é aceita. Os dados gravados não mudam (seguem AAAA-MM-DD).
+- **Busca de categoria sem acento** ("saude" acha "Saúde"); Enter escolhe o primeiro resultado.
+- **Contagens no singular**: "1 aporte", "1 lançamento", "1 item", "1 parcela".
+- **Testes**: autoteste 196 (+13: conversão e máscara de data, campos convertidos, calendário, busca sem acento, singular).
+
 ## Seletor universal de mês e ano — out/2026
 
 - **Um só seletor** (mês e ano, no topo; no celular, na barra de mês) vale para todas as abas, inclusive Visão Anual e Orçamento. Saíram a navegação de ano própria da Visão Anual e a de mês do cartão do Orçamento (as duas sobrepunham o seletor do topo).
