@@ -118,6 +118,9 @@ function addMonthsISO(iso, n) {
 // Simétrico: -12,345 → -12,35 (Math.round puro arredondaria o .5 negativo para cima)
 const roundMoney = v => (Math.sign(v) * Math.round((Math.abs(v) + Number.EPSILON) * 100) / 100) || 0;
 
+// "1 lançamento", "2 lançamentos" (antes saía "1 lançamentos", "1 aportes")
+const nDe = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+
 // Texto para comparação humana: sem acento e minúsculo ("Farmácia" ≈ "farmacia")
 const fold = s => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 // Ordenação alfabética pt-BR: "Ágape" antes de "Farmácia", "Item 2" antes de "Item 10"
@@ -373,8 +376,8 @@ function buildCatCombo(id, tipo, currentVal) {
 }
 
 function _catComboItems(list, query, safe) {
-    const q = (query || '').toLowerCase();
-    const filtered = q ? list.filter(c => c.toLowerCase().includes(q)) : list;
+    const q = fold(query || '');      // sem acento: "saude" acha "💊 Saúde", "alimentacao" acha "Alimentação"
+    const filtered = q ? list.filter(c => fold(c).includes(q)) : list;
     if (!filtered.length && !q) return '<div class="cat-combo-empty">Nenhuma categoria</div>';
     const items = filtered.map((c, i) => `
         <div class="cat-combo-item" data-val="${escHtml(c)}" data-onclick="catComboSelect(${jsStr(safe)}, this.dataset.val)"
@@ -382,7 +385,7 @@ function _catComboItems(list, query, safe) {
             <span>${escHtml(splitCatName(c).icon || '')}</span>
             <span>${escHtml(c)}</span>
         </div>`).join('');
-    const addBtn = q && !list.some(c => c.toLowerCase() === q)
+    const addBtn = q && !list.some(c => fold(c) === q)
         ? `<div class="cat-combo-add" data-onclick="catComboAddNew(${jsStr(safe)})">＋ Adicionar "${escHtml(query)}"</div>`
         : '';
     return items + addBtn;
@@ -438,7 +441,12 @@ function catComboKey(e, safe) {
     const items = drop.querySelectorAll('.cat-combo-item');
     if (e.key === 'ArrowDown') { e.preventDefault(); _catComboActiveIdx = Math.min(_catComboActiveIdx + 1, items.length - 1); items.forEach((el, i) => el.classList.toggle('active', i === _catComboActiveIdx)); }
     if (e.key === 'ArrowUp')   { e.preventDefault(); _catComboActiveIdx = Math.max(_catComboActiveIdx - 1, 0); items.forEach((el, i) => el.classList.toggle('active', i === _catComboActiveIdx)); }
-    if (e.key === 'Enter')     { e.preventDefault(); if (_catComboActiveIdx >= 0 && items[_catComboActiveIdx]) { catComboSelect(safe, items[_catComboActiveIdx].dataset.val); } }
+    if (e.key === 'Enter')     {
+        e.preventDefault();
+        // Sem item destacado, Enter escolhe o primeiro resultado da busca ("sau" + Enter = Saúde)
+        const inp = $(decodeURIComponent(safe)), alvo = items[_catComboActiveIdx >= 0 ? _catComboActiveIdx : (inp && inp.value.trim() ? 0 : -1)];
+        if (alvo) catComboSelect(safe, alvo.dataset.val);
+    }
     if (e.key === 'Escape')    { drop.classList.remove('open'); }
 }
 
@@ -608,7 +616,7 @@ function renderMobList() {
                     <div class="mob-tx-dot" style="background:${f.card.cor}22;border-radius:10px"><span style="font-size:16px">💳</span></div>
                     <div class="mob-tx-info">
                         <div class="mob-tx-desc" style="color:var(--accent)">${escHtml(f.card.nome)}</div>
-                        <div class="mob-tx-meta">Fatura · vence ${vd}/${vm} · ${parcial ? `${f.items.length} de ${f.totalItens} itens` : `${f.items.length} itens`}</div>
+                        <div class="mob-tx-meta">Fatura · vence ${vd}/${vm} · ${parcial ? `${f.items.length} de ${f.totalItens} itens` : nDe(f.items.length, 'item', 'itens')}</div>
                     </div>
                     <div class="mob-tx-right">
                         ${(v => `<div class="mob-tx-val" style="color:var(--${v < 0 ? 'success' : 'danger'})">${v < 0 ? '+' : '−'} ${fmt(Math.abs(v))}</div>`)(parcial ? f.sub : f.total)}
@@ -1915,7 +1923,7 @@ function _abrirRemoverParcela(t) {
     $('parcRemLblEsta').textContent = `Só a parcela ${k}/${n}`;
     $('parcRemRowProx').style.display = apos.length > 1 ? '' : 'none';
     $('parcRemLblProx').textContent = `Esta e as seguintes (${k} a ${apos[apos.length - 1].parcela.k})`;
-    $('parcRemNotaProx').textContent = `${apos.length} parcelas, ${soma(apos)}.`;
+    $('parcRemNotaProx').textContent = `${nDe(apos.length, 'parcela', 'parcelas')}, ${soma(apos)}.`;
     $('parcRemLblTodas').textContent = `Todas as ${serie.length} parcelas`;
     $('parcRemNotaTodas').textContent = `${soma(serie)}${serie.length > apos.length ? ', inclusive as anteriores' : ''}.`;
     document.querySelector('input[name="parcRemEscopo"][value="esta"]').checked = true;
@@ -2374,7 +2382,7 @@ function renderBackupAge() {
     // Tamanho da base que cada sincronização envia/baixa por inteiro (a sync não é por item): avisa antes de pesar
     try {
         const kb = Math.round(JSON.stringify({ t: tx, c: cats, g: goals, k: cards, b: budget, l: loans }).length / 1024);
-        el.textContent += ` Dados: ${tx.length} lançamentos, ~${kb} KB` + (kb > CONFIG.PAYLOAD_AVISO_KB ? ' — base grande: cada sincronização sobe tudo; considere arquivar anos antigos.' : '.');
+        el.textContent += ` Dados: ${nDe(tx.length, 'lançamento', 'lançamentos')}, ~${kb} KB` + (kb > CONFIG.PAYLOAD_AVISO_KB ? ' — base grande: cada sincronização sobe tudo; considere arquivar anos antigos.' : '.');
     } catch (e) {}
 }
 
@@ -2439,7 +2447,7 @@ function importar(input) {
                 return;
             }
             const n = _asList(d.t).length;
-            confirmar(`Substituir os dados atuais pelo backup${d.t ? ` (${n} lançamentos)` : ''}?\nDá para desfazer com Ctrl+Z.`, { ok: 'Substituir', perigo: true }, () => {
+            confirmar(`Substituir os dados atuais pelo backup${d.t ? ` (${nDe(n, 'lançamento', 'lançamentos')})` : ''}?\nDá para desfazer com Ctrl+Z.`, { ok: 'Substituir', perigo: true }, () => {
                 try { _aplicarBackup(d); } catch (e) { toast('❌ Erro ao importar o backup: ' + e.message, '#dc2626'); }
             });
         } catch (e) {
@@ -4010,7 +4018,7 @@ function renderGoals() {
             <div style="font-size:11px;color:var(--text-3);margin-bottom:12px">📅 Prazo: ${prazoStr}${ritmo ? ` · <span style="${ritmo.startsWith('⚠️') ? 'color:var(--danger);font-weight:600' : ''}">${ritmo}</span>` : ''}</div>
             <button class="btn-aporte" style="background:${corLegivel(g.cor)}" data-onclick="abrirAporte(${g.id})">+ Adicionar Aporte</button>
             ${g.aportes.length ? `
-                <button class="goal-hist-toggle" data-onclick="toggleHistory(this, ${g.id})">${histOpen ? 'Ocultar histórico' : `Ver histórico (${g.aportes.length} aportes)`}</button>
+                <button class="goal-hist-toggle" data-onclick="toggleHistory(this, ${g.id})">${histOpen ? 'Ocultar histórico' : `Ver histórico (${nDe(g.aportes.length, 'aporte', 'aportes')})`}</button>
                 <div class="goal-history ${histOpen ? 'open' : ''}">${aportesList}</div>` : ''}
         </div>`;
     }).join('') + `
@@ -4025,7 +4033,7 @@ function toggleHistory(btn, goalId) {
     hist.classList.toggle('open');
     if (hist.classList.contains('open')) _goalHistOpen.add(goalId); else _goalHistOpen.delete(goalId);
     const count = hist.querySelectorAll('.aporte-item').length;
-    btn.textContent = hist.classList.contains('open') ? 'Ocultar histórico' : `Ver histórico (${count} aportes)`;
+    btn.textContent = hist.classList.contains('open') ? 'Ocultar histórico' : `Ver histórico (${nDe(count, 'aporte', 'aportes')})`;
 }
 
 function renderColorPicker() {
@@ -5628,7 +5636,7 @@ async function abrirBackups() {
         if (!dias.length) { box.textContent = 'Ainda não há cópias (a primeira é criada no próximo uso com internet).'; return; }
         dias.forEach(d => {
             const b = document.createElement('button'); b.className = 'btn-mcancel'; b.style.textAlign = 'left';
-            b.textContent = `${d.split('-').reverse().join('/')} · ${meta[d].n} lançamentos`; b.onclick = () => restaurarBackup(d);
+            b.textContent = `${d.split('-').reverse().join('/')} · ${nDe(meta[d].n, 'lançamento', 'lançamentos')}`; b.onclick = () => restaurarBackup(d);
             box.appendChild(b);
         });
     } catch (e) {
@@ -5642,7 +5650,7 @@ async function restaurarBackup(dia) {
         if (_remotoMaisNovo(raw)) { toast('⚠️ Essa cópia é de uma versão mais nova do app — recarregue a página.', '#b45309'); return; }
         const d = _mapKeys(raw, _fbKeyDec);
         closeBackups();
-        confirmar(`Substituir os dados atuais pela cópia de ${dia.split('-').reverse().join('/')} (${_asList(d.t).length} lançamentos)?\nDá para desfazer com Ctrl+Z.`, { ok: 'Restaurar', perigo: true }, () => _aplicarBackup({ t: [], g: [], k: [], l: [], b: {}, ...d }));   // o Firebase não guarda vazios: ausente = vazio (como em _applyRemote)
+        confirmar(`Substituir os dados atuais pela cópia de ${dia.split('-').reverse().join('/')} (${nDe(_asList(d.t).length, 'lançamento', 'lançamentos')})?\nDá para desfazer com Ctrl+Z.`, { ok: 'Restaurar', perigo: true }, () => _aplicarBackup({ t: [], g: [], k: [], l: [], b: {}, ...d }));   // o Firebase não guarda vazios: ausente = vazio (como em _applyRemote)
     } catch (e) { toast('❌ Não consegui ler a cópia: ' + e.message, '#dc2626'); }
 }
 function _buildPayload() {
@@ -6748,7 +6756,7 @@ function extConfirmImport() {
     const isCredit = $('extAccType').value === 'credito';
     const cardId   = isCredit ? toId($('extCardId').value) : null;
 
-    pushUndo(`Importação de extrato (${toImport.length} lançamentos)`);
+    pushUndo(`Importação de extrato (${nDe(toImport.length, 'lançamento', 'lançamentos')})`);
     let catsChanged = false;
     const novos = toImport.map(r => {
         catsChanged = ensureCat(r.tipo, r.cat) || catsChanged;

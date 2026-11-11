@@ -85,6 +85,14 @@ function runSelfTests() {
     eq('addMonths virada de ano', addMonthsISO('2026-11-15', 3), '2027-02-15');
     eq('addMonths negativo', addMonthsISO('2026-01-15', -1), '2025-12-15');
 
+    // Contagens no singular e busca de categoria sem acento
+    eq('nDe singular/plural', [nDe(1, 'aporte', 'aportes'), nDe(2, 'aporte', 'aportes'), nDe(0, 'item', 'itens')], ['1 aporte', '2 aportes', '0 itens']);
+    {
+        const html = q => _catComboItems(['💊 Saúde', '🍔 Alimentação', 'Lazer'], q, 'x'), n = q => (html(q).match(/class="cat-combo-item"/g) || []).length;
+        eq('combo de categoria: busca ignora acento e caixa', [n('saude'), n('ALIMENTACAO'), n('saú'), n('zzz'), n('')], [1, 1, 1, 0, 3]);
+        eq('combo de categoria: "adicionar" some quando o nome já existe (sem acento)', [/cat-combo-add/.test(html('lazer')), /cat-combo-add/.test(html('Viagem'))], [false, true]);
+    }
+
     // Campo de data dd/mm/aaaa (independe do idioma do navegador; o valor lido/gravado segue ISO)
     eq('data BR: ISO → dd/mm/aaaa', [isoParaBR('2026-10-26'), isoParaBR(''), isoParaBR(null), isoParaBR('26/10/2026')], ['26/10/2026', '', '', '']);
     eq('data BR: dd/mm/aaaa → ISO', [brParaISO('26/10/2026'), brParaISO('5/3/26'), brParaISO('29/02/2028')], ['2026-10-26', '2026-03-05', '2028-02-29']);
