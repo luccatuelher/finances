@@ -213,6 +213,85 @@ function corTexto(cor) {
     return '#ffffff';
 }
 
+// ── CAMPO DE DATA NO FORMATO BRASILEIRO ──────────────────────────────────────
+// <input type="date"> segue o idioma do NAVEGADOR (em inglês mostra mm/dd/aaaa). Todo campo de data do app vira
+// um campo de texto dd/mm/aaaa com botão de calendário (abre o seletor nativo). O resto do código não muda:
+// `el.value` continua lendo e gravando ISO (aaaa-mm-dd); data incompleta ou impossível lê como '' (o formulário
+// já recusa data vazia). Vale também para campos criados depois (edição na linha), via MutationObserver.
+const isoParaBR = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso == null ? '' : iso)); return m ? `${m[3]}/${m[2]}/${m[1]}` : ''; };
+// "5/3/26" → 2026-03-05 (ano de 2 dígitos = 20xx); só datas que existem, de 1900 em diante
+function brParaISO(txt) {
+    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/.exec(String(txt == null ? '' : txt).trim());
+    if (!m) return '';
+    const iso = `${m[3].length === 2 ? '20' + m[3] : m[3]}-${pad2(+m[2])}-${pad2(+m[1])}`;
+    return isValidISODate(iso) && +iso.slice(0, 4) >= 1900 ? iso : '';
+}
+// Máscara enquanto digita: só dígitos e barras; "5/" vira "05/"; as barras entram sozinhas
+function _mascaraDataBR(txt) {
+    const partes = String(txt).replace(/[^\d/]/g, '').split('/').slice(0, 3);
+    let dig = '';
+    partes.forEach((p, i) => {
+        const fechada = i < partes.length - 1, max = i < 2 ? 2 : 4;
+        dig += (fechada && i < 2 && p.length === 1 ? '0' + p : p).slice(0, fechada ? max : 8);
+    });
+    dig = dig.slice(0, 8);
+    return dig.length > 4 ? `${dig.slice(0, 2)}/${dig.slice(2, 4)}/${dig.slice(4)}` : dig.length > 2 ? `${dig.slice(0, 2)}/${dig.slice(2)}` : dig;
+}
+const _valorNativo = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+function campoDataBR(el) {
+    if (!el || el.dataset.dataBr) return;
+    const iso0 = el.value;
+    el.dataset.dataBr = '1';
+    el.type = 'text'; el.inputMode = 'numeric'; el.placeholder = 'dd/mm/aaaa'; el.maxLength = 10; el.size = 10; el.autocomplete = 'off';
+    el.classList.add('data-br');
+    const texto = () => _valorNativo.get.call(el);
+    Object.defineProperty(el, 'value', {
+        configurable: true,
+        get() { return brParaISO(texto()); },
+        set(v) { _valorNativo.set.call(el, isoParaBR(v)); el.classList.remove('data-br-invalida'); },
+    });
+    el.value = iso0;
+    const wrap = document.createElement('span'); wrap.className = 'data-br-wrap';
+    el.replaceWith(wrap); wrap.appendChild(el);
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'data-br-btn'; btn.tabIndex = -1; btn.title = 'Escolher no calendário'; btn.setAttribute('aria-label', 'Escolher no calendário');
+    btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>';
+    const picker = document.createElement('input');
+    picker.type = 'date'; picker.className = 'data-br-picker'; picker.tabIndex = -1; picker.setAttribute('aria-hidden', 'true'); picker.dataset.dataBr = '1';
+    wrap.append(btn, picker);
+    const avisar = () => { el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); };
+    el.addEventListener('input', () => {
+        const antes = texto(), depois = _mascaraDataBR(antes);
+        if (depois !== antes) {
+            // cursor: mantém a posição contando os dígitos à esquerda dele
+            const fim = el.selectionStart == null || el.selectionStart >= antes.length;
+            const nDig = antes.slice(0, el.selectionStart || 0).replace(/\D/g, '').length;
+            _valorNativo.set.call(el, depois);
+            if (!fim) { let pos = 0, vistos = 0; while (pos < depois.length && vistos < nDig) { if (/\d/.test(depois[pos])) vistos++; pos++; } try { el.setSelectionRange(pos, pos); } catch (e) {} }
+        }
+        el.classList.remove('data-br-invalida');
+    });
+    el.addEventListener('blur', () => {
+        const t = texto().trim(), iso = brParaISO(t);
+        if (iso) { if (isoParaBR(iso) !== t) { _valorNativo.set.call(el, isoParaBR(iso)); avisar(); } }   // "5/3/26" → "05/03/2026"
+        el.classList.toggle('data-br-invalida', !!t && !iso);
+    });
+    btn.addEventListener('click', () => {
+        if (el.disabled) return;
+        picker.value = el.value;
+        try { picker.showPicker(); } catch (e) { try { picker.focus(); picker.click(); } catch (e2) { el.focus(); } }
+    });
+    picker.addEventListener('change', () => { if (picker.value) { el.value = picker.value; avisar(); } });
+}
+function camposDataBR(raiz = document) { raiz.querySelectorAll?.('input[type="date"]:not([data-data-br])').forEach(campoDataBR); }
+camposDataBR();
+try {
+    new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => {
+        if (n.nodeType !== 1) return;
+        if (n.matches?.('input[type="date"]:not([data-data-br])')) campoDataBR(n); else camposDataBR(n);
+    }))).observe(document.body, { childList: true, subtree: true });
+} catch (e) {}
+
 // structuredClone polyfill for older browsers
 const _clone = typeof structuredClone === 'function' ? structuredClone : o => JSON.parse(JSON.stringify(o));
 
